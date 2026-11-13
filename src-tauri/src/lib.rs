@@ -23,9 +23,9 @@ macro_rules! eprintln {
     }};
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), desktop))]
 use tauri::utils::config::FrontendDist;
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), desktop))]
 use tauri::utils::config_v1::WindowUrl;
 
 use tauri::{Emitter, Manager};
@@ -626,7 +626,7 @@ pub(crate) fn http_client(family: Option<IpAddr>) -> &'static reqwest::Client {
 
 /// localStorage is keyed by origin, port included: a new port every launch silently wipes it.
 /// The fixed port keeps the origin stable; a random one is only the fallback when it is taken.
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), desktop))]
 fn ui_port() -> u16 {
     const PREFERRED_UI_PORT: u16 = 47_731;
     [PREFERRED_UI_PORT, 0]
@@ -2495,16 +2495,15 @@ fn build_login_window(
     loaded: Arc<AtomicBool>,
     slot_id: &str,
 ) -> Result<tauri::Webview, CommandError> {
-    // TODO(android): Tauri mobile has a single window with a single webview, so there is no
-    // way to host the address bar + partitioned Google page that desktop uses. Sign-in on
-    // Android needs its own flow (e.g. a native WebView activity in a Kotlin plugin that hands
-    // the cookies back).
+    // Tauri mobile has a single window with a single webview, so there is no way to host the
+    // address bar + partitioned Google page; Android signs in through LoginActivity instead
+    // (android.rs), and nothing there reaches this.
     #[cfg(mobile)]
     {
         let _ = (app, visible, loaded, slot_id);
-        return Err(CommandError {
-            message: "YouTube Music sign-in is not available on mobile yet".into(),
-        });
+        Err(CommandError {
+            message: "the desktop sign-in window does not exist on mobile".into(),
+        })
     }
     #[cfg(desktop)]
     build_login_window_desktop(app, visible, loaded, slot_id)
@@ -5053,7 +5052,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init());
 
-    #[cfg(not(debug_assertions))]
+    // Desktop only: Android serves the UI from its own `tauri.localhost` scheme, and a release
+    // APK forbids the cleartext http://localhost this would switch it to.
+    #[cfg(all(not(debug_assertions), desktop))]
     {
         let port = ui_port();
         let url: url::Url = format!("http://localhost:{}", port)

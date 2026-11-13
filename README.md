@@ -250,6 +250,7 @@ The `docs/` folder documents the codebase:
 - [`docs/architecture.md`](docs/architecture.md) — system overview and module map
 - [`docs/frontend.md`](docs/frontend.md) — React structure, styling tokens, icon conventions
 - [`docs/backend.md`](docs/backend.md) — Rust commands and the IPC surface
+- [`docs/android.md`](docs/android.md) — the Android build and how it maps onto the desktop app
 
 ### Contributing
 

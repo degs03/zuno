@@ -22,7 +22,6 @@ tauri-build = { version = "2", features = [] }
 # read-only address bar above Google's page.
 tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png", "unstable"] }
 tauri-plugin-opener = "2"
-tauri-plugin-localhost = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate", "stream"] }
@@ -56,6 +55,8 @@ rodio-wsola = "0.2"
 # Desktop-only plugins: none of them has an Android/iOS implementation.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
+# Release builds serve the UI from http://localhost (lib.rs); Android keeps its own scheme.
+tauri-plugin-localhost = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 

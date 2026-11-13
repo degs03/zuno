@@ -1,0 +1,93 @@
+# Android: compile the Rust crate for the phone target and build an installable APK.
+#
+# Everything Android-only sits behind `#[cfg(target_os = "android")]` (android.rs,
+# android_context.rs) or in Kotlin under src-tauri/gen/android, and none of the other jobs ever
+# feeds that to a compiler. This one does, and keeps the APK as an artifact so a pull request
+# can be tried on a phone without a local Android toolchain.
+name: Android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep in step with the NDK the generated Gradle project expects.
+  NDK_VERSION: 27.1.12297006
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Android NDK
+        run: |
+          sdkmanager --install "ndk;${NDK_VERSION}"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: android
+
+      - run: npm ci
+
+      # Clippy for the Android cfg, as the Windows job does for desktop. The NDK's clang is
+      # what the C dependencies (libopus) build with.
+      - name: Clippy (Android)
+        working-directory: src-tauri
+        run: |
+          TC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CC_aarch64_linux_android="$TC/aarch64-linux-android26-clang"
+          export AR_aarch64_linux_android="$TC/llvm-ar"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TC/aarch64-linux-android26-clang"
+          cargo clippy --target aarch64-linux-android --lib --locked -- -D warnings
+
+      - name: Build APK
+        run: npx tauri android build --apk --target aarch64 --ci
+
+      # Android refuses unsigned APKs outright, so the artifact is signed with a throwaway key
+      # made for this run: good for trying a pull request on a phone, not for distribution
+      # (each run's key differs, so installing a newer artifact means uninstalling first).
+      # Release signing would use a keystore secret instead.
+      - name: Sign APK (test key)
+        run: |
+          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          keytool -genkeypair -keystore test.jks -alias test -keyalg RSA -keysize 2048 \
+            -validity 30 -storepass testpass -keypass testpass -dname "CN=Zuno CI test"
+          APK=$(find src-tauri/gen/android/app/build/outputs/apk -name '*release*.apk' | head -1)
+          "$BT/zipalign" -f -p 4 "$APK" zuno-arm64-aligned.apk
+          "$BT/apksigner" sign --ks test.jks --ks-pass pass:testpass \
+            --out zuno-android-arm64-test-signed.apk zuno-arm64-aligned.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zuno-android-arm64
+          path: zuno-android-arm64-test-signed.apk
+          if-no-files-found: error
