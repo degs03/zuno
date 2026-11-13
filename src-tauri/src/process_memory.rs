@@ -141,11 +141,44 @@ fn collect() -> MemoryReport {
 }
 
 /*
- * ponytail: Windows only. It is the platform the report was built to investigate, and the
- * equivalents elsewhere are a different API each (`proc_pid_rusage` on macOS, `/proc` on
- * Linux). Add one when there is a number there worth chasing.
+ * ponytail: nothing on macOS yet (`proc_pid_rusage`). Add it when there is a number there worth
+ * chasing.
  */
-#[cfg(not(target_os = "windows"))]
+/**
+ * Linux and Android: the app's own process from `/proc/self/status`.
+ *
+ * `VmRSS` stands in for the working set and `RssAnon` (anonymous resident pages: heaps, the
+ * decoder, buffers) for commit. On Android the WebView renderer is a separate sandboxed process
+ * this cannot see, so the frontend's own heap numbers remain the renderer's half of the picture.
+ */
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn collect() -> MemoryReport {
+    let Ok(status) = std::fs::read_to_string("/proc/self/status") else {
+        return MemoryReport::default();
+    };
+    // Lines look like `VmRSS:     123456 kB`.
+    let field = |name: &str| -> usize {
+        status
+            .lines()
+            .find_map(|line| line.strip_prefix(name))
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|kb| kb.parse::<usize>().ok())
+            .map_or(0, |kb| kb * 1024)
+    };
+    let process = ProcessMemory {
+        pid: std::process::id(),
+        name: "app".to_string(),
+        working_set_mb: round(field("VmRSS:")),
+        commit_mb: round(field("RssAnon:")),
+    };
+    MemoryReport {
+        total_working_set_mb: process.working_set_mb,
+        total_commit_mb: process.commit_mb,
+        processes: vec![process],
+    }
+}
+
+#[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "android")))]
 fn collect() -> MemoryReport {
     MemoryReport::default()
 }

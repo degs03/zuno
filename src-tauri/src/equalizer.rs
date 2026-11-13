@@ -224,7 +224,17 @@ pub(crate) struct EqualizedSource<S> {
     loudness_gain: f32,
     bypass: bool,
     generation: u64,
+    /// Indices of the bands that actually filter. A 0 dB band is a passthrough biquad, and
+    /// running it anyway was five multiply-adds per sample for nothing.
+    active: [usize; BAND_COUNT],
+    active_len: usize,
+    /// Samples until the settings generation is checked again.
+    recheck_in: u32,
 }
+
+/// How often a playing source looks for new EQ settings: ~3 ms at 48 kHz stereo, far below
+/// anything a slider drag can be heard to lag by, and one atomic load instead of 256.
+const RECHECK_EVERY: u32 = 256;
 
 impl<S: Source> EqualizedSource<S> {
     pub(crate) fn new(inner: S, loudness_db: Option<f32>) -> Self {
@@ -241,6 +251,9 @@ impl<S: Source> EqualizedSource<S> {
             // Not the live generation: starting one behind forces the first sample to load
             // whatever the user already had set before this track began.
             generation: u64::MAX,
+            active: [0; BAND_COUNT],
+            active_len: 0,
+            recheck_in: 0,
         };
         source.reload();
         source
@@ -256,9 +269,20 @@ impl<S: Source> EqualizedSource<S> {
             return;
         }
 
-        for channel in &mut self.filters {
-            for (band, filter) in channel.iter_mut().enumerate() {
-                filter.retune(Biquad::peaking(BAND_HZ[band], self.sample_rate, values.bands_db[band]));
+        self.active_len = 0;
+        for band in 0..BAND_COUNT {
+            let next = Biquad::peaking(BAND_HZ[band], self.sample_rate, values.bands_db[band]);
+            let filters = next.b0 != 1.0 || next.b1 != 0.0 || next.b2 != 0.0;
+            if filters {
+                self.active[self.active_len] = band;
+                self.active_len += 1;
+            }
+            for channel in &mut self.filters {
+                channel[band].retune(next);
+                if !filters {
+                    // A band that goes quiet must not carry history into the next time it is on.
+                    channel[band] = Biquad::PASSTHROUGH;
+                }
             }
         }
     }
@@ -271,9 +295,13 @@ impl<S: Source> Iterator for EqualizedSource<S> {
     fn next(&mut self) -> Option<f32> {
         let sample = self.inner.next()?;
 
-        if self.generation != EQUALIZER.generation.load(Ordering::Acquire) {
-            self.reload();
+        if self.recheck_in == 0 {
+            self.recheck_in = RECHECK_EVERY;
+            if self.generation != EQUALIZER.generation.load(Ordering::Acquire) {
+                self.reload();
+            }
         }
+        self.recheck_in -= 1;
         // Counted while bypassed too, or turning the EQ on mid-track filters left as right.
         let channel = self.channel_index;
         self.channel_index = (self.channel_index + 1) % self.filters.len();
@@ -282,8 +310,9 @@ impl<S: Source> Iterator for EqualizedSource<S> {
         }
 
         let mut output = sample * self.gain;
-        for filter in &mut self.filters[channel] {
-            output = filter.process(output);
+        let filters = &mut self.filters[channel];
+        for &band in &self.active[..self.active_len] {
+            output = filters[band].process(output);
         }
         Some(output)
     }

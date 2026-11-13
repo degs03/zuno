@@ -55,6 +55,7 @@ mod process_memory;
 mod discord_rpc;
 mod equalizer;
 mod opus_source;
+mod prefetch;
 mod lastfm;
 
 // Keep the legacy service name so existing sign-in credentials survive the product rename.
@@ -188,7 +189,12 @@ const YOUTUBE_SLOW_PERSIST_COOKIES: [&str; 3] = ["SIDCC", "__Secure-1PSIDCC", "_
 /// Generous enough for a cold WebView2 start plus the Google redirect chain, because the cost of
 /// being a second too impatient is a sign-in prompt the user did not need.
 const YOUTUBE_SILENT_REFRESH_POLLS: u32 = 25;
+#[cfg(not(target_os = "android"))]
 const DEFAULT_CACHE_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+/// Phones often have 16-32 GB in total; a 4 GB data cache is a real share of that, and its LRU
+/// sweep lists the whole directory, which gets slower the bigger it is allowed to grow.
+#[cfg(target_os = "android")]
+const DEFAULT_CACHE_MAX_BYTES: u64 = 512 * 1024 * 1024;
 const CURRENT_LOG_FILE_NAME: &str = "current.log";
 
 const PREVIOUS_LOG_FILE_NAME: &str = "previous.log";
@@ -4559,11 +4565,11 @@ async fn native_audio_load(
          */
         if opus_source::is_opus(&mime_type) {
             return opus_source::OpusSource::new(reader, &mime_type)
-                .map(|source| equalized(source, loudness_db));
+                .and_then(|source| equalized(source, loudness_db));
         }
         rodio::Decoder::new(reader)
-            .map(|source| equalized(source, loudness_db))
             .map_err(|error| format!("audio decode failed: {error}"))
+            .and_then(|source| equalized(source, loudness_db))
     })
     .await
     .map_err(|error| cache_error(format!("audio decode task failed: {error}")))?;
@@ -4628,11 +4634,12 @@ async fn native_audio_load(
     .map_err(cache_error)?;
 
     eprintln!(
-        "[internal][tauri][info] native_audio_load track_id={} standby={} duration_sec={} decode_ms={}",
+        "[internal][tauri][info] native_audio_load track_id={} standby={} duration_sec={} decode_ms={} underruns_total={}",
         track_id,
         standby.unwrap_or(false),
         duration,
-        started_at.elapsed().as_millis()
+        started_at.elapsed().as_millis(),
+        prefetch::UNDERRUNS.load(Ordering::Relaxed),
     );
     Ok(duration)
 }
@@ -4646,16 +4653,24 @@ async fn native_audio_load(
  *
  * The duration is read *before* wrapping: it is what the caller reports back to the frontend,
  * and reading it through two adapters is one more place for it to go missing.
+ *
+ * The decoder itself goes behind `Prefetch`, which runs it on its own thread: decoding and
+ * waiting on the download then never happen on the realtime audio callback. The equaliser and
+ * limiter stay on the callback side, so a slider moved mid-song still applies immediately.
  */
-fn equalized<S>(source: S, loudness_db: Option<f32>) -> (audio::BoxedSource, Option<f64>)
+fn equalized<S>(
+    source: S,
+    loudness_db: Option<f32>,
+) -> Result<(audio::BoxedSource, Option<f64>), String>
 where
     S: rodio::Source + Send + 'static,
 {
     use rodio::Source as _;
     let duration = source.total_duration().map(|value| value.as_secs_f64());
-    let shaped = equalizer::EqualizedSource::new(source, loudness_db)
+    let decoded = prefetch::Prefetch::new(Box::new(source))?;
+    let shaped = equalizer::EqualizedSource::new(decoded, loudness_db)
         .limit(rodio::source::LimitSettings::new());
-    (Box::new(shaped) as audio::BoxedSource, duration)
+    Ok((Box::new(shaped) as audio::BoxedSource, duration))
 }
 
 /// Volume normalisation from each track's measured loudness. Applies immediately, and never

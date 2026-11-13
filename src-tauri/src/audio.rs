@@ -130,6 +130,26 @@ struct Clocked {
     inner: BoxedSource,
     clock: Clock,
     samples_per_sec: f64,
+    /// Counted locally and published in batches: an atomic add per sample was ~96k RMW
+    /// operations a second per deck on the audio thread, for a position read four times a second.
+    pending: u32,
+}
+
+/// Samples between publishes: ~10 ms of 48 kHz stereo, far below the 250 ms position tick.
+const CLOCK_BATCH: u32 = 1_024;
+
+impl Clocked {
+    fn new(inner: BoxedSource, clock: Clock, samples_per_sec: f64) -> Self {
+        Self { inner, clock, samples_per_sec, pending: 0 }
+    }
+
+    #[inline]
+    fn publish(&mut self) {
+        if self.pending > 0 {
+            self.clock.fetch_add(u64::from(self.pending), Ordering::Relaxed);
+            self.pending = 0;
+        }
+    }
 }
 
 impl Iterator for Clocked {
@@ -137,8 +157,15 @@ impl Iterator for Clocked {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let sample = self.inner.next()?;
-        self.clock.fetch_add(1, Ordering::Relaxed);
+        let Some(sample) = self.inner.next() else {
+            // The end of the track must read as the end, not up to a batch short of it.
+            self.publish();
+            return None;
+        };
+        self.pending += 1;
+        if self.pending >= CLOCK_BATCH {
+            self.publish();
+        }
         Some(sample)
     }
 }
@@ -159,6 +186,7 @@ impl Source for Clocked {
     fn try_seek(&mut self, position: Duration) -> Result<(), rodio::source::SeekError> {
         self.inner.try_seek(position)?;
         let samples = position.as_secs_f64() * self.samples_per_sec;
+        self.pending = 0;
         self.clock.store(samples as u64, Ordering::Relaxed);
         Ok(())
     }
@@ -821,10 +849,24 @@ fn open_device_sink(
 
     match device {
         Some(device) => DeviceSinkBuilder::from_device(device)
+            .map(with_platform_buffer)
             .and_then(|builder| builder.with_error_callback(on_error).open_stream())
             .map_err(|error| format!("failed to open audio output device: {error}")),
         None => open_default_sink(on_error),
     }
+}
+
+/**
+ * Android gets a bigger device buffer than rodio's ~50 ms default.
+ *
+ * Phones run this callback on slow cores next to a WebView, and AAudio asks for small buffers
+ * by default. A music player has no use for low latency — the only thing that waits on this
+ * buffer is the pause button — so ~85 ms of headroom buys glitch-free audio for nothing.
+ */
+fn with_platform_buffer(builder: DeviceSinkBuilder) -> DeviceSinkBuilder {
+    #[cfg(target_os = "android")]
+    let builder = builder.with_buffer_size(rodio::cpal::BufferSize::Fixed(4_096));
+    builder
 }
 
 // ponytail: rodio's fallback to another device keeps its own logging callback, so a stream on
@@ -833,6 +875,7 @@ fn open_default_sink(
     on_error: impl FnMut(StreamError) + Send + 'static,
 ) -> Result<MixerDeviceSink, String> {
     DeviceSinkBuilder::from_default_device()
+        .map(with_platform_buffer)
         .and_then(|builder| builder.with_error_callback(on_error).open_stream())
         .or_else(|_| DeviceSinkBuilder::open_default_sink())
         .map_err(|error| format!("no audio output device: {error}"))
@@ -1063,11 +1106,7 @@ impl Engine {
                 deck.clock = Clock::default();
                 deck.samples_per_sec =
                     source.sample_rate().get() as f64 * source.channels().get() as f64;
-                let clocked = Clocked {
-                    inner: source,
-                    clock: deck.clock.clone(),
-                    samples_per_sec: deck.samples_per_sec,
-                };
+                let clocked = Clocked::new(source, deck.clock.clone(), deck.samples_per_sec);
                 deck.sink.append(Respan::new(Box::new(Stretch::new(clocked))));
                 deck.track_id = Some(track_id);
                 deck.duration_sec = duration;
@@ -1442,11 +1481,7 @@ mod tests {
     fn stretch_changes_length_not_pitch_and_steps_aside_at_one() {
         let stretched = |tempo: f32| {
             let clock = Clock::default();
-            let clocked = Clocked {
-                inner: Box::new(Unspanned(48_000)),
-                clock: clock.clone(),
-                samples_per_sec: 48_000.0,
-            };
+            let clocked = Clocked::new(Box::new(Unspanned(48_000)), clock.clone(), 48_000.0);
             TEMPO.store(tempo.to_bits(), Ordering::Relaxed);
             let stretch = Stretch::new(clocked);
             let rate = stretch.sample_rate().get();
