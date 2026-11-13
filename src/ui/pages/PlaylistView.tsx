@@ -158,7 +158,7 @@ function PlaylistDescription({
     return (
       <div className="flex flex-col gap-2">
         <textarea
-          className="min-h-20 w-full resize-y rounded-xl bg-muted/40 px-3 py-2 text-sm text-foreground outline-none ring-1 ring-[var(--color-hairline)] placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-20 w-full resize-y rounded-xl bg-muted/40 px-3 py-2 text-sm text-foreground outline-none ring-1 ring-[var(--color-edge)] placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
           value={draft}
           autoFocus
           maxLength={5000}
@@ -738,7 +738,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
           artworkVariant="playlist"
           artworkSlot={isLikedSongs ? (
             <img
-              className="size-44 shrink-0 rounded-2xl object-cover shadow-2xl ring-1 ring-[var(--color-hairline)]"
+              className="size-44 shrink-0 rounded-2xl object-cover shadow-2xl ring-1 ring-[var(--color-edge)]"
               src={likedSongsCover}
               alt=""
             />

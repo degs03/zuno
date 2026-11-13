@@ -41,7 +41,26 @@ export function resolveTheme(preference = readThemePreference()): ResolvedTheme 
  * already correct — a flash of the wrong theme is the classic failure here.
  */
 export function applyTheme(preference = readThemePreference()): void {
-  document.documentElement.setAttribute("data-theme", resolveTheme(preference));
+  const resolved = resolveTheme(preference);
+  document.documentElement.setAttribute("data-theme", resolved);
+  syncSystemChrome(resolved);
+}
+
+/**
+ * Keeps what the OS draws around the app in step with the theme: the browser `theme-color`
+ * and, on Android, the status/navigation bar icon colour and the window behind the WebView —
+ * which otherwise stayed dark (white icons on a white bar) in light mode.
+ */
+function syncSystemChrome(resolved: ResolvedTheme): void {
+  const background = resolved === "light" ? "#f0f0f0" : "#0a0a0a";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", background);
+  if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)) {
+    void import("@tauri-apps/api/core")
+      .then(({ invoke }) => invoke("android_set_system_bars", { light: resolved === "light" }))
+      .catch(() => {
+        // Before the bridge is up (very first paint) this can fail; hydrateTheme re-applies.
+      });
+  }
 }
 
 export function setThemePreference(preference: ThemePreference): void {

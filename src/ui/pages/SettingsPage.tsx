@@ -2272,7 +2272,7 @@ export function SettingsPage({
                       className={cn(
                         "flex h-12 w-full flex-col justify-end overflow-hidden rounded-lg p-1 ring-1",
                         option.swatch,
-                        isActive ? "ring-primary" : "ring-black/10",
+                        isActive ? "ring-primary" : "ring-border",
                       )}
                       aria-hidden="true"
                     >

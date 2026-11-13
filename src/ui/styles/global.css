@@ -37,7 +37,9 @@
   --color-muted-foreground: oklch(0.708 0 0);
 
   /* Brand accent — the one colour carried over from the old identity. */
-  --color-primary: #ff0033;
+  /* #e8002e rather than the original #ff0033: white label text on #ff0033 is 3.8:1, below the
+     4.5:1 small text needs; this is the same red, a shade deeper, at 4.7:1. */
+  --color-primary: #e8002e;
   --color-primary-foreground: oklch(0.985 0 0);
 
   --color-secondary: oklch(0.269 0 0);
@@ -48,7 +50,7 @@
 
   --color-border: oklch(1 0 0 / 10%);
   --color-input: oklch(1 0 0 / 15%);
-  --color-ring: #ff0033;
+  --color-ring: #e8002e;
 
   /*
    * Shape, by role rather than one radius for everything: the smaller the thing, the tighter
@@ -73,6 +75,9 @@
 
   /* Theme-aware stand-ins for the white/black alpha literals components used to hard-code. */
   --color-hairline: oklch(1 0 0 / 8%);
+  /* An outline that shows on either theme (hairline is a top *highlight*: white in both). */
+  --color-edge: oklch(1 0 0 / 9%);
+  --color-skeleton: oklch(1 0 0 / 9%);
   --color-pressed: oklch(1 0 0 / 7%);
   --color-scrim: oklch(0 0 0 / 55%);
 }
@@ -146,6 +151,10 @@ html[data-theme="light"] {
 
   --color-border: oklch(0 0 0 / 10%);
   --color-hairline: oklch(1 0 0 / 70%);
+  --color-edge: oklch(0 0 0 / 9%);
+  --color-skeleton: oklch(0 0 0 / 8%);
+  /* The dark theme's destructive red is ~3:1 on white; this one clears 4.5:1. */
+  --color-destructive: oklch(0.577 0.245 27.325);
   --color-pressed: oklch(0 0 0 / 5%);
   --color-scrim: oklch(0 0 0 / 35%);
   --elevation-shade: oklch(0.3 0 0 / 22%);
@@ -195,6 +204,10 @@ html[data-platform-mobile] {
  * and no grey flash on tap. Inputs keep normal selection.
  */
 html[data-platform-mobile] body {
+  /* The WebView is transparent over the Activity's own (dark) window background; without this
+     every gap between surfaces — around the floating player, under the status bar — showed
+     black in light mode. */
+  background: var(--color-background);
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
@@ -299,6 +312,30 @@ html[data-platform-mobile] [data-scroll-row]::-webkit-scrollbar {
 html[data-platform-mobile] [data-scroll-row] > * {
   flex-shrink: 0;
   min-height: 2.5rem;
+}
+
+/*
+ * Loading placeholder: a soft sweep across a theme-aware tint (the old foreground/10 pulse all
+ * but vanished on white). The `animations` effect switch stops the sweep and leaves the tint.
+ */
+.skeleton-shimmer {
+  background-color: var(--color-skeleton);
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in oklab, var(--color-skeleton), var(--color-foreground) 8%) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-sweep 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-sweep {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
 }
 
 /*
@@ -443,12 +480,25 @@ textarea:focus-visible {
  * default surfaces are translucent and lean on a backdrop-filter that the `backdrop` switch
  * removes, so without opaque replacements the mode's own surfaces stop being readable.
  */
-html[data-paper-pc] {
+/*
+ * Potato PC's opaque palette, per theme. It used to be one dark block that, sharing the light
+ * theme's specificity and coming later, silently overrode it: light mode + Potato rendered
+ * near-black surfaces under dark text — exactly what phones that switch Potato on by default
+ * showed as a "black player card".
+ */
+html[data-paper-pc]:not([data-theme="light"]) {
   --color-background: #070707;
   --color-card: #181818;
   --color-popover: #202020;
   --color-muted: #262626;
   --color-border: #2c2c2c;
+}
+html[data-paper-pc][data-theme="light"] {
+  --color-background: #f0f0f0;
+  --color-card: #ffffff;
+  --color-popover: #ffffff;
+  --color-muted: #e6e6e6;
+  --color-border: #d4d4d4;
 }
 
 /*

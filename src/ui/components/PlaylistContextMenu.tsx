@@ -362,7 +362,7 @@ export function PlaylistContextMenuProvider({
       {children}
       {/* Mobile: a scrim under the bottom sheet. Tapping it reaches the window mousedown
           listener that closes the menu, the same as clicking away on desktop. */}
-      {isMobile && position && (album || playlist) && <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" />}
+      {isMobile && position && (album || playlist) && <div className="fixed inset-0 z-40 bg-[var(--color-scrim)]" aria-hidden="true" />}
       {position && (album || playlist) && (
         <div
           ref={menuRef}

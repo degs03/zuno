@@ -567,7 +567,7 @@ export function TrackContextMenuProvider({
 
       {/* Mobile: a scrim under the bottom sheet. Tapping it reaches the window mousedown
           listener that closes the menu, the same as clicking away on desktop. */}
-      {isMobile && menuPosition && track && <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" />}
+      {isMobile && menuPosition && track && <div className="fixed inset-0 z-40 bg-[var(--color-scrim)]" aria-hidden="true" />}
       {menuPosition && track && (
         <div
           ref={menuRef}

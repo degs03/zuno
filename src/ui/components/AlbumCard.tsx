@@ -37,7 +37,7 @@ interface AlbumCardProps {
  * is unchanged.
  */
 export const AlbumCard = memo(function AlbumCard({
-  color = "#333333",
+  color,
   artworkUrl,
   title,
   subtitle,
@@ -83,7 +83,7 @@ export const AlbumCard = memo(function AlbumCard({
       tabIndex={0}
     >
       <TiltCard max={9} className="aspect-square w-full overflow-hidden rounded-art shadow-card">
-        <div className="relative size-full" style={{ backgroundColor: color }}>
+        <div className="relative size-full bg-muted" style={color ? { backgroundColor: color } : undefined}>
           <TrackArtwork
             className="size-full object-cover"
             artworkUrl={artworkUrl}

@@ -56,6 +56,20 @@ class ZunoPlugin(private val activity: Activity) : Plugin(activity) {
     }
   }
 
+  /** Light theme: dark bar icons on a light window; dark theme: the reverse. */
+  @Command
+  fun setSystemBars(invoke: Invoke) {
+    val light = invoke.getArgs().optBoolean("light", false)
+    main.post {
+      val window = activity.window
+      window.decorView.setBackgroundColor(if (light) 0xFFF0F0F0.toInt() else 0xFF0A0A0A.toInt())
+      val controller = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+      controller.isAppearanceLightStatusBars = light
+      controller.isAppearanceLightNavigationBars = light
+    }
+    invoke.resolve()
+  }
+
   // ---- Sign-in ------------------------------------------------------------------------------
 
   @Command

@@ -491,7 +491,7 @@ export function LyricsView({ onClose }: LyricsViewProps) {
             <TrackArtwork
               artworkUrl={track?.artworkUrl}
               size={288}
-              className="aspect-square w-full   shadow-2xl shadow-black/50"
+              className="aspect-square w-full rounded-card shadow-pop"
               iconSize={40}
               loading="eager"
             />
@@ -513,7 +513,7 @@ export function LyricsView({ onClose }: LyricsViewProps) {
           <TrackArtwork
             artworkUrl={track?.artworkUrl}
             size={56}
-            className="size-14   shadow-lg shadow-black/30"
+            className="size-14 rounded-art shadow-card"
             iconSize={20}
             loading="eager"
           />
@@ -623,7 +623,7 @@ export function LyricsView({ onClose }: LyricsViewProps) {
           {isFollowPaused && activeIndex >= 0 && (
             <button
               type="button"
-              className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-card px-4 py-2 text-sm font-medium text-foreground shadow-xl shadow-black/30 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-card px-4 py-2 text-sm font-medium text-foreground shadow-pop transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={resumeFollow}
               aria-label="Resync lyrics to current playback position"
             >

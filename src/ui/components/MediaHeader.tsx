@@ -168,7 +168,7 @@ export function MediaHeader({
         >
           <TrackArtwork
             className={cn(
-              "size-44 shrink-0 shadow-pop ring-1 ring-[var(--color-hairline)] max-sm:size-40",
+              "size-44 shrink-0 shadow-pop ring-1 ring-[var(--color-edge)] max-sm:size-40",
               circularArtwork ? "rounded-full" : "rounded-card",
             )}
             artworkUrl={artworkUrl}

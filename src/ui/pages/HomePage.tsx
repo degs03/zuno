@@ -289,9 +289,9 @@ export function HomePage({
 
   const madeForYouSection = (
     <section
-      className={`${"flex flex-col gap-3 overflow-y-visible"} ${
-        isLoadingSuggestions ? "opacity-60" : "opacity-100 transition-opacity"
-      }`}
+      // No dimming while loading: the skeleton already says "loading", and faded on a light
+      // background it disappeared entirely.
+      className="flex flex-col gap-3 overflow-y-visible"
     >
         
       <div className="flex items-center justify-between gap-3">

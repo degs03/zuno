@@ -326,7 +326,7 @@ export function ArtistView({
          */
         artworkSlot={
           <TrackArtwork
-            className="size-44 shrink-0 rounded-full bg-card shadow-2xl ring-1 ring-[var(--color-hairline)]"
+            className="size-44 shrink-0 rounded-full bg-card shadow-2xl ring-1 ring-[var(--color-edge)]"
             size={176}
             artworkUrl={displayedArtist.artworkUrl}
             iconSize={72}

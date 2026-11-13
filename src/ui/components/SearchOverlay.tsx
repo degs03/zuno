@@ -458,7 +458,7 @@ export function SearchOverlay({
             className={cn(
               "group flex items-center rounded-none transition-all",
               active
-                ? "bg-muted text-accent-foreground"
+                ? "bg-muted text-foreground"
                 : "hover:bg-muted"
             )}
           >

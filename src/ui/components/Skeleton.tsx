@@ -26,7 +26,7 @@ function SkeletonBlock({
   return (
     <div
       aria-hidden="true"
-      className={cn("animate-pulse rounded-lg bg-foreground/10", className)}
+      className={cn("skeleton-shimmer rounded-lg", className)}
       style={{ ...style, animationDelay: `${delayMs}ms` }}
     />
   );
@@ -135,5 +135,6 @@ export function AlbumGridSkeleton({
  * carousel gives every child and `PickCard`'s own outer corner.
  */
 export function PickCardSkeleton() {
-  return <SkeletonBlock className="h-full w-full rounded-2xl" />;
+  // The same portrait shape and corner as `PickCard`, so the loading row is the real row.
+  return <SkeletonBlock className="mx-auto aspect-[3/4] h-full rounded-card" />;
 }

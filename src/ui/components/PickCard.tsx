@@ -121,7 +121,7 @@ export function PickCard({
       <span
         className={cn(
           "relative block size-full overflow-hidden rounded-card bg-card shadow-card",
-          "ring-1 ring-[var(--color-hairline)] transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          "ring-1 ring-[var(--color-edge)] transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
           !disabled && "group-hover/pick:-translate-y-1.5 group-hover/pick:shadow-xl group-hover/pick:ring-foreground/25",
         )}
       >
@@ -140,13 +140,23 @@ export function PickCard({
         {/* Scrim only under the text, so the artwork stays the loudest thing on the card.
             The caption gets the card's full width: a portrait tile is narrow, and reserving
             a gutter for the play button left almost nothing for the title. */}
+        {/* White on a dark scrim belongs over a photo, in either theme. Without artwork the card
+            is a plain surface, so the caption takes the theme's own colours instead of a black
+            band across a white card. */}
         <span
-          className="pointer-events-none absolute inset-x-0 bottom-0 bg-linear-to-t from-black/90 via-black/55 to-transparent px-3 pb-2.5 pt-8"
+          className={cn(
+            "pointer-events-none absolute inset-x-0 bottom-0 px-3 pb-2.5 pt-8",
+            artworkUrl && "bg-linear-to-t from-black/90 via-black/55 to-transparent",
+          )}
           aria-hidden="true"
         >
-          <span className="block truncate text-sm font-semibold text-white">{title}</span>
+          <span className={cn("block truncate text-sm font-semibold", artworkUrl ? "text-white" : "text-foreground")}>
+            {title}
+          </span>
           {subtitle ? (
-            <span className="mt-0.5 block truncate text-xs text-white/70">{subtitle}</span>
+            <span className={cn("mt-0.5 block truncate text-xs", artworkUrl ? "text-white/70" : "text-muted-foreground")}>
+              {subtitle}
+            </span>
           ) : null}
         </span>
 

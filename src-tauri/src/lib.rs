@@ -5277,7 +5277,9 @@ pub fn run() {
             #[cfg(target_os = "android")]
             android::update_android_media_session,
             #[cfg(target_os = "android")]
-            android::android_cancel_sign_in
+            android::android_cancel_sign_in,
+            #[cfg(target_os = "android")]
+            android::android_set_system_bars
         ])
         .run(context)
         .expect("error while running tauri application");

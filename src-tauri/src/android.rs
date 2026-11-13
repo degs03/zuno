@@ -186,6 +186,17 @@ pub fn forget_slot(app: &tauri::AppHandle, slot_id: &str) {
     });
 }
 
+#[derive(Serialize)]
+struct SystemBarsArgs {
+    light: bool,
+}
+
+/// Status/navigation bar icons and the window background follow the app theme.
+#[tauri::command]
+pub async fn android_set_system_bars(app: tauri::AppHandle, light: bool) -> Result<(), CommandError> {
+    call::<serde_json::Value, _>(&app, "setSystemBars", SystemBarsArgs { light }).await.map(|_| ())
+}
+
 #[tauri::command]
 pub async fn android_cancel_sign_in(app: tauri::AppHandle) -> Result<(), CommandError> {
     call::<serde_json::Value, _>(&app, "cancelSignIn", ()).await.map(|_| ())

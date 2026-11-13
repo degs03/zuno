@@ -69,7 +69,7 @@ export function CoverButton({ artworkUrl, label, className, children }: CoverBut
               >
                 <TrackArtwork
                   artworkUrl={getFullSizeArtworkUrl(artworkUrl)}
-                  className="aspect-square w-[min(80vh,80vw)] rounded-2xl shadow-2xl shadow-black/50"
+                  className="aspect-square w-[min(80vh,80vw)] rounded-card shadow-pop"
                   iconSize={96}
                   loading="eager"
                 />
