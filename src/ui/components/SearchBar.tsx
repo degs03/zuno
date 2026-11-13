@@ -1,7 +1,7 @@
 import { Button } from "@/components/motion/button";
 import { Tooltip } from "@/components/motion/tooltip";
 import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from "@/ui/icons";
-import { primaryModifierLabel } from "../platform";
+import { isMobile, primaryModifierLabel } from "../platform";
 
 interface SearchBarProps {
   onOpen: () => void;
@@ -58,9 +58,11 @@ export function SearchBar({
       >
         <SearchIcon size={17} className="shrink-0" />
         <span className="truncate">Search artists, songs, playlists, and albums</span>
-        <kbd className="ml-auto shrink-0 rounded bg-background/60 px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
-          {primaryModifierLabel} Space
-        </kbd>
+        {!isMobile && (
+          <kbd className="ml-auto shrink-0 rounded bg-background/60 px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
+            {primaryModifierLabel} Space
+          </kbd>
+        )}
       </button>
     </div>
   );

@@ -12,6 +12,7 @@ import { DownloadButton } from "./DownloadButton";
 import { PlaybackOptions } from "./PlaybackOptions";
 import { VolumeControl } from "./VolumeControl";
 import { LyricsButton } from "./LyricsButton";
+import { isMobile } from "../../platform";
 import {
   useCompactPlayerBar,
   useExtraPlayerControlsAlwaysVisible,
@@ -179,6 +180,41 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
         )}
       </AnimatePresence>
 
+      {isMobile ? (
+        /*
+         * Phone width: track and its two panels on one row, the transport centred under it.
+         * No volume (the hardware keys own it), no hover-revealed controls (there is no hover),
+         * and no 22rem minimum that would push the bar wider than the screen.
+         */
+        <div
+          className="flex shrink-0 flex-col gap-2 bg-background px-3 pb-2 pt-2"
+          onClick={handlePlayerBarClick}
+        >
+          <SeekBar />
+          <div className="flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <TrackInfo />
+            </div>
+            <LyricsButton onToggle={onToggleLyrics} />
+            <button
+              type="button"
+              className={cn(
+                "flex size-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                isQueueOpen ? "bg-card text-primary" : "text-muted-foreground",
+              )}
+              onClick={onToggleQueue}
+              aria-label={isQueueOpen ? "Close queue" : "Open queue"}
+            >
+              <QueuePanelIcon size={20} />
+            </button>
+            <DownloadButton />
+            <PlaybackOptions />
+          </div>
+          <div className="flex justify-center">
+            <PlaybackControls extraControlsAlwaysVisible />
+          </div>
+        </div>
+      ) : (
       <div
         className="group/playerbar flex shrink-0 flex-col gap-1 bg-background px-4 pb-3 pt-2"
         onClick={handlePlayerBarClick}
@@ -234,6 +270,7 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
           </div>
         </div>
       </div>
+      )}
     </>
   );
 }

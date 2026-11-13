@@ -51,6 +51,8 @@ import { useNativeWindowControls, useWindowOutline } from "./settings/windowCont
 /** Wide enough for a 44px cover plus breathing room, matching the sidebar rail's feel. */
 const COLLAPSED_QUEUE_WIDTH = 62;
 import { Layout } from "./components/Layout";
+import { MobileNavBar, type MobileNavTarget } from "./components/MobileNavBar";
+import { registerBackHandler } from "./android";
 import type { Tab, TabViewState } from "./types/tab";
 import {
   libraryController,
@@ -1501,6 +1503,64 @@ export default function App() {
     playerUIStore.setLyricsOpen(true);
   };
 
+  const mobileNavActive: MobileNavTarget | null = isSearchOpen
+    ? "search"
+    : activeTab?.view === "home" || activeTab?.view === "browse"
+      || activeTab?.view === "library" || activeTab?.view === "settings"
+      ? activeTab.view
+      : null;
+
+  const handleMobileNavigate = (target: MobileNavTarget) => {
+    setIsQueuePanelOpen(false);
+    if (target === "search") {
+      // Search is suppressed over Settings (desktop opens Settings as its own page), so leave it.
+      if (activeTab?.view === "settings") handleNavigateHome();
+      setIsSearchOpen(true);
+      return;
+    }
+    setIsSearchOpen(false);
+    playerUIStore.setLyricsOpen(false);
+    if (target === "home") handleNavigateHome();
+    if (target === "browse") handleOpenBrowse();
+    if (target === "library") handleOpenLibrary();
+    if (target === "settings") handleOpenSettings();
+  };
+
+  // Android back: close the topmost layer, then step back through history; only when there is
+  // nothing left does MainActivity send the app to the background.
+  const backStateRef = useRef({ isSearchOpen, isQueuePanelOpen, canNavigateBack, isLyricsOpen: false });
+  backStateRef.current = {
+    isSearchOpen,
+    isQueuePanelOpen,
+    canNavigateBack,
+    isLyricsOpen: playerUIState.isLyricsOpen,
+  };
+  const handleNavigateBackRef = useRef(handleNavigateBack);
+  handleNavigateBackRef.current = handleNavigateBack;
+  useEffect(() => {
+    if (!isMobile) return;
+    return registerBackHandler(() => {
+      const current = backStateRef.current;
+      if (current.isSearchOpen) {
+        setIsSearchOpen(false);
+        return true;
+      }
+      if (current.isQueuePanelOpen) {
+        setIsQueuePanelOpen(false);
+        return true;
+      }
+      if (current.isLyricsOpen) {
+        playerUIStore.setLyricsOpen(false);
+        return true;
+      }
+      if (current.canNavigateBack) {
+        handleNavigateBackRef.current();
+        return true;
+      }
+      return false;
+    });
+  }, [setIsQueuePanelOpen]);
+
   const handleToggleQueue = () => {
     // Toggle asynchronously to avoid triggering synchronous store updates
     // during React commit phase which can cause "Maximum update depth".
@@ -1982,7 +2042,9 @@ useEffect(() => {
     */}
     <div
       className={`relative flex h-screen flex-col overflow-hidden rounded-[var(--window-radius)] ${
-        nativeWindowControls || !windowOutline
+        isMobile
+          ? "pt-[env(safe-area-inset-top)]"
+          : nativeWindowControls || !windowOutline
           ? ""
           : "border border-border ring-1 ring-inset ring-[var(--window-edge)]"
       }`}
@@ -1994,7 +2056,8 @@ useEffect(() => {
     /> */}
       {/* Dropped entirely in full-screen lyrics, not just visually hidden: the window is
           real OS fullscreen at that point, so there is no frame left to drag or minimize. */}
-      {!playerUIState.isLyricsFullscreen && (
+      {/* Mobile has no window to drag and no tab strip; MobileNavBar takes its place. */}
+      {!playerUIState.isLyricsFullscreen && !isMobile && (
       <TitleBar
         tabs={tabs}
         activeTabId={activeTabId}
@@ -2031,7 +2094,7 @@ useEffect(() => {
           onNavigateBack={handleNavigateBack}
           onNavigateForward={handleNavigateForward}
           fullBleedContent={playerUIState.isLyricsOpen}
-          hideSidebar={playerUIState.isLyricsFullscreen}
+          hideSidebar={isMobile || playerUIState.isLyricsFullscreen}
           showTransientScrollbar={
             !playerUIState.isLyricsOpen
             && (activeTab?.view === "playlist" || activeTab?.view === "album")
@@ -2047,7 +2110,7 @@ useEffect(() => {
             the close animation didn't start until that guess elapsed, then had to play out a
             spring on top of it. Removing the mirror is what makes closing start immediately.
           */
-          rightPanel={isQueuePanelOpen ? (
+          rightPanel={isQueuePanelOpen && !isMobile ? (
             <QueuePanel onClose={() => setIsQueuePanelOpen(false)} />
           ) : undefined}
         >
@@ -2223,6 +2286,15 @@ useEffect(() => {
           </ErrorBoundary>
         </div>
       </div>
+      {isMobile && !playerUIState.isLyricsFullscreen && (
+        <MobileNavBar active={mobileNavActive} onNavigate={handleMobileNavigate} />
+      )}
+      {/* Mobile: the queue is a full-screen sheet over the page, not a side column. */}
+      {isMobile && isQueuePanelOpen && (
+        <div className="absolute inset-0 z-40 flex flex-col bg-card pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+          <QueuePanel onClose={() => setIsQueuePanelOpen(false)} />
+        </div>
+      )}
       <SearchOverlay
         isOpen={isSearchOpen && activeTab?.view !== "settings"}
         activeTabId={activeTabId}
@@ -2248,7 +2320,8 @@ useEffect(() => {
           {loadingScreenState === "hidden" && showOnboardingWelcome && (
             <OnboardingWelcome />
           )}
-          {loadingScreenState === "hidden" && onboardingComplete === false && !showOnboardingWelcome && onboardingStep && (
+          {/* The tour points at desktop chrome and keyboard shortcuts that mobile does not have. */}
+          {!isMobile && loadingScreenState === "hidden" && onboardingComplete === false && !showOnboardingWelcome && onboardingStep && (
             <Onboarding
               step={onboardingStep}
               onSkip={finishOnboarding}

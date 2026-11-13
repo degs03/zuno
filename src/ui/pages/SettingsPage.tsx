@@ -208,7 +208,7 @@ import {
   setLastFmScrobblingEnabled,
   useLastFmScrobblingEnabled,
 } from "../settings/lastfm";
-import { isLinux, isMacOS, isTilingWindowManager, subscribeTilingWindowManager } from "../platform";
+import { isLinux, isMacOS, isMobile, isTilingWindowManager, subscribeTilingWindowManager } from "../platform";
 import { GITHUB_NEW_ISSUE_URL, GITHUB_REPOSITORY_URL } from "../links";
 import { AccountAvatar, AccountSwitcher, AddGoogleAccountButton, GoogleAccountSwitcher } from "../components/AccountSwitcher";
 import {
@@ -1057,7 +1057,8 @@ export function SettingsPage({
           role="tablist"
           aria-label="Settings categories"
         >
-          {SETTINGS_TABS.map((tab) => {
+          {/* Mobile has no window chrome and no keyboard to bind. */}
+          {SETTINGS_TABS.filter((tab) => !isMobile || (tab.id !== "window" && tab.id !== "shortcuts")).map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
@@ -1257,6 +1258,8 @@ export function SettingsPage({
             </div>
           </section>
 
+          {/* Desktop only: not meaningful on mobile. */}
+          {!isMobile && (
           <section className={SETTINGS_CARD} aria-labelledby="discord-settings-title">
             <h2 className="text-lg font-semibold text-foreground" id="discord-settings-title">
               Discord
@@ -1278,6 +1281,7 @@ export function SettingsPage({
               />
             </div>
           </section>
+          )}
 
           <section className={SETTINGS_CARD} aria-labelledby="about-settings-title">
             <h2 className="text-lg font-semibold text-foreground" id="about-settings-title">
@@ -1363,6 +1367,8 @@ export function SettingsPage({
 
       {activeTab === "system" && (
         <div className="flex flex-col gap-5" role="tabpanel" aria-label="Library settings">
+          {/* Desktop only: not meaningful on mobile. */}
+          {!isMobile && (
           <section className={SETTINGS_CARD} aria-labelledby="library-local-title">
             <SettingsCardHeader
               title="Local music"
@@ -1482,6 +1488,7 @@ export function SettingsPage({
             </div>
 
           </section>
+          )}
 
           <section className={SETTINGS_CARD} aria-labelledby="library-storage-title">
             <SettingsCardHeader
@@ -1744,6 +1751,8 @@ export function SettingsPage({
 
           </section>
 
+          {/* Desktop only: not meaningful on mobile. */}
+          {!isMobile && (
           <section className={SETTINGS_CARD} aria-labelledby="library-system-title">
             <SettingsCardHeader
               title="System"
@@ -1771,6 +1780,7 @@ export function SettingsPage({
 
 
           </section>
+          )}
 
           <section className={SETTINGS_CARD} aria-labelledby="library-trouble-title">
             <SettingsCardHeader
@@ -2276,6 +2286,8 @@ export function SettingsPage({
               })}
             </div>
 
+            {/* Desktop only: not meaningful on mobile. */}
+            {!isMobile && (
             <SettingRow
               title="App size"
               description={`Zooms the whole app. ${isMacOS ? "⌘" : "Ctrl"} with + or − works too, and 0 resets it.`}
@@ -2299,6 +2311,7 @@ export function SettingsPage({
                 </Select>
               )}
             </SettingRow>
+            )}
           </section>
 
           <section className={SETTINGS_CARD} aria-labelledby="toolbar-settings-title">

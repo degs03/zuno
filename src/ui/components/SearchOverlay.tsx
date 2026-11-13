@@ -5,7 +5,7 @@ import type { Album, Artist, Playlist, SearchResults, Track } from "../../dataso
 import type { SearchController } from "../../player/SearchController";
 import { TrackArtwork } from "./TrackArtwork";
 import { useTrackContextMenu } from "./TrackContextMenu";
-import { isMacOS, primaryModifierLabel } from "../platform";
+import { isMacOS, isMobile, primaryModifierLabel } from "../platform";
 import { usePlaylistContextMenu } from "./PlaylistContextMenu";
 
 const RECENT_SEARCHES_KEY = "yt-music-dock:recent-searches";
@@ -485,11 +485,14 @@ export function SearchOverlay({
   </section>
 )}
 
-        <footer className="flex items-center gap-3 px-4 py-2 text-xs text-muted-foreground">
-          <span>Enter search</span>
-          <span>Shift or {primaryModifierLabel} + Enter new tab</span>
-          <span>Esc close</span>
-        </footer>
+        {/* Keyboard hints; a phone has neither the keys nor the tabs they open. */}
+        {!isMobile && (
+          <footer className="flex items-center gap-3 px-4 py-2 text-xs text-muted-foreground">
+            <span>Enter search</span>
+            <span>Shift or {primaryModifierLabel} + Enter new tab</span>
+            <span>Esc close</span>
+          </footer>
+        )}
       </section>
     </div>
   );
