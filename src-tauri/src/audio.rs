@@ -553,6 +553,11 @@ impl NativeAudio {
             .lock()
             .map_err(|_| "native audio lock poisoned".to_string())?
             .clone();
+        // cpal panics without the JavaVM/Activity; see android_context.
+        #[cfg(target_os = "android")]
+        if !crate::android_context::wait(std::time::Duration::from_secs(5)) {
+            return Err("android audio context was not initialised".to_string());
+        }
         std::thread::Builder::new()
             .name("zuno-audio".into())
             .spawn(move || run(app, rx, commands, ready_tx, device))

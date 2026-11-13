@@ -21,10 +21,8 @@ tauri-build = { version = "2", features = [] }
 # `unstable` is what allows more than one webview in a window: the sign-in window puts a
 # read-only address bar above Google's page.
 tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png", "unstable"] }
-tauri-plugin-autostart = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-localhost = "2"
-tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "gzip", "brotli", "deflate", "stream"] }
@@ -34,7 +32,6 @@ base64 = "0.22"
 url = "2.5"
 keyring = { version = "3.6", features = ["apple-native", "windows-native", "sync-secret-service"] }
 discord-rich-presence = "0.2"
-tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 tauri-plugin-dialog = "2"
 md5 = "0.8.0"
@@ -55,6 +52,18 @@ opus = "0.3.1"
 # Was macOS-only (the session encryption key); account slot ids need it on every platform now.
 rand = "0.8"
 rodio-wsola = "0.2"
+
+# Desktop-only plugins: none of them has an Android/iOS implementation.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-autostart = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
+
+[target.'cfg(target_os = "android")'.dependencies]
+# Same versions cpal and wry already pull: wry's JNI callback hands us a jni 0.21 env, and
+# cpal reads the context back through ndk-context.
+jni = "0.21"
+ndk-context = "0.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 aes-gcm = "0.10"

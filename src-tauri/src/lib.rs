@@ -43,6 +43,8 @@ mod windows_media;
 #[cfg(target_os = "linux")]
 mod linux_media;
 
+#[cfg(target_os = "android")]
+mod android_context;
 mod audio;
 mod process_memory;
 mod discord_rpc;
@@ -1691,6 +1693,7 @@ fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         set_webview_memory_low(&window, false);
         let _ = window.show();
+        #[cfg(desktop)]
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
@@ -1715,11 +1718,16 @@ fn close_or_hide_main_window(app: &tauri::AppHandle) {
 
 // The tray only exists to bring back a hidden window, so it follows minimize-to-tray (#145).
 fn set_tray_visible(app: &tauri::AppHandle, visible: bool) {
+    // No tray on mobile; the OS owns backgrounding there.
+    #[cfg(mobile)]
+    let _ = (app, visible);
+    #[cfg(desktop)]
     if let Some(tray) = app.tray_by_id("main-tray") {
         let _ = tray.set_visible(visible);
     }
 }
 
+#[cfg(desktop)]
 fn build_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem};
     use tauri::tray::{TrayIconBuilder, TrayIconEvent};
@@ -2477,6 +2485,28 @@ fn decode_slot_id_bytes(slot_id: &str) -> [u8; 16] {
 /// `loaded` is raised once a navigation finishes, which the silent refresh needs: cookies read
 /// before the page has actually loaded are the same stale ones we already hold.
 fn build_login_window(
+    app: &tauri::AppHandle,
+    visible: bool,
+    loaded: Arc<AtomicBool>,
+    slot_id: &str,
+) -> Result<tauri::Webview, CommandError> {
+    // TODO(android): Tauri mobile has a single window with a single webview, so there is no
+    // way to host the address bar + partitioned Google page that desktop uses. Sign-in on
+    // Android needs its own flow (e.g. a native WebView activity in a Kotlin plugin that hands
+    // the cookies back).
+    #[cfg(mobile)]
+    {
+        let _ = (app, visible, loaded, slot_id);
+        return Err(CommandError {
+            message: "YouTube Music sign-in is not available on mobile yet".into(),
+        });
+    }
+    #[cfg(desktop)]
+    build_login_window_desktop(app, visible, loaded, slot_id)
+}
+
+#[cfg(desktop)]
+fn build_login_window_desktop(
     app: &tauri::AppHandle,
     visible: bool,
     loaded: Arc<AtomicBool>,
@@ -4939,16 +4969,27 @@ pub fn run() {
          * it immediately. Reuses the tray's own "bring to front" — a second launch is exactly
          * that, wherever it came from.
          */
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        ;
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             show_main_window(app);
-        }))
+        }));
+    }
+    builder = builder
         .manage(CacheLock(Mutex::new(None)))
         .manage(AppSettings::default())
         .manage(AccountStoreLock(Mutex::new(())))
         .manage(YoutubeCookieJar(Mutex::new(CookieJarState::default())))
-        .manage(discord_manager)
-        .plugin(tauri_plugin_autostart::Builder::new().build())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(discord_manager);
+    // Autostart and self-update have no Android/iOS implementation; the store handles both.
+    #[cfg(desktop)]
+    {
+        builder = builder
+            .plugin(tauri_plugin_autostart::Builder::new().build())
+            .plugin(tauri_plugin_updater::Builder::new().build());
+    }
+    builder = builder
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init());
@@ -4981,6 +5022,8 @@ pub fn run() {
              * handle from the OS mixer for a decoder they will not use.
              */
             app.manage(audio::NativeAudio::new(app.handle().clone()));
+            #[cfg(target_os = "android")]
+            android_context::initialize(app.handle());
             // Before the log is initialised, so a first run after the rename still logs to
             // the directory the user's settings were just restored into.
             migrate_legacy_app_data(app.handle());
@@ -4996,6 +5039,7 @@ pub fn run() {
             #[cfg(target_os = "linux")]
             linux_media::mirror_volume(app.handle());
             // Always built, so toggling the setting takes effect without a restart.
+            #[cfg(desktop)]
             if let Err(error) = build_tray(app.handle()) {
                 std::eprintln!("[internal][tauri][warn] tray unavailable: {error}");
             }
