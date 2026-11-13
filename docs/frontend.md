@@ -337,6 +337,15 @@ Two shared utilities live in `global.css`:
 
 Shadows and blur stay under the existing `data-fx-off` switches, so Potato mode removes them.
 
+**Accent and style** (`src/ui/settings/appearance.ts`) are two more attributes on `<html>`:
+- `data-accent` swaps `--color-primary` and `--color-ring`. A custom colour is written as inline
+  variables, and its label colour is chosen by contrast.
+- `data-style` (`zuno`, `glass`, `ios`, `solid`) overrides only the surface, radius and
+  elevation tokens.
+
+Components never branch on either one. A new surface that uses the tokens above follows every
+style for free. Potato PC's palette is declared after the styles, so it always wins.
+
 On a phone, a context menu opens from a visible ⋯ or from a long-press (`useLongPress` in
 `src/lib/hooks`). The long-press delivers the same event shape as a right-click, so existing
 `onContextMenu` handlers need no changes.
