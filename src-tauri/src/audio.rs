@@ -1180,6 +1180,7 @@ impl Engine {
                 for deck in &self.decks {
                     deck.sink.set_speed(self.pitch);
                 }
+                crate::equalizer::set_pitch_ratio(self.pitch);
             }
             Command::Transition { track_id, fade_ms, reply } => {
                 self.queued = None;

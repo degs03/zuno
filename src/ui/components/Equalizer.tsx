@@ -143,7 +143,9 @@ export function EqualizerGraph({ compact = false, disabled = false }: { compact?
     const { band, gain, rect } = locate(event.currentTarget, event.clientX, event.clientY);
     const current = getEqualizer().bandsDb[band];
     const nodeY = rect.top + (yOf(current) / 100) * rect.height;
-    const grab = Math.abs(event.clientY - nodeY) <= GRAB_RADIUS_PX;
+    // A finger is not a cursor: it always takes the band under it, relatively, so a tap
+    // meant to scroll or to select never paints a band to wherever it landed.
+    const grab = event.pointerType === "touch" || Math.abs(event.clientY - nodeY) <= GRAB_RADIUS_PX;
     gesture.current = grab
       ? { kind: "grab", band, startY: event.clientY, startGain: current }
       : { kind: "draw", band, gain };
@@ -162,6 +164,8 @@ export function EqualizerGraph({ compact = false, disabled = false }: { compact?
       return;
     }
     if (current.kind === "grab") {
+      // Dead zone for touch: under 6px of travel is a tap, not an adjustment.
+      if (event.pointerType === "touch" && Math.abs(current.startY - event.clientY) < 6) return;
       const moved = ((current.startY - event.clientY) / (rect.height / 2)) * DISPLAY_DB;
       setBands([[current.band, snapGain(current.startGain + moved)]]);
       return;
@@ -236,7 +240,7 @@ export function EqualizerGraph({ compact = false, disabled = false }: { compact?
           onDoubleClick={onDoubleClick}
           className={cn(
             "relative min-w-0 flex-1 touch-none select-none rounded-xl bg-background/40",
-            compact ? "h-24" : "h-52",
+            compact ? "h-24 max-sm:h-36" : "h-52",
             disabled ? "pointer-events-none" : grabbing ? "cursor-grabbing" : "cursor-crosshair",
           )}
         >
@@ -468,7 +472,7 @@ export function EqualizerPresets({
       className={cn(
         "relative rounded-full font-medium transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-        compact ? "px-2 py-0.5 text-[10px]" : "px-3 py-1 text-xs",
+        compact ? "px-2 py-0.5 text-[10px] max-sm:min-h-9 max-sm:px-3 max-sm:text-xs" : "px-3 py-1 text-xs max-sm:min-h-10",
         isActive
           ? "text-primary-foreground"
           : compact
@@ -679,9 +683,11 @@ export function EqualizerPanel({ disabled }: { disabled: boolean }) {
       <EqualizerGraph disabled={disabled} />
       <EqualizerPreamp disabled={disabled} />
       <p className="text-xs text-muted-foreground">
-        Changes play as you make them. Drag a point, or sweep across the graph to draw a curve;
-        double-click a band to flatten it. Anything over the dashed line is held back by the
-        limiter — lower the preamp, or let Auto do it.
+        {/Android/i.test(navigator.userAgent)
+          ? "Changes play as you make them. Slide a band up or down with your finger; pick Flat to start over."
+          : "Changes play as you make them. Drag a point, or sweep across the graph to draw a curve; double-click a band to flatten it."}{" "}
+        Anything over the dashed line is held back by the limiter — lower the preamp, or let Auto
+        do it.
       </p>
     </div>
   );

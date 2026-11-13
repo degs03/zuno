@@ -10,6 +10,7 @@ import { Switch } from "@/components/motion/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import { RangeSlider } from "@/components/motion/range-slider";
 import appLogo from "../../../assets/img/logo-72.png";
+import { playerController } from "../../player/playerStore";
 import { setEqualizerEnabled, useEqualizerEnabled } from "../settings/equalizer";
 import { EqualizerPanel } from "../components/Equalizer";
 import {
@@ -38,6 +39,7 @@ import {
   FolderAddIcon,
   FolderIcon,
   FolderOpenIcon,
+  CheckActiveIcon,
   HomeIcon,
   KeyIcon,
   LastFmIcon,
@@ -49,6 +51,7 @@ import {
   QueuePanelIcon,
   RefreshIcon,
   SettingsIcon,
+  SpeedIcon,
   StarIcon,
   TrashIcon,
   UserIcon,
@@ -60,6 +63,17 @@ import {
   useThemePreference,
   type ThemePreference,
 } from "../settings/theme";
+import {
+  ACCENTS,
+  STYLES,
+  setAccent,
+  setCustomAccent,
+  setStyle,
+  useAccent,
+  useCustomAccent,
+  useStyle,
+  type StylePreset,
+} from "../settings/appearance";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -245,6 +259,236 @@ const SETTING_LABEL =
 /** Section card. One shape for every group so the page reads as a single system. */
 // The shared card recipe at a softer fill: settings stack many cards, and full `bg-card` on
 // every one reads as a wall. Tighter padding on phones gives the rows back their width.
+/**
+ * Accent colour and visual style (see settings/appearance.ts). Swatches are radios; "Custom"
+ * wraps a native colour input. Style tiles preview their own shape, depth and translucency.
+ */
+function AppearancePicker() {
+  const accent = useAccent();
+  const customAccent = useCustomAccent();
+  const style = useStyle();
+  return (
+    <>
+      <div className="flex flex-col gap-2.5">
+        <h3 className="text-sm font-medium text-foreground" id="accent-settings-title">Accent colour</h3>
+        <div className="flex flex-wrap gap-2.5" role="radiogroup" aria-labelledby="accent-settings-title">
+          {ACCENTS.map((option) => {
+            const selected = accent === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                aria-label={option.label}
+                title={option.label}
+                onClick={() => setAccent(option.id)}
+                className={cn(
+                  "pressable grid size-10 place-items-center rounded-full ring-offset-2 ring-offset-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  selected && "ring-2 ring-foreground",
+                )}
+                style={{ backgroundColor: option.swatch }}
+              >
+                {selected ? <CheckActiveIcon size={18} className="text-white" aria-hidden="true" /> : null}
+              </button>
+            );
+          })}
+          <label
+            className={cn(
+              "pressable relative grid size-10 cursor-pointer place-items-center overflow-hidden rounded-full ring-offset-2 ring-offset-card focus-within:ring-2 focus-within:ring-ring",
+              accent === "custom" && "ring-2 ring-foreground",
+            )}
+            title="Custom colour"
+            style={{
+              background:
+                accent === "custom"
+                  ? customAccent
+                  : "conic-gradient(#e8002e, #c2410c, #ca8a04, #047857, #2563eb, #7c3aed, #be185d, #e8002e)",
+            }}
+          >
+            <input
+              type="color"
+              aria-label="Custom accent colour"
+              className="absolute inset-0 size-full cursor-pointer opacity-0"
+              value={customAccent}
+              onChange={(event) => setCustomAccent(event.target.value)}
+            />
+            {accent === "custom" ? (
+              <CheckActiveIcon size={18} className="pointer-events-none text-white" aria-hidden="true" />
+            ) : null}
+          </label>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2.5">
+        <h3 className="text-sm font-medium text-foreground" id="style-settings-title">Style</h3>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-labelledby="style-settings-title">
+          {STYLES.map((option) => {
+            const selected = style === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => {
+                  setStyle(option.id);
+                  // Glass *is* the blur: choosing it switches the blur effect back on (phones
+                  // start with it off to save GPU), otherwise it would fall back to opaque.
+                  if (option.id === "glass") setEffectDisabled("backdrop", false);
+                }}
+                className={cn(
+                  "pressable flex flex-col gap-2 rounded-row p-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  selected ? "bg-primary/10 ring-1 ring-primary/40" : "bg-background/40 hover:bg-muted/60",
+                )}
+              >
+                <StylePreview style={option.id} />
+                <span className="text-sm font-semibold text-foreground">{option.label}</span>
+                <span className="text-xs text-muted-foreground">{option.hint}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** A tiny card stack drawn the way each style draws real cards. */
+function StylePreview({ style }: { style: StylePreset }) {
+  const card = {
+    zuno: "rounded-lg bg-card shadow-[0_6px_14px_-8px_var(--elevation-shade)]",
+    glass: "rounded-xl bg-white/25 ring-1 ring-white/40 backdrop-blur-sm",
+    ios: "rounded-2xl bg-card",
+    solid: "rounded-sm bg-card ring-1 ring-border",
+  }[style];
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "relative flex h-16 w-full items-end gap-1.5 overflow-hidden rounded-lg p-2",
+        style === "glass"
+          ? "bg-[radial-gradient(circle_at_20%_20%,var(--color-primary),transparent_70%)] bg-muted"
+          : "bg-muted",
+      )}
+    >
+      <span className={cn("h-10 w-1/2", card)} />
+      <span className={cn("h-7 w-1/3", card)}>
+        <span className="m-1 block h-1.5 w-2/3 rounded-full bg-primary" />
+      </span>
+    </span>
+  );
+}
+
+const SPEED_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
+
+/**
+ * Speed and pitch, the same controls as the player's popup, where people look for them in
+ * Settings too. Both are remembered across launches by the player itself.
+ */
+function SpeedPitchSettings({ rustEngine }: { rustEngine: boolean }) {
+  const [rate, setRate] = useState(() => playerController.getPlaybackRate());
+  const [pitch, setPitch] = useState(() => playerController.getPitch());
+  const applyRate = (next: number) => {
+    playerController.setPlaybackRate(next);
+    setRate(playerController.getPlaybackRate());
+  };
+  const applyPitch = (next: number) => {
+    playerController.setPitch(next);
+    setPitch(playerController.getPitch());
+  };
+  const chip = (active: boolean) =>
+    cn(
+      "pressable min-h-10 min-w-12 flex-1 rounded-full px-3 text-sm font-medium tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      active ? "bg-primary text-primary-foreground" : "bg-muted/60 text-foreground hover:bg-muted",
+    );
+  return (
+    <section className={SETTINGS_CARD} aria-labelledby="speed-settings-title">
+      <SettingsCardHeader
+        title="Speed & pitch"
+        titleId="speed-settings-title"
+        icon={<SpeedIcon size={18} aria-hidden="true" />}
+        description="Change tempo without chipmunk voices, or key without changing tempo."
+        status={
+          rate !== 1 || pitch !== 0 ? (
+            <button
+              type="button"
+              className="rounded-full px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => {
+                applyRate(1);
+                applyPitch(0);
+              }}
+            >
+              Reset
+            </button>
+          ) : undefined
+        }
+      />
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-foreground" id="speed-row-label">
+          Speed <span className="tabular-nums text-muted-foreground">· {rate}×</span>
+        </span>
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-labelledby="speed-row-label">
+          {SPEED_STEPS.map((value) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={rate === value}
+              className={chip(rate === value)}
+              onClick={() => applyRate(value)}
+            >
+              {value}×
+            </button>
+          ))}
+        </div>
+      </div>
+      {rustEngine ? (
+        <div className="flex flex-col gap-2">
+          <span className="text-sm font-medium text-foreground" id="pitch-row-label">
+            Pitch{" "}
+            <span className="tabular-nums text-muted-foreground">
+              · {pitch === 0 ? "original key" : `${pitch > 0 ? "+" : ""}${pitch} semitone${Math.abs(pitch) === 1 ? "" : "s"}`}
+            </span>
+          </span>
+          <div className="flex items-center gap-2" role="group" aria-labelledby="pitch-row-label">
+            <button
+              type="button"
+              aria-label="Lower pitch a semitone"
+              className={cn(chip(false), "flex-none text-lg")}
+              disabled={pitch <= -12}
+              onClick={() => applyPitch(pitch - 1)}
+            >
+              −
+            </button>
+            <input
+              type="range"
+              min={-12}
+              max={12}
+              step={1}
+              value={pitch}
+              aria-label="Pitch in semitones"
+              className="h-10 min-w-0 flex-1 accent-[var(--color-primary)]"
+              onChange={(event) => applyPitch(Number(event.target.value))}
+            />
+            <button
+              type="button"
+              aria-label="Raise pitch a semitone"
+              className={cn(chip(false), "flex-none text-lg")}
+              disabled={pitch >= 12}
+              onClick={() => applyPitch(pitch + 1)}
+            >
+              +
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">Pitch needs the Rust audio engine.</p>
+      )}
+    </section>
+  );
+}
+
 /** Thin used-of-total bar. */
 function UsageMeter({ used, total, label }: { used: number; total: number; label: string }) {
   const percent = total > 0 ? Math.min(100, (used / total) * 100) : 0;
@@ -2244,6 +2488,8 @@ export function SettingsPage({
             />
           </section>
 
+          <SpeedPitchSettings rustEngine={audioEngineMode === "rust"} />
+
           <EqualizerSettings engineMode={audioEngineMode} />
 
           <section className={SETTINGS_CARD} aria-labelledby="playback-settings-title">
@@ -2336,11 +2582,13 @@ export function SettingsPage({
         <div className="flex flex-col gap-5" role="tabpanel" aria-label="Appearance settings">
           <section className={SETTINGS_CARD} aria-labelledby="theme-settings-title">
             <SettingsCardHeader
-              title="Theme"
+              title="Look & feel"
               titleId="theme-settings-title"
               icon={<PaletteIcon size={18} aria-hidden="true" />}
-              description="Applies instantly across both windows."
+              description="Theme, colour and style. Changes apply instantly."
             />
+
+            <h3 className="-mb-2 text-sm font-medium text-foreground">Theme</h3>
 
             <div
               className="grid grid-cols-3 gap-2"
@@ -2385,6 +2633,8 @@ export function SettingsPage({
                 );
               })}
             </div>
+
+            <AppearancePicker />
 
             {/* Desktop only: not meaningful on mobile. */}
             {!isMobile && (

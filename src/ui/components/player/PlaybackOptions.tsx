@@ -29,7 +29,10 @@ export function PlaybackOptions() {
   const [isOpen, setIsOpen] = useState(false);
   const [rate, setRate] = useState(() => playerController.getPlaybackRate());
   const [pitch, setPitch] = useState(() => playerController.getPitch());
-  const canShiftPitch = useAudioEngineMode() === "rust";
+  const rustEngine = useAudioEngineMode() === "rust";
+  // Read when the panel opens: a track that fell back to the YouTube player ignores pitch/EQ.
+  const onFallback = isOpen && playerController.isOnFallbackPlayer();
+  const canShiftPitch = rustEngine && !onFallback;
   const [remainingMs, setRemainingMs] = useState<number | null>(
     () => playerController.getSleepTimerRemainingMs(),
   );
@@ -77,7 +80,7 @@ export function PlaybackOptions() {
       onOpenChange={setIsOpen}
       side="top"
       triggerClassName="shrink-0"
-      className="w-64"
+      className="w-72"
       trigger={
         <Tooltip content="Speed, sleep timer and equaliser">
           <button
@@ -107,8 +110,28 @@ export function PlaybackOptions() {
       }
     >
       <div className="flex flex-col gap-3">
+        {onFallback && rustEngine && (
+          <p className="rounded-md bg-muted/60 px-2.5 py-2 text-xs text-muted-foreground">
+            This track is playing through the YouTube player, so pitch and the equaliser don&apos;t
+            apply to it. Speed still does.
+          </p>
+        )}
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-foreground">Playback speed</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-foreground">Playback speed</span>
+            {(rate !== 1 || pitch !== 0) && (
+              <button
+                type="button"
+                className="rounded-full px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:py-1.5"
+                onClick={() => {
+                  applyRate(1);
+                  applyPitch(0);
+                }}
+              >
+                Reset
+              </button>
+            )}
+          </div>
           <div className="flex rounded-lg bg-card p-0.5" role="radiogroup" aria-label="Playback speed">
             {SPEEDS.map((value) => (
               <button
@@ -118,7 +141,7 @@ export function PlaybackOptions() {
                 aria-checked={rate === value}
                 onClick={() => applyRate(value)}
                 className={cn(
-                  "flex-1 rounded-md px-1 py-1 text-[11px] font-medium tabular-nums transition-colors",
+                  "flex-1 rounded-md px-1 py-1 text-[11px] font-medium tabular-nums transition-colors max-sm:min-h-10 max-sm:text-sm",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                   rate === value
                     ? "bg-background text-foreground shadow-sm"
@@ -147,7 +170,7 @@ export function PlaybackOptions() {
                   disabled={step === 0 ? pitch === 0 : Math.abs(pitch + step) > 12}
                   onClick={() => applyPitch(step === 0 ? 0 : pitch + step)}
                   className={cn(
-                    "min-w-8 rounded-md px-2 py-1 text-[11px] font-medium tabular-nums transition-colors",
+                    "min-w-8 rounded-md px-2 py-1 text-[11px] font-medium tabular-nums transition-colors max-sm:min-h-10 max-sm:min-w-11 max-sm:text-sm",
                     "text-muted-foreground hover:text-foreground disabled:pointer-events-none",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                     step === 0 && pitch !== 0 && "text-primary",
@@ -175,7 +198,7 @@ export function PlaybackOptions() {
                 key={minutes}
                 type="button"
                 onClick={() => applySleep(minutes)}
-                className="rounded-full bg-card px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-full bg-card px-2.5 py-1 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-10 max-sm:px-3.5 max-sm:text-sm"
               >
                 {minutes} min
               </button>
@@ -184,7 +207,7 @@ export function PlaybackOptions() {
               <button
                 type="button"
                 onClick={() => applySleep(null)}
-                className="rounded-full px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-full px-2.5 py-1 text-[11px] font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-10 max-sm:text-sm"
               >
                 Cancel
               </button>

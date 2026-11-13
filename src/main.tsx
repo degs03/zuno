@@ -6,6 +6,7 @@ import "./ui/styles/global.css";
 import { logInternalError, logInternalInfo } from "./internal/logging";
 import { applyPaperPcMode, hydratePaperPcMode } from "./ui/settings/paperPcMode";
 import { applyTheme, hydrateTheme, watchSystemTheme } from "./ui/settings/theme";
+import { applyAppearance, hydrateAppearance } from "./ui/settings/appearance";
 import {
   applyNativeWindowControls,
   hydrateWindowControlSettings,
@@ -54,6 +55,7 @@ applyPlatformAttributes();
 void detectTilingWindowManager();
 // Before React mounts: a late theme apply shows a flash of the wrong palette.
 applyTheme();
+applyAppearance();
 watchSystemTheme();
 applyPaperPcMode();
 applyRenderEffects();
@@ -73,6 +75,7 @@ void Promise.all([
   hydrateRenderEffects(),
   isMobile ? Promise.resolve() : hydrateZoom(),
   hydrateTheme(),
+  hydrateAppearance(),
   hydrateWindowControlSettings(),
   hydrateMediaSessionSettings(),
   hydrateMiniPlayerSettings(),

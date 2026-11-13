@@ -8,6 +8,7 @@ import MiniPlayer from "./ui/components/mini-player/MiniPlayer";
 import { SkinnedMiniPlayer } from "./ui/components/mini-player/SkinnedMiniPlayer";
 import { hydrateMiniPlayerSettings, useMiniPlayerSkin } from "./ui/settings/miniPlayer";
 import { applyPaperPcMode, hydratePaperPcMode } from "./ui/settings/paperPcMode";
+import { applyAppearance, hydrateAppearance } from "./ui/settings/appearance";
 import {
   applyRenderEffects,
   hydrateRenderEffects,
@@ -24,7 +25,9 @@ applyPlatformAttributes();
  */
 applyPaperPcMode();
 applyRenderEffects();
-void Promise.all([hydrateMiniPlayerSettings(), hydratePaperPcMode(), hydrateRenderEffects()]);
+// Accent and style too, so the mini player's controls follow the chosen colour.
+applyAppearance();
+void Promise.all([hydrateMiniPlayerSettings(), hydratePaperPcMode(), hydrateRenderEffects(), hydrateAppearance()]);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "re
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
+import { isMobile } from "../platform";
+import { registerBackHandler } from "../android";
 
 /** Distance between the trigger and the panel. */
 const GAP = 10;
@@ -160,9 +162,15 @@ export function FloatingPanel({
 
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPointerDown, true);
+    // Android back closes the panel before anything behind it.
+    const releaseBack = registerBackHandler(() => {
+      onOpenChange(false);
+      return true;
+    });
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPointerDown, true);
+      releaseBack();
     };
   }, [open, onOpenChange]);
 
@@ -183,8 +191,21 @@ export function FloatingPanel({
 
       {createPortal(
         <AnimatePresence>
+          {/* Phones: the panel is a bottom sheet (menu-sheet in global.css) over a scrim. */}
+          {open && isMobile ? (
+            <motion.div
+              key="scrim"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[99] bg-[var(--color-scrim)]"
+              aria-hidden="true"
+              onPointerDown={() => onOpenChange(false)}
+            />
+          ) : null}
           {open ? (
             <motion.div
+              key="panel"
               ref={panelRef}
               role="dialog"
               aria-modal="false"
@@ -209,8 +230,11 @@ export function FloatingPanel({
               className={cn(
                 side === "top" ? "origin-bottom" : side === "bottom" ? "origin-top" : "origin-left",
                 "z-[100] rounded-lg  bg-popover p-2 text-popover-foreground",
-                "shadow-2xl ring-1 ring-border",
+                "shadow-pop ring-1 ring-border",
+                // Never taller than the screen: a tall panel used to run off the top edge.
+                "max-h-[calc(100dvh-24px)] overflow-y-auto overscroll-contain",
                 className,
+                isMobile && "menu-sheet",
               )}
             >
               {children}

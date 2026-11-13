@@ -10,7 +10,7 @@
  * one — so a source reads shared state rather than capturing gains when it was built.
  */
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -100,6 +100,23 @@ static NORMALIZE: AtomicBool = AtomicBool::new(false);
 pub(crate) fn set_normalize(enabled: bool) {
     NORMALIZE.store(enabled, Ordering::Release);
     EQUALIZER.generation.fetch_add(1, Ordering::Release);
+}
+
+/// The deck's pitch ratio, as f32 bits. 1.0 by default.
+static PITCH_RATIO: AtomicU32 = AtomicU32::new(0x3f80_0000);
+
+/**
+ * Tells the equaliser how far the deck resamples for pitch.
+ *
+ * The EQ runs before the deck's pitch resampling, which scales every frequency by the ratio —
+ * at +12 semitones the "1 kHz" band would really boost 2 kHz. Designing each band at
+ * `centre / ratio` puts it back where its label says, whatever the pitch.
+ */
+pub(crate) fn set_pitch_ratio(ratio: f32) {
+    let ratio = if ratio.is_finite() && ratio > 0.0 { ratio } else { 1.0 };
+    if PITCH_RATIO.swap(ratio.to_bits(), Ordering::AcqRel) != ratio.to_bits() {
+        EQUALIZER.generation.fetch_add(1, Ordering::Release);
+    }
 }
 
 /**
@@ -200,6 +217,13 @@ impl Biquad {
         self.y1
     }
 
+    fn clear_history(&mut self) {
+        self.x1 = 0.0;
+        self.x2 = 0.0;
+        self.y1 = 0.0;
+        self.y2 = 0.0;
+    }
+
     /// Swaps in new coefficients without disturbing the sample history, so a slider moved during
     /// a note retunes the filter rather than restarting it with a click.
     fn retune(&mut self, next: Self) {
@@ -264,24 +288,35 @@ impl<S: Source> EqualizedSource<S> {
         let values = values();
         let normalize = if NORMALIZE.load(Ordering::Acquire) { self.loudness_gain } else { 1.0 };
         self.gain = 10f32.powf(values.preamp_db / 20.0) * normalize;
+        let was_bypassed = self.bypass;
         self.bypass = values.is_flat();
         if self.bypass {
             return;
         }
 
+        let pitch = f32::from_bits(PITCH_RATIO.load(Ordering::Acquire));
+        // A copy of a small fixed array, not a Vec: this runs on the audio thread.
+        let (previous, previous_len) = (self.active, self.active_len);
+        let previously_active = &previous[..previous_len];
         self.active_len = 0;
         for band in 0..BAND_COUNT {
-            let next = Biquad::peaking(BAND_HZ[band], self.sample_rate, values.bands_db[band]);
+            let centre = BAND_HZ[band] / pitch;
+            let next = Biquad::peaking(centre, self.sample_rate, values.bands_db[band]);
             let filters = next.b0 != 1.0 || next.b1 != 0.0 || next.b2 != 0.0;
             if filters {
                 self.active[self.active_len] = band;
                 self.active_len += 1;
             }
+            /*
+             * A band that is (re)joining the cascade starts from silence instead of whatever it
+             * last held — after a bypass that history is minutes stale and plays as a click.
+             * A band that keeps filtering keeps its history, so a slider drag retunes smoothly.
+             */
+            let joining = filters && (was_bypassed || !previously_active.contains(&band));
             for channel in &mut self.filters {
                 channel[band].retune(next);
-                if !filters {
-                    // A band that goes quiet must not carry history into the next time it is on.
-                    channel[band] = Biquad::PASSTHROUGH;
+                if joining {
+                    channel[band].clear_history();
                 }
             }
         }

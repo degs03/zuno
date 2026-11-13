@@ -365,6 +365,9 @@ export class AudioEngine {
     this.releaseNativeAudio();
     this.iframeFallbackActive = true;
     await this.loadIframeTrack(videoId);
+    // The YouTube player starts at 1x; without this a fallback track ignored the chosen speed
+    // while the speed control still showed it.
+    this.player?.setPlaybackRate?.(this.playbackRate);
     logInternalWarn("AudioEngine fell back to the YouTube player", { videoId });
   }
 
@@ -1154,6 +1157,11 @@ export class AudioEngine {
 
   getPlaybackRate(): number {
     return this.playbackRate;
+  }
+
+  /** The current track fell back to the YouTube player, where pitch and the EQ do not apply. */
+  isOnFallbackPlayer(): boolean {
+    return this.iframeFallbackActive;
   }
 
   /** Semitones up or down, without changing speed. */

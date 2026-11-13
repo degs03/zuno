@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { Switch } from "@/components/motion/switch";
 import {
   isEqualizerFlat,
+  setEqualizer,
   setEqualizerEnabled,
   useEqualizer,
   useEqualizerEnabled,
@@ -25,9 +26,21 @@ export function MiniEqualizer() {
           Equaliser
         </span>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">
-            {available ? (enabled ? (flat ? "Flat" : "On") : "Off") : "Rust engine only"}
-          </span>
+          {/* A visible way back to flat: the graph's own reset is a double-click, which a
+              finger cannot reliably do. */}
+          {available && !flat ? (
+            <button
+              type="button"
+              className="rounded-full px-2 py-0.5 text-[11px] font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-9 max-sm:px-3 max-sm:text-xs"
+              onClick={() => setEqualizer({ preampDb: 0, bandsDb: equalizer.bandsDb.map(() => 0) })}
+            >
+              Reset
+            </button>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">
+              {available ? (enabled ? "Flat" : "Off") : "Rust engine only"}
+            </span>
+          )}
           <Switch
             checked={enabled}
             onCheckedChange={setEqualizerEnabled}

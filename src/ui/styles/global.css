@@ -175,6 +175,95 @@ html[data-theme="dark"] {
 }
 
 /*
+ * Accent colours (Settings → Appearance). Each one keeps white label text at 4.5:1 or better,
+ * the same bar the default red was raised to. A custom accent is not listed here: appearance.ts
+ * writes it onto the root as inline variables.
+ */
+html[data-accent="ocean"] { --color-primary: #2563eb; --color-ring: #2563eb; }
+html[data-accent="violet"] { --color-primary: #7c3aed; --color-ring: #7c3aed; }
+html[data-accent="mint"] { --color-primary: #047857; --color-ring: #047857; }
+html[data-accent="sunset"] { --color-primary: #c2410c; --color-ring: #c2410c; }
+html[data-accent="rose"] { --color-primary: #be185d; --color-ring: #be185d; }
+html[data-accent="mono"] { --color-primary: #52525b; --color-ring: #71717a; }
+
+/*
+ * Visual styles. Token overrides only — shape, elevation and surface opacity — so every
+ * component follows without knowing a style exists. Potato PC (later in this file) wins over
+ * all of them.
+ */
+
+/* Glass: frosted, see-through surfaces over a faint wash of the accent. */
+html[data-style="glass"] {
+  --radius-card: 1.25rem;
+  --radius-sheet: 1.5rem;
+  --color-card: oklch(0.3 0 0 / 55%);
+  --color-popover: oklch(0.24 0 0 / 72%);
+  --color-background: oklch(0.145 0 0 / 68%);
+  --color-hairline: oklch(1 0 0 / 16%);
+  --color-edge: oklch(1 0 0 / 14%);
+}
+html[data-style="glass"][data-theme="light"] {
+  --color-card: oklch(1 0 0 / 62%);
+  --color-popover: oklch(1 0 0 / 78%);
+  --color-background: oklch(0.954 0 0 / 66%);
+  --color-hairline: oklch(1 0 0 / 85%);
+  --color-edge: oklch(0 0 0 / 8%);
+}
+html[data-style="glass"] body {
+  background:
+    radial-gradient(120% 70% at 0% 0%, color-mix(in oklab, var(--color-primary) 45%, transparent), transparent 62%),
+    radial-gradient(90% 60% at 100% 100%, color-mix(in oklab, var(--color-primary) 30%, transparent), transparent 58%),
+    oklch(0.12 0 0);
+}
+html[data-style="glass"][data-theme="light"] body {
+  background:
+    radial-gradient(120% 70% at 0% 0%, color-mix(in oklab, var(--color-primary) 30%, transparent), transparent 62%),
+    radial-gradient(90% 60% at 100% 100%, color-mix(in oklab, var(--color-primary) 20%, transparent), transparent 58%),
+    oklch(0.96 0 0);
+}
+html[data-style="glass"] :is(.card-surface, .bg-card, .bg-popover, [data-mobile-player], [data-menu-sheet], [class*="bg-card/"], [class*="bg-popover/"]) {
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+}
+/* Where blur is unavailable or switched off, translucency would only lower contrast. */
+html[data-style="glass"]:is([data-fx-off~="backdrop"], [data-platform-linux]) {
+  --color-card: oklch(0.285 0 0);
+  --color-popover: oklch(0.205 0 0);
+  --color-background: oklch(0.145 0 0);
+}
+html[data-style="glass"][data-theme="light"]:is([data-fx-off~="backdrop"], [data-platform-linux]) {
+  --color-card: oklch(1 0 0);
+  --color-popover: oklch(1 0 0);
+  --color-background: oklch(0.954 0 0);
+}
+
+/* Rounded: iPhone-like — big corners, the system font, grouped lists with inset separators. */
+html[data-style="ios"] {
+  --radius-art: 0.75rem;
+  --radius-row: 0.875rem;
+  --radius-card: 1.375rem;
+  --radius-sheet: 1.75rem;
+  --shadow-card: none;
+}
+html[data-style="ios"] body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, Roboto, sans-serif;
+}
+html[data-style="ios"] .setting-row + .setting-row {
+  border-top: 1px solid var(--color-border);
+}
+
+/* Solid: flat and crisp — no shadows or highlights, tighter corners, an outline instead. */
+html[data-style="solid"] {
+  --radius-art: 0.375rem;
+  --radius-row: 0.5rem;
+  --radius-card: 0.625rem;
+  --radius-sheet: 0.875rem;
+  --shadow-card: 0 0 0 1px var(--color-edge);
+  --shadow-pop: 0 0 0 1px var(--color-edge);
+  --color-hairline: transparent;
+}
+
+/*
  * Layout constants read from TSX (`h-[var(--titlebar-height)]`) rather than colours —
  * every colour now comes from the @theme block above.
  */
@@ -235,7 +324,7 @@ html[data-platform-mobile] [class*="group-hover/row:opacity-100"] {
  * full width, with finger-sized rows — instead of a cursor-sized popover wherever the press was.
  * The inline left/top the desktop menu positions itself with is overridden here.
  */
-html[data-platform-mobile] [data-menu-sheet] {
+html[data-platform-mobile] :is([data-menu-sheet], .menu-sheet) {
   left: 0.5rem !important;
   right: 0.5rem !important;
   top: auto !important;
@@ -246,12 +335,16 @@ html[data-platform-mobile] [data-menu-sheet] {
   padding: 0.5rem;
   animation: menu-sheet-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-html[data-platform-mobile] [data-menu-sheet] [role="menuitem"] {
+/* Panels carry a desktop width class (e.g. w-72); as a sheet they span the screen. */
+html[data-platform-mobile] .menu-sheet {
+  width: auto !important;
+}
+html[data-platform-mobile] :is([data-menu-sheet], .menu-sheet) [role="menuitem"] {
   min-height: 3rem;
   font-size: 0.9375rem;
   border-radius: 0.75rem;
 }
-html[data-platform-mobile] [data-menu-sheet] kbd {
+html[data-platform-mobile] :is([data-menu-sheet], .menu-sheet) kbd {
   display: none;
 }
 @keyframes menu-sheet-in {

@@ -77,6 +77,7 @@ type PlayerControllerMethod =
   | "getPlaybackRate"
   | "setPitch"
   | "getPitch"
+  | "isOnFallbackPlayer"
   | "setSleepTimer"
   | "getSleepTimerRemainingMs"
   | "getLyrics"
@@ -153,6 +154,7 @@ class ActivePlayerController implements PlayerControllerActions {
   getPlaybackRate = () => tabManager.getActivePlayer().getPlaybackRate();
   setPitch = (semitones: number) => tabManager.getActivePlayer().setPitch(semitones);
   getPitch = () => tabManager.getActivePlayer().getPitch();
+  isOnFallbackPlayer = () => tabManager.getActivePlayer().isOnFallbackPlayer();
   setSleepTimer = (minutes: number | null) =>
     tabManager.getActivePlayer().setSleepTimer(minutes);
   getSleepTimerRemainingMs = () =>

@@ -709,6 +709,10 @@ export class PlayerController {
     this.emit();
   }
 
+  isOnFallbackPlayer(): boolean {
+    return this.audioEngine.isOnFallbackPlayer();
+  }
+
   getPitch(): number {
     return this.audioEngine.getPitch();
   }
