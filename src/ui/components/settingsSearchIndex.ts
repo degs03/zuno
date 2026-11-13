@@ -5,7 +5,15 @@ export type SettingsSearchEntry = {
   category: string;
   title: string;
   description: string;
+  /** Hidden on a phone (no windows, keyboard or local folders there). */
+  desktopOnly?: boolean;
 };
+
+/** Settings a phone does not show, so search must not lead to them there. */
+const DESKTOP_ONLY_TITLES = new Set([
+  "Discord presence", "App size", "Toolbar", "Onboarding", "Local music", "Launch at startup",
+  "Remember window size and location",
+]);
 
 const ENTRIES: SettingsSearchEntry[] = [
   { tab: "about", category: "Account", title: "Account", description: "Sign in and manage your YouTube Music account." },
@@ -13,6 +21,8 @@ const ENTRIES: SettingsSearchEntry[] = [
   { tab: "about", category: "Account", title: "Discord presence", description: "Show what you are playing and hide status when paused." },
   { tab: "about", category: "Account", title: "Updates", description: "Check for and install Zuno updates." },
   { tab: "appearance", category: "Appearance", title: "Theme", description: "Choose light, dark, or system theme." },
+  { tab: "appearance", category: "Appearance", title: "Accent colour", description: "Pick the colour of buttons, highlights and the progress bar." },
+  { tab: "appearance", category: "Appearance", title: "Style", description: "Glass, iOS-like, solid or Zuno's own look for cards and panels." },
   { tab: "appearance", category: "Appearance", title: "App size", description: "Zoom the whole app in or out. Ctrl + and Ctrl - work too." },
   { tab: "appearance", category: "Appearance", title: "Motion", description: "Control animations and visual effects." },
   { tab: "appearance", category: "Appearance", title: "Toolbar", description: "Choose which controls appear in the title bar." },
@@ -47,7 +57,11 @@ const ENTRIES: SettingsSearchEntry[] = [
 export function searchSettings(query: string): SettingsSearchEntry[] {
   const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   if (terms.length === 0) return [];
+  const mobile = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
   return ENTRIES.filter((entry) => {
+    if (mobile && (entry.tab === "window" || entry.tab === "shortcuts" || DESKTOP_ONLY_TITLES.has(entry.title))) {
+      return false;
+    }
     const haystack = `${entry.category} ${entry.title} ${entry.description}`.toLocaleLowerCase();
     return terms.every((term) => haystack.includes(term));
   });

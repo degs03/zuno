@@ -313,7 +313,9 @@ export function GoogleAccountSwitcher({
                       void handleRemove(account, event as unknown as React.MouseEvent);
                     }}
                     aria-label={`Remove ${account.name}`}
-                    className="flex shrink-0 items-center justify-center rounded-md p-1 opacity-0 transition-opacity hover:bg-background hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    // `[@media(hover:hover)]` scopes the hover reveal to mice: on touch the button
+                    // is simply visible (and finger-sized) instead of an invisible tap target.
+                    className="flex shrink-0 items-center justify-center rounded-md p-1 transition-opacity hover:bg-background hover:text-destructive [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:size-10 max-sm:rounded-full"
                   >
                     <CloseIcon size={14} aria-hidden="true" />
                   </span>

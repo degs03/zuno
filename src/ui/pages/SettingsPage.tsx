@@ -9,6 +9,7 @@ import {
 import { Switch } from "@/components/motion/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import { RangeSlider } from "@/components/motion/range-slider";
+import appLogo from "../../../assets/img/logo-72.png";
 import { setEqualizerEnabled, useEqualizerEnabled } from "../settings/equalizer";
 import { EqualizerPanel } from "../components/Equalizer";
 import {
@@ -37,6 +38,7 @@ import {
   FolderAddIcon,
   FolderIcon,
   FolderOpenIcon,
+  HomeIcon,
   KeyIcon,
   LastFmIcon,
   LogFileIcon,
@@ -243,6 +245,37 @@ const SETTING_LABEL =
 /** Section card. One shape for every group so the page reads as a single system. */
 // The shared card recipe at a softer fill: settings stack many cards, and full `bg-card` on
 // every one reads as a wall. Tighter padding on phones gives the rows back their width.
+/** Thin used-of-total bar. */
+function UsageMeter({ used, total, label }: { used: number; total: number; label: string }) {
+  const percent = total > 0 ? Math.min(100, (used / total) * 100) : 0;
+  return (
+    <div
+      className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+      role="meter"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(percent)}
+    >
+      <div
+        className={cn("h-full rounded-full", percent > 90 ? "bg-destructive" : "bg-primary")}
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  );
+}
+
+/** Size presets for the storage pickers, in GB. Touch keyboards make free-form numbers fiddly. */
+const CACHE_SIZE_PRESETS_GB = ["0.25", "0.5", "1", "2", "4", "8", "16"];
+const DOWNLOAD_SIZE_PRESETS_GB = [2, 4, 8, 16, 32, 64, 128];
+const formatGb = (gb: number) => (gb < 1 ? `${Math.round(gb * 1024)} MB` : `${gb} GB`);
+
+/** In-card action: a filled pill, so it reads as a button and not as more description. */
+const CARD_BUTTON =
+  "pressable inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-muted px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/70 active:bg-[var(--color-pressed)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:w-full";
+const CARD_BUTTON_PRIMARY =
+  "pressable inline-flex min-h-10 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:brightness-110 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-sm:w-full";
+
 const SETTINGS_CARD = "flex flex-col gap-5 rounded-card bg-card/60 p-6 shadow-card max-sm:gap-4 max-sm:p-4";
 
 /**
@@ -330,7 +363,7 @@ function OutputDeviceSetting({ engineMode }: { engineMode: AudioEngineMode }) {
     >
       {(labelId) => (
         <Select
-          className="w-52"
+          className="w-52 setting-wide"
           value={selected ?? SYSTEM_DEFAULT_DEVICE}
           onValueChange={(value) => {
             setOutputDevice(value === SYSTEM_DEFAULT_DEVICE ? null : value);
@@ -378,7 +411,7 @@ function SettingRow({
   return (
     <div
       className={cn(
-        "flex items-start justify-between gap-6 py-2.5 max-sm:gap-3",
+        "setting-row flex items-start justify-between gap-6 py-2.5 max-sm:gap-3",
         disabled && "pointer-events-none opacity-50",
       )}
     >
@@ -390,7 +423,7 @@ function SettingRow({
           <span className="text-sm text-muted-foreground">{description}</span>
         ) : null}
       </span>
-      <span className="flex shrink-0 items-center gap-2 pt-0.5">{children(labelId)}</span>
+      <span className="setting-control flex shrink-0 items-center gap-2 pt-0.5">{children(labelId)}</span>
     </div>
   );
 }
@@ -833,8 +866,8 @@ export function SettingsPage({
     }
   };
 
-  const saveCacheSize = async () => {
-    const sizeGb = Number(cacheSizeGb);
+  const saveCacheSize = async (value: string = cacheSizeGb) => {
+    const sizeGb = Number(value);
     if (!Number.isFinite(sizeGb) || sizeGb < 0.25 || sizeGb > 64) {
       setCacheError("Cache size must be between 0.25 GB and 64 GB.");
       return;
@@ -1038,16 +1071,21 @@ export function SettingsPage({
           <div className="w-72 max-w-full @max-4xl/settings:w-full">
             <SettingsSearch query={settingsQuery} onQueryChange={setSettingsQuery} />
           </div>
-          <ExternalLinkButton
-            icon={<StarIcon size={16} aria-hidden="true" />}
-            label="Star on GitHub"
-            url={GITHUB_REPOSITORY_URL}
-          />
-          <ExternalLinkButton
-            icon={<BugIcon size={16} aria-hidden="true" />}
-            label="Report an issue"
-            url={GITHUB_NEW_ISSUE_URL}
-          />
+          {/* On a phone these took a whole row above the tabs; they live in About there. */}
+          {!isMobile && (
+            <>
+              <ExternalLinkButton
+                icon={<StarIcon size={16} aria-hidden="true" />}
+                label="Star on GitHub"
+                url={GITHUB_REPOSITORY_URL}
+              />
+              <ExternalLinkButton
+                icon={<BugIcon size={16} aria-hidden="true" />}
+                label="Report an issue"
+                url={GITHUB_NEW_ISSUE_URL}
+              />
+            </>
+          )}
         </div>
       </header>
 
@@ -1133,10 +1171,15 @@ export function SettingsPage({
                 names instead of truncating. */}
             {/* Wraps on a narrow phone, so the sign-in button drops under the name instead of
                 pushing past the card's edge. */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <AccountAvatar artworkUrl={account?.artworkUrl} className="size-11" iconSize={26} />
+            {/* Phones: a centred profile with a full-width action; wider panes keep the row. */}
+            <div className="flex items-center justify-between gap-3 max-sm:flex-col max-sm:text-center">
+              <AccountAvatar
+                artworkUrl={account?.artworkUrl}
+                className="size-11 max-sm:size-16"
+                iconSize={26}
+              />
 
-              <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex min-w-0 flex-1 flex-col max-sm:w-full">
                 <span className="truncate text-base font-medium text-foreground">
                   {isSignedIn ? account?.name || "YouTube Music" : "Not signed in"}
                 </span>
@@ -1149,25 +1192,27 @@ export function SettingsPage({
 
               {isSignedIn ? (
                 <button
-                  className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  className={CARD_BUTTON}
                   type="button"
                   onClick={() => void libraryController.signOut()}
                 >
-                  <LogoutIcon size={18} />
+                  <LogoutIcon size={18} aria-hidden="true" />
                   Sign out
                 </button>
               ) : (
-                <GoogleSignInButton
-                  isBusy={authBusy}
-                  onClick={() => void onSignIn()}
-                />
+                <div className="max-sm:flex max-sm:w-full max-sm:justify-center">
+                  <GoogleSignInButton
+                    isBusy={authBusy}
+                    onClick={() => void onSignIn()}
+                  />
+                </div>
               )}
             </div>
 
             {/* Separate Google logins, not channels — always shown once signed in, since this
                 is where a second account gets added, not just switched to. */}
             {isSignedIn && (
-              <div className="flex flex-col gap-1.5 border-t border-border pt-4">
+              <div className="flex flex-col gap-1.5 rounded-row bg-background/40 p-3">
                 <GoogleAccountSwitcher
                   libraryController={libraryController}
                   showSingle
@@ -1180,7 +1225,7 @@ export function SettingsPage({
 
             {/* Renders nothing unless the account actually has more than one channel. */}
             {isSignedIn && (
-              <div className="flex flex-col gap-1.5 border-t border-border pt-4">
+              <div className="flex flex-col gap-1.5 empty:hidden">
                 <AccountSwitcher libraryController={libraryController} showSingle label="Channel" />
               </div>
             )}
@@ -1288,50 +1333,59 @@ export function SettingsPage({
           )}
 
           <section className={SETTINGS_CARD} aria-labelledby="about-settings-title">
-            <h2 className="text-lg font-semibold text-foreground" id="about-settings-title">
-              About
-            </h2>
-
-            <div className="flex flex-col gap-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                  <strong>Updates</strong>
-                  <span>
-                    Installed version: {
-                      installedVersion
-                        ? installedVersion === "Unknown" ? installedVersion : `v${installedVersion}`
-                        : "Loading..."
-                    }
-                  </span>
+            <SettingsCardHeader
+              title="About Zuno"
+              titleId="about-settings-title"
+              icon={<img src={appLogo} alt="" className="size-6 rounded-md" />}
+              description="Version, updates and help."
+              status={
+                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium tabular-nums text-muted-foreground">
+                  {installedVersion
+                    ? installedVersion === "Unknown" ? installedVersion : `v${installedVersion}`
+                    : "…"}
                 </span>
-                <button
-                  className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  type="button"
-                  disabled={updateStatus === "checking"}
-                  onClick={() => void handleCheckForUpdates()}
-                >
-                  <RefreshIcon size={18} />
-                  {updateStatus === "checking" ? "Checking..." : "Check for updates"}
-                </button>
-              </div>
+              }
+            />
 
-              {updateResult && (
-                <div className="flex flex-col gap-1">
-                  <span>
-                    {updateStatus === "installing"
-                      ? updateProgress?.percent !== undefined
-                        ? `Downloading version ${updateResult.version}: ${updateProgress.percent}%`
-                        : `Preparing version ${updateResult.version}...`
-                      : `Version ${updateResult.version} is available.`}
-                  </span>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
+                <strong>Updates</strong>
+                <span>
+                  {updateStatus === "current"
+                    ? "You're on the latest version."
+                    : "See whether a newer version is out."}
+                </span>
+              </span>
+              <button
+                className={CARD_BUTTON}
+                type="button"
+                disabled={updateStatus === "checking"}
+                onClick={() => void handleCheckForUpdates()}
+              >
+                <RefreshIcon size={18} aria-hidden="true" />
+                {updateStatus === "checking" ? "Checking…" : "Check for updates"}
+              </button>
+            </div>
+
+            {/* One inset box for the result, so the message and its actions read as a unit. */}
+            {updateResult && (
+              <div className="flex flex-col gap-3 rounded-row bg-background/50 p-3 text-sm">
+                <span className="font-medium text-foreground">
+                  {updateStatus === "installing"
+                    ? updateProgress?.percent !== undefined
+                      ? `Downloading version ${updateResult.version}: ${updateProgress.percent}%`
+                      : `Preparing version ${updateResult.version}…`
+                    : `Version ${updateResult.version} is available.`}
+                </span>
+                <div className="flex flex-wrap gap-2">
                   {updateResult.canInstall && (
                     <button
-                      className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                      className={CARD_BUTTON_PRIMARY}
                       type="button"
                       disabled={updateStatus === "installing"}
                       onClick={() => void handleInstallUpdate()}
                     >
-                      {updateStatus === "installing" ? "Installing..." : "Install"}
+                      {updateStatus === "installing" ? "Installing…" : "Install update"}
                     </button>
                   )}
                   {/* The one link where a silent failure strands the user: if this cannot
@@ -1342,29 +1396,44 @@ export function SettingsPage({
                     className="px-4 py-2"
                   />
                 </div>
-              )}
-              {updateStatus === "current" && (
-                <p className="text-sm text-muted-foreground">You are up to date.</p>
-              )}
-              {updateStatus === "error" && (
-                <p className="text-sm text-destructive">{updateError}</p>
-              )}
+              </div>
+            )}
+            {updateStatus === "error" && (
+              <p className="rounded-row bg-destructive/10 p-3 text-sm text-destructive">{updateError}</p>
+            )}
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* The guided tour points at desktop chrome; a phone gets the project links instead. */}
+            {isMobile ? (
+              <div className="flex flex-col gap-2">
+                <span className={SETTING_LABEL}>
+                  <strong>Help and feedback</strong>
+                  <span>Found a bug or have an idea? Tell us on GitHub.</span>
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <ExternalLinkButton
+                    icon={<BugIcon size={16} aria-hidden="true" />}
+                    label="Report an issue"
+                    url={GITHUB_NEW_ISSUE_URL}
+                  />
+                  <ExternalLinkButton
+                    icon={<StarIcon size={16} aria-hidden="true" />}
+                    label="Star on GitHub"
+                    url={GITHUB_REPOSITORY_URL}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
                   <strong>Quick start</strong>
                   <span>Replay the guided introduction.</span>
                 </span>
-                <button
-                  className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  type="button"
-                  onClick={onRestartOnboarding}
-                >
-                  <RefreshIcon size={18} />
+                <button className={CARD_BUTTON} type="button" onClick={onRestartOnboarding}>
+                  <RefreshIcon size={18} aria-hidden="true" />
                   Start onboarding
                 </button>
               </div>
-            </div>
+            )}
           </section>
         </div>
       )}
@@ -1502,51 +1571,53 @@ export function SettingsPage({
               description="How much disk Zuno is allowed to use."
             />
 
-            <div className="flex flex-wrap items-end justify-between gap-4 py-2">
-              <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                <strong>Cache</strong>
-                <span className="tabular-nums">
+            {/* Each block: what it is, how full (figures + bar), then its actions on their own row. */}
+            <div className="flex flex-col gap-3 rounded-row bg-background/40 p-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <strong className="text-sm font-medium text-foreground">Cache</strong>
+                <span className="text-xs tabular-nums text-muted-foreground">
                   {cacheStats
-                    ? `${formatBytes(cacheStats.usedBytes)} of ${formatBytes(cacheStats.maxBytes)}`
+                    ? `${formatBytes(cacheStats.usedBytes)} of ${formatBytes(cacheStats.maxBytes)} · ${cacheStats.entryCount} items`
                     : "Loading…"}
-                  {cacheStats ? ` · ${cacheStats.entryCount} items` : ""}
                 </span>
-              </span>
-
+              </div>
+              <UsageMeter
+                used={cacheStats?.usedBytes ?? 0}
+                total={cacheStats?.maxBytes ?? 0}
+                label="Cache used"
+              />
+              <p className="text-xs text-muted-foreground">
+                Pages and covers Zuno keeps so the library opens instantly. Safe to clear.
+              </p>
               <div className="flex flex-wrap items-center gap-2">
-                {/* The caption sits above the field rather than inside it: nested in a
-                    fixed-width pill it wrapped onto two lines and squeezed the number. */}
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  Maximum size
-                  <span className="flex w-28 items-center gap-1.5 rounded-lg bg-background px-2.5 py-1.5 text-sm text-foreground focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/60">
-                    <input
-                      className="w-full min-w-0 bg-transparent tabular-nums outline-none"
-                      type="number"
-                      min="0.25"
-                      max="64"
-                      step="0.25"
-                      value={cacheSizeGb}
-                      disabled={cacheBusy}
-                      onChange={(event) => setCacheSizeGb(event.target.value)}
-                    />
-                    <span className="shrink-0 text-muted-foreground">GB</span>
-                  </span>
-                </label>
-                <button
-                  className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  type="button"
-                  disabled={cacheBusy}
-                  onClick={() => void saveCacheSize()}
+                <Select
+                  className="w-36 max-sm:w-full"
+                  value={
+                    CACHE_SIZE_PRESETS_GB.includes(cacheSizeGb) ? cacheSizeGb : undefined
+                  }
+                  onValueChange={(value) => {
+                    setCacheSizeGb(value);
+                    void saveCacheSize(value);
+                  }}
                 >
-                  Save
-                </button>
+                  <SelectTrigger aria-label="Maximum cache size">
+                    <SelectValue placeholder={`${cacheSizeGb} GB`} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CACHE_SIZE_PRESETS_GB.map((gb) => (
+                      <SelectItem key={gb} value={gb}>
+                        Up to {formatGb(Number(gb))}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <button
-                  className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  className={cn(CARD_BUTTON, "text-destructive")}
                   type="button"
                   disabled={cacheBusy}
                   onClick={() => void handleClearCache()}
                 >
-                  <TrashIcon size={18} />
+                  <TrashIcon size={18} aria-hidden="true" />
                   Clear cache
                 </button>
               </div>
@@ -1554,47 +1625,56 @@ export function SettingsPage({
 
             {cacheError && <p className="text-sm text-destructive">{cacheError}</p>}
 
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                <strong>Downloads</strong>
-                <span>
-                  {offlineState.usedBytes > 0 || Object.keys(offlineState.entries).length > 0
-                    ? `${Object.keys(offlineState.entries).length} songs · ${formatBytes(offlineState.usedBytes)}`
-                    : "No songs downloaded yet."}
+            <div className="flex flex-col gap-3 rounded-row bg-background/40 p-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <strong className="text-sm font-medium text-foreground">Downloads</strong>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {Object.keys(offlineState.entries).length > 0
+                    ? `${Object.keys(offlineState.entries).length} songs · ${formatBytes(offlineState.usedBytes)} of ${formatGb(Math.round(offlineMaxGb))}`
+                    : "No songs downloaded yet"}
+                </span>
+              </div>
+              <UsageMeter
+                used={offlineState.usedBytes}
+                total={Math.max(1, offlineMaxGb) * 1024 ** 3}
+                label="Download space used"
+              />
+              {(offlineState.downloadingId || offlineState.queued.length > 0) && (
+                <p className="text-xs text-muted-foreground">
                   {offlineState.downloadingId
                     ? offlineState.progress !== null
-                      ? ` · downloading ${offlineState.progress}%`
-                      : " · downloading"
+                      ? `Downloading ${offlineState.progress}%`
+                      : "Downloading"
                     : ""}
-                  {offlineState.queued.length > 0
-                    ? ` · ${offlineState.queued.length} queued`
-                    : ""}
-                </span>
-              </span>
+                  {offlineState.queued.length > 0 ? ` · ${offlineState.queued.length} queued` : ""}
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-2">
-                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-                  Maximum size
-                  <span className="flex w-28 items-center gap-1.5 rounded-lg bg-background px-2.5 py-1.5 text-sm text-foreground focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/60">
-                    <input
-                      className="w-full min-w-0 bg-transparent outline-none"
-                      type="number"
-                      min={1}
-                      max={512}
-                      value={Math.round(offlineMaxGb)}
-                      onChange={(event) => {
-                        const next = Number(event.target.value);
-                        if (!Number.isFinite(next)) return;
-                        setOfflineMaxGb(next);
-                        setOfflineMaxBytes(Math.max(1, next) * 1024 ** 3);
-                      }}
-                      aria-label="Maximum download size in gigabytes"
-                    />
-                    <span className="shrink-0 text-xs text-muted-foreground">GB</span>
-                  </span>
-                </label>
+                <Select
+                  className="w-36 max-sm:w-full"
+                  value={String(Math.round(offlineMaxGb))}
+                  onValueChange={(value) => {
+                    const next = Number(value);
+                    if (!Number.isFinite(next)) return;
+                    setOfflineMaxGb(next);
+                    setOfflineMaxBytes(Math.max(1, next) * 1024 ** 3);
+                  }}
+                >
+                  <SelectTrigger aria-label="Maximum download size">
+                    <SelectValue placeholder={formatGb(Math.round(offlineMaxGb))} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[...new Set([...DOWNLOAD_SIZE_PRESETS_GB, Math.round(offlineMaxGb)])]
+                      .sort((a, b) => a - b)
+                      .map((gb) => (
+                        <SelectItem key={gb} value={String(gb)}>
+                          Up to {formatGb(gb)}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
                 <button
-                  className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  className={cn(CARD_BUTTON, "text-destructive")}
                   type="button"
                   disabled={clearingDownloads || Object.keys(offlineState.entries).length === 0}
                   onClick={() => {
@@ -1602,8 +1682,8 @@ export function SettingsPage({
                     void removeAllDownloads().finally(() => setClearingDownloads(false));
                   }}
                 >
-                  <TrashIcon size={18} />
-                  {clearingDownloads ? "Removing..." : "Remove all"}
+                  <TrashIcon size={18} aria-hidden="true" />
+                  {clearingDownloads ? "Removing…" : "Remove all"}
                 </button>
               </div>
             </div>
@@ -1624,7 +1704,7 @@ export function SettingsPage({
             >
               {(labelId) => (
                 <Select
-                  className="w-52"
+                  className="w-52 setting-wide"
                   value={streamingQuality}
                   onValueChange={(value) => setStreamingQuality(value as AudioQuality)}
                 >
@@ -1649,7 +1729,7 @@ export function SettingsPage({
             >
               {(labelId) => (
                 <Select
-                  className="w-52"
+                  className="w-52 setting-wide"
                   value={downloadQuality}
                   onValueChange={(value) => setDownloadQuality(value as AudioQuality)}
                 >
@@ -1683,7 +1763,7 @@ export function SettingsPage({
             >
               {(labelId) => (
                 <Select
-                  className="w-52"
+                  className="w-52 setting-wide"
                   value={lyricsTranslationLang}
                   onValueChange={setLyricsTranslationLang}
                 >
@@ -1709,7 +1789,7 @@ export function SettingsPage({
             >
               {(labelId) => (
                 <Select
-                  className="w-52"
+                  className="w-52 setting-wide"
                   value={String(lyricsFontScale)}
                   onValueChange={(value) => setLyricsFontScale(Number(value))}
                 >
@@ -1734,7 +1814,7 @@ export function SettingsPage({
             >
               {(labelId) => (
                 <Select
-                  className="w-52"
+                  className="w-52 setting-wide"
                   value={preferredLyricsSource}
                   onValueChange={setPreferredLyricsSourceId}
                 >
@@ -1942,7 +2022,7 @@ export function SettingsPage({
             >
               {() => (
                 <Select
-                  className="w-52"
+                  className="w-52 setting-wide"
                   value={sidebarMode}
                   onValueChange={(value) => setSidebarMode(value as SidebarMode)}
                 >
@@ -1967,7 +2047,7 @@ export function SettingsPage({
               >
                 {() => (
                   <Select
-                    className="w-44"
+                    className="w-44 setting-wide"
                     value={miniPlayerHoverAction}
                     onValueChange={(value) =>
                       setMiniPlayerHoverAction(value as MiniPlayerHoverAction)}
@@ -2094,37 +2174,53 @@ export function SettingsPage({
               description="What actually plays the sound."
             />
 
-            <SettingRow
-              title="Playback method"
-              description={
-                audioEngineMode === "native"
-                  ? "Zuno plays each track itself. About 90 MB lighter, slower to start, no gapless or crossfade."
-                  : "A hidden YouTube frame plays each track. Costs about 90 MB, starts faster, required for gapless and crossfade."
-              }
-            >
-              {() => (
-                <Select
-                  className="w-52"
-                  value={audioEngineMode}
-                  onValueChange={(value) => setAudioEngineMode(value as AudioEngineMode)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AUDIO_ENGINE_MODES.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
+            {/* One card per engine with its own description, instead of a dropdown beside a
+                description that only knew two of the three engines (Rust showed the YouTube
+                player's text). Cards stack and wrap at any width. */}
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Playback method">
+              {AUDIO_ENGINE_MODES.map((option) => {
+                const selected = audioEngineMode === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setAudioEngineMode(option.value)}
+                    className={cn(
+                      "pressable flex w-full items-start gap-3 rounded-row p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      selected
+                        ? "bg-primary/10 ring-1 ring-primary/40"
+                        : "bg-muted/40 hover:bg-muted/70",
+                    )}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "mt-0.5 grid size-5 shrink-0 place-items-center rounded-full ring-2",
+                        selected ? "bg-primary ring-primary" : "ring-muted-foreground/40",
+                      )}
+                    >
+                      {selected ? <span className="size-2 rounded-full bg-primary-foreground" /> : null}
+                    </span>
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="text-sm font-semibold text-foreground">
                         {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </SettingRow>
-
-            <p className="px-1 text-xs text-muted-foreground">
-              Applies from the next track.
-            </p>
+                        {option.value === "rust" ? (
+                          <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
+                            Recommended
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="text-sm text-muted-foreground">{option.hint}</span>
+                      {selected ? (
+                        <span className="text-xs text-muted-foreground">Applies from the next track.</span>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
 
             <OutputDeviceSetting engineMode={audioEngineMode} />
 
@@ -2190,7 +2286,7 @@ export function SettingsPage({
               {(labelId) => (
                 <span className="flex items-center gap-3">
                   <RangeSlider
-                    className="w-44"
+                    className="w-44 setting-wide"
                     value={crossfadeSec}
                     min={0}
                     max={MAX_CROSSFADE_SEC}
@@ -2298,7 +2394,7 @@ export function SettingsPage({
             >
               {(labelId) => (
                 <Select
-                  className="w-52"
+                  className="w-52 setting-wide"
                   value={String(zoom)}
                   onValueChange={(value) => setZoom(Number(value))}
                 >
@@ -2318,26 +2414,29 @@ export function SettingsPage({
             )}
           </section>
 
+          {/* No title bar on a phone, so nothing for this card to configure there. */}
+          {!isMobile && (
           <section className={SETTINGS_CARD} aria-labelledby="toolbar-settings-title">
-            <div className="min-w-0">
-              <h2 className="text-lg" id="toolbar-settings-title">Title bar</h2>
-              <p className="text-sm text-muted-foreground">
-                Which optional buttons sit next to the window controls.
-              </p>
-            </div>
+            <SettingsCardHeader
+              title="Title bar"
+              titleId="toolbar-settings-title"
+              icon={<QueuePanelIcon size={18} aria-hidden="true" />}
+              description="Which optional buttons sit next to the window controls."
+            />
 
             {TOOLBAR_ITEMS.map((item) => (
               <ToolbarItemToggle key={item.id} item={item} />
             ))}
           </section>
+          )}
 
           <section className={SETTINGS_CARD} aria-labelledby="home-settings-title">
-            <div className="min-w-0">
-              <h2 className="text-lg" id="home-settings-title">Home</h2>
-              <p className="text-sm text-muted-foreground">
-                Which sections the home page shows.
-              </p>
-            </div>
+            <SettingsCardHeader
+              title="Home"
+              titleId="home-settings-title"
+              icon={<HomeIcon size={18} aria-hidden="true" />}
+              description="Which sections the home page shows."
+            />
 
             <SettingToggle
               title="Made for you"
@@ -2348,12 +2447,12 @@ export function SettingsPage({
           </section>
 
           <section className={SETTINGS_CARD} aria-labelledby="motion-settings-title">
-            <div className="min-w-0">
-              <h2 className="text-lg" id="motion-settings-title">Motion &amp; performance</h2>
-              <p className="text-sm text-muted-foreground">
-                Turn these off on low-powered machines.
-              </p>
-            </div>
+            <SettingsCardHeader
+              title="Motion & performance"
+              titleId="motion-settings-title"
+              icon={<SettingsIcon size={18} aria-hidden="true" />}
+              description="Turn these off on low-powered devices."
+            />
 
             <PotatoPcSettings />
           </section>

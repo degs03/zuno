@@ -339,6 +339,26 @@ html[data-platform-mobile] [data-scroll-row] > * {
 }
 
 /*
+ * Settings rows with a wide control (a dropdown, a slider) stack on a phone: the title gets the
+ * full width and the control sits under it at full width. Side by side, a fixed 13rem dropdown
+ * left ~36px for the title and description on a 320px screen. Switches stay on the right.
+ */
+@media (max-width: 639px) {
+  .setting-row:has(.setting-wide) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.625rem;
+  }
+  .setting-row:has(.setting-wide) > .setting-control {
+    width: 100%;
+  }
+  .setting-row .setting-wide {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+}
+
+/*
  * Height of the fixed chrome at the bottom of the screen: where toasts and floating bars must
  * sit above. Desktop has the player bar only; mobile adds the nav bar.
  */
