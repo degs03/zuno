@@ -34,7 +34,7 @@ import {
   hydrateMainWindowGeometry,
   restoreMainWindowGeometry,
 } from "./ui/settings/mainWindowGeometry";
-import { applyPlatformAttributes, detectTilingWindowManager } from "./ui/platform";
+import { applyPlatformAttributes, detectTilingWindowManager, isMobile } from "./ui/platform";
 import { hydrateArtworkCache } from "./internal/artworkCache";
 import { hydratePlaybackSettings } from "./player/playbackSettings";
 import { hydratePlayHistory } from "./player/playHistory";
@@ -57,18 +57,21 @@ applyTheme();
 watchSystemTheme();
 applyPaperPcMode();
 applyRenderEffects();
-watchZoomKeys();
+// Mobile has one fixed window: no zoom keys, window decorations or saved geometry.
+if (!isMobile) watchZoomKeys();
 // One line a minute in the app log, so "the renderer is using 220 MB" can be split into heap,
 // DOM, images and subframes instead of guessed at. Settings → Troubleshooting → Open log.
 startMemoryReport();
-void applyNativeWindowControls();
-void hydrateMainWindowGeometry().then(restoreMainWindowGeometry).catch((error) => {
-  logInternalError("mainWindowGeometry.restore failed", error);
-});
+if (!isMobile) {
+  void applyNativeWindowControls();
+  void hydrateMainWindowGeometry().then(restoreMainWindowGeometry).catch((error) => {
+    logInternalError("mainWindowGeometry.restore failed", error);
+  });
+}
 void Promise.all([
   hydratePaperPcMode(),
   hydrateRenderEffects(),
-  hydrateZoom(),
+  isMobile ? Promise.resolve() : hydrateZoom(),
   hydrateTheme(),
   hydrateWindowControlSettings(),
   hydrateMediaSessionSettings(),

@@ -3132,6 +3132,15 @@ export class YouTubeMusicDataSource extends DataSource {
    * sign-in completed, and it is not worth an error.
    */
   async cancelSignIn(): Promise<void> {
+    // Android signs in through its own activity, not a Tauri window.
+    if (/Android/i.test(navigator.userAgent)) {
+      await invoke("android_cancel_sign_in").catch((error) => {
+        logInternalWarn("YouTubeMusicDataSource.cancelSignIn android failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+      return;
+    }
     // A plain Window lookup: the sign-in window holds an address bar and the page as two
     // child webviews, so no webview carries the window's own label.
     const loginWindow = await Window.getByLabel(YOUTUBE_LOGIN_WINDOW_LABEL);

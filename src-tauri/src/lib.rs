@@ -1,3 +1,6 @@
+// The desktop sign-in window, tray and OS media sessions have no Android counterpart; their
+// helpers would each need a cfg otherwise.
+#![cfg_attr(target_os = "android", allow(dead_code))]
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -43,6 +46,8 @@ mod windows_media;
 #[cfg(target_os = "linux")]
 mod linux_media;
 
+#[cfg(target_os = "android")]
+mod android;
 #[cfg(target_os = "android")]
 mod android_context;
 mod audio;
@@ -2634,14 +2639,20 @@ fn remove_login_partition(app: &tauri::AppHandle, slot_id: &str) {
     if slot_id == LEGACY_ACCOUNT_SLOT_ID {
         return;
     }
-    let Ok(page) = build_login_window(app, false, Arc::new(AtomicBool::new(false)), slot_id) else {
-        return;
-    };
-    let _ = page.clear_all_browsing_data();
-    // The clear is asynchronous underneath and reports through a handler nobody waits on;
-    // closing the webview out from under it can leave the partition half-cleared.
-    thread::sleep(Duration::from_millis(750));
-    let _ = page.window().close();
+    // Android has one cookie store and a per-slot snapshot instead of partitions.
+    #[cfg(target_os = "android")]
+    android::forget_slot(app, slot_id);
+    #[cfg(not(target_os = "android"))]
+    {
+        let Ok(page) = build_login_window(app, false, Arc::new(AtomicBool::new(false)), slot_id) else {
+            return;
+        };
+        let _ = page.clear_all_browsing_data();
+        // The clear is asynchronous underneath and reports through a handler nobody waits on;
+        // closing the webview out from under it can leave the partition half-cleared.
+        thread::sleep(Duration::from_millis(750));
+        let _ = page.window().close();
+    }
 }
 
 /// The session cookie as the login webview currently holds it, if it holds one at all.
@@ -2717,18 +2728,72 @@ async fn sign_in_youtube_music(
      * unused — cleaned up rather than left as an orphaned directory.
      */
     let candidate_slot_id = generate_slot_id();
-    let window = build_login_window(&app, true, Arc::new(AtomicBool::new(false)), &candidate_slot_id)?;
-    eprintln!("[internal][tauri][info] sign_in_youtube_music login window created");
-
-    let result = poll_for_sign_in(&app, &jar, &account_lock, &window, &candidate_slot_id);
-    // Any failure (cancel, timeout, keyring error) must not leave the window up or the partition behind (#144).
-    if result.is_err() {
-        let _ = window.window().close();
-        remove_login_partition(&app, &candidate_slot_id);
+    #[cfg(target_os = "android")]
+    {
+        let cookie_header = android::sign_in(&app, &candidate_slot_id).await?;
+        let result = record_signed_in_cookie(&app, &jar, &account_lock, cookie_header, &candidate_slot_id, 0)?;
+        // Only now is the final slot known: a re-sign-in reuses the stored account's slot.
+        android::save_snapshot(&app, &result.slot_id).await;
+        Ok(result)
     }
-    result
+    #[cfg(not(target_os = "android"))]
+    {
+        let window = build_login_window(&app, true, Arc::new(AtomicBool::new(false)), &candidate_slot_id)?;
+        eprintln!("[internal][tauri][info] sign_in_youtube_music login window created");
+
+        let result = poll_for_sign_in(&app, &jar, &account_lock, &window, &candidate_slot_id);
+        // Any failure (cancel, timeout, keyring error) must not leave the window up or the partition behind (#144).
+        if result.is_err() {
+            let _ = window.window().close();
+            remove_login_partition(&app, &candidate_slot_id);
+        }
+        result
+    }
 }
 
+/// Stores a freshly harvested sign-in: the account store (reusing the slot of an account that
+/// is already there), the live jar, and cleanup of the now-unused candidate partition.
+fn record_signed_in_cookie(
+    app: &tauri::AppHandle,
+    jar: &YoutubeCookieJar,
+    account_lock: &AccountStoreLock,
+    cookie_header: String,
+    candidate_slot_id: &str,
+    poll: u32,
+) -> Result<SignInResult, CommandError> {
+    let (slot_id, account_changed, reused_existing_slot) = {
+        let _guard = account_lock.0.lock().map_err(|_| CommandError {
+            message: "account store lock unavailable".to_string(),
+        })?;
+        let mut store = load_account_store(app)?;
+        let (slot_id, account_changed) =
+            store.upsert_signed_in_account(&cookie_header, candidate_slot_id.to_string());
+        save_account_store(app, &store)?;
+        (slot_id.clone(), account_changed, slot_id != candidate_slot_id)
+    };
+    if reused_existing_slot {
+        remove_login_partition(app, candidate_slot_id);
+    }
+    if let Ok(mut state) = jar.0.lock() {
+        state.cookie = Some(cookie_header.clone());
+        state.persisted_at = Some(Instant::now());
+    }
+
+    eprintln!(
+        "[internal][tauri][info] sign_in_youtube_music detected session poll={} credential_bytes={} account_changed={} slot={}",
+        poll,
+        cookie_header.len(),
+        account_changed,
+        slot_id,
+    );
+    Ok(SignInResult {
+        cookie: cookie_header,
+        account_changed,
+        slot_id,
+    })
+}
+
+#[cfg(not(target_os = "android"))]
 fn poll_for_sign_in(
     app: &tauri::AppHandle,
     jar: &YoutubeCookieJar,
@@ -2751,37 +2816,9 @@ fn poll_for_sign_in(
             other => other?,
         };
         if let Some(cookie_header) = harvested {
-            let (slot_id, account_changed, reused_existing_slot) = {
-                let _guard = account_lock.0.lock().map_err(|_| CommandError {
-                    message: "account store lock unavailable".to_string(),
-                })?;
-                let mut store = load_account_store(app)?;
-                let (slot_id, account_changed) =
-                    store.upsert_signed_in_account(&cookie_header, candidate_slot_id.to_string());
-                save_account_store(app, &store)?;
-                (slot_id.clone(), account_changed, slot_id != candidate_slot_id)
-            };
-            if reused_existing_slot {
-                remove_login_partition(app, candidate_slot_id);
-            }
-            if let Ok(mut state) = jar.0.lock() {
-                state.cookie = Some(cookie_header.clone());
-                state.persisted_at = Some(Instant::now());
-            }
-
-            eprintln!(
-                "[internal][tauri][info] sign_in_youtube_music detected session poll={} credential_bytes={} account_changed={} slot={}",
-                poll,
-                cookie_header.len(),
-                account_changed,
-                slot_id,
-            );
+            let result = record_signed_in_cookie(app, jar, account_lock, cookie_header, candidate_slot_id, poll)?;
             let _ = window.window().close();
-            return Ok(SignInResult {
-                cookie: cookie_header,
-                account_changed,
-                slot_id,
-            });
+            return Ok(result);
         }
 
         if app.get_window(YOUTUBE_LOGIN_WINDOW).is_none() {
@@ -2835,6 +2872,23 @@ async fn refresh_youtube_music_cookie(
         return Ok(None);
     };
 
+    #[cfg(target_os = "android")]
+    {
+        let renewed = android::refresh(&app, &active_slot_id).await?;
+        match &renewed {
+            Some(cookie_header) => {
+                eprintln!(
+                    "[internal][tauri][info] refresh_youtube_music_cookie renewed credential_bytes={}",
+                    cookie_header.len()
+                );
+                persist_active_account_cookie(&app, &account_lock, &jar, &active_slot_id, cookie_header)?;
+            }
+            None => eprintln!("[internal][tauri][info] refresh_youtube_music_cookie found no usable session"),
+        }
+        Ok(renewed)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
     let loaded = Arc::new(AtomicBool::new(false));
     let window = build_login_window(&app, false, loaded.clone(), &active_slot_id)?;
 
@@ -2869,6 +2923,7 @@ async fn refresh_youtube_music_cookie(
     })();
     let _ = window.window().close();
     result
+    }
 }
 
 /// Signs out of whichever account is currently active — today's one-account "sign out".
@@ -4989,6 +5044,10 @@ pub fn run() {
             .plugin(tauri_plugin_autostart::Builder::new().build())
             .plugin(tauri_plugin_updater::Builder::new().build());
     }
+    #[cfg(target_os = "android")]
+    {
+        builder = builder.plugin(android::plugin());
+    }
     builder = builder
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
@@ -5016,6 +5075,9 @@ pub fn run() {
     builder
         .manage(LocalAudioWatcher(Mutex::new(None)))
         .setup(|app| {
+            // Before anything can open a keyring entry; see android::secret_store.
+            #[cfg(target_os = "android")]
+            android::secret_store::initialize(app.handle());
             /*
              * The audio thread and its output device are not opened here — `NativeAudio` starts
              * them on the first command. A listener on the IFrame engine should never claim a
@@ -5178,7 +5240,11 @@ pub fn run() {
             #[cfg(target_os = "windows")]
             windows_media::update_windows_media_session,
             #[cfg(target_os = "linux")]
-            linux_media::update_linux_media_session
+            linux_media::update_linux_media_session,
+            #[cfg(target_os = "android")]
+            android::update_android_media_session,
+            #[cfg(target_os = "android")]
+            android::android_cancel_sign_in
         ])
         .run(context)
         .expect("error while running tauri application");

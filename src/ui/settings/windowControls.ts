@@ -78,6 +78,8 @@ export function setWindowOutline(visible: boolean) {
 }
 
 export async function applyNativeWindowControls(enabled = readNativeWindowControls()) {
+  // No window decorations to toggle on Android.
+  if (/Android/i.test(navigator.userAgent)) return;
   try {
     await getCurrentWindow().setDecorations(enabled);
     document.documentElement.toggleAttribute("data-native-window-controls", enabled);

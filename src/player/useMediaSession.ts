@@ -7,6 +7,8 @@ import { logInternalWarn } from "../internal/logging";
 import { useLinuxMediaSession } from "../ui/settings/mediaSession";
 import { useOfflineArtworkUrl } from "./offlineStore";
 import { onPosition } from "./rustAudio";
+import { isAndroid, isLinux, isMacOS, isWindows } from "../ui/platform";
+import { onAndroidEvent } from "../ui/android";
 
 type NativeMediaAction =
   | "play"
@@ -17,8 +19,7 @@ type NativeMediaAction =
   | { action: "seekTo"; positionSec: number }
   | { action: "setVolume"; volume: number };
 
-const usesNativeWindowsMediaSession =
-  isTauri() && /Windows/i.test(navigator.userAgent);
+const usesNativeWindowsMediaSession = isTauri() && isWindows;
 /*
  * macOS goes through MPNowPlayingInfoCenter rather than the WebView's media session, because
  * only the native centre reaches Control Center, the lock screen and the F7-F9 keys. The Rust
@@ -31,18 +32,23 @@ const usesNativeWindowsMediaSession =
  * existing "Show in system media controls" setting — since it's the only platform that ever had
  * one to turn off.
  */
-const usesNativeMacosMediaSession =
-  isTauri() && /Macintosh|Mac OS X/i.test(navigator.userAgent);
-const usesNativeLinuxMediaSession =
-  isTauri() && /Linux/i.test(navigator.userAgent);
+const usesNativeMacosMediaSession = isTauri() && isMacOS;
+const usesNativeLinuxMediaSession = isTauri() && isLinux;
+/*
+ * Android: a MediaSession owned by a foreground service (PlaybackService.kt). Always on — it is
+ * also what keeps the process, and so the in-process Rust engine, alive in the background.
+ */
+const usesNativeAndroidMediaSession = isTauri() && isAndroid;
 const usesNativeMediaSession =
   usesNativeWindowsMediaSession ||
   usesNativeMacosMediaSession ||
-  usesNativeLinuxMediaSession;
+  usesNativeLinuxMediaSession ||
+  usesNativeAndroidMediaSession;
 
 function getNativeMediaCommand(linuxEnabled: boolean): string | null {
   if (usesNativeWindowsMediaSession) return "update_windows_media_session";
   if (usesNativeMacosMediaSession) return "update_macos_media_session";
+  if (usesNativeAndroidMediaSession) return "update_android_media_session";
   if (usesNativeLinuxMediaSession && linuxEnabled) return "update_linux_media_session";
   return null;
 }
@@ -120,6 +126,20 @@ export function useMediaSession(
       });
     });
   }, [controller, nativeMediaCommand, offlineArtworkUrl, state.currentTrack, state.status]);
+
+  useEffect(() => {
+    if (!usesNativeAndroidMediaSession) return;
+    return onAndroidEvent("media", (event) => {
+      if (event.action === "seekTo" && typeof event.positionSec === "number") {
+        void controller.seekTo(event.positionSec);
+      }
+      if (event.action === "play") void controller.play();
+      if (event.action === "pause") void controller.pause();
+      if (event.action === "playPause") void controller.togglePlayPause();
+      if (event.action === "next") void controller.skipToNext();
+      if (event.action === "previous") void controller.skipToPrevious();
+    });
+  }, [controller]);
 
   useEffect(() => {
     if (!nativeMediaControlEvent) return;

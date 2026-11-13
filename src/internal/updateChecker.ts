@@ -70,6 +70,10 @@ async function checkViaGithubApi(): Promise<UpdateInfo | null> {
 }
 
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
+  // The Android build has no self-updater and no release artifact to point at yet.
+  if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)) {
+    return null;
+  }
   const isMacOS =
     typeof navigator !== "undefined" && /Macintosh|Mac OS X/.test(navigator.userAgent);
 

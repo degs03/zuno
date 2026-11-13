@@ -91,7 +91,7 @@ import {
   previousOnboardingStep,
   type OnboardingStep,
 } from "./components/Onboarding";
-import { isLinux, isMacOS } from "./platform";
+import { isLinux, isMacOS, isMobile } from "./platform";
 import { useReduceMotion } from "./settings/renderEffects";
 
 import { emit, listen } from "@tauri-apps/api/event";
@@ -321,6 +321,8 @@ export default function App() {
   // The window is transparent so the app root can round its own corners. When the window
   // is maximised or fullscreen those corners would expose the desktop, so drop the radius.
   useEffect(() => {
+    // One full-screen window on mobile: no corners to round, nothing to track.
+    if (isMobile) return;
     const appWindow = getCurrentWindow();
     let disposed = false;
 
@@ -354,6 +356,8 @@ export default function App() {
   // Full-screen lyrics is real OS fullscreen, not just a wider layout — the whole point is
   // the window chrome getting out of the way too.
   useEffect(() => {
+    // Mobile is always full screen; the lyrics view simply covers the app.
+    if (isMobile) return;
     void getCurrentWindow()
       .setFullscreen(playerUIState.isLyricsFullscreen)
       .catch((error) => {
@@ -870,7 +874,7 @@ export default function App() {
     clearAppSession();
 
     const results = await Promise.allSettled([
-      setAutostartEnabled(false),
+      isMobile ? Promise.resolve() : setAutostartEnabled(false),
       libraryController.signOut(),
       clearCache(),
       clearAppSettings(),
@@ -1736,6 +1740,8 @@ useEffect(() => {
      *   minimise, where the user's intent to background the app is unambiguous.
      */
     const showMiniPlayerIfAllowed = async (_event?: unknown, force = false) => {
+      // Mobile has no second window; the media notification plays that role.
+      if (isMobile) return;
       /*
        * Every one of these is checked before the window is asked for, not after.
        *

@@ -1,8 +1,15 @@
 export const isMacOS =
   typeof navigator !== "undefined" && /Macintosh|Mac OS X/.test(navigator.userAgent);
 
+/** Android's user agent also says "Linux"; everything desktop-Linux must exclude it. */
+export const isAndroid =
+  typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+
+/** One window, no title bar, touch-first: the mobile build. Only Android ships one today. */
+export const isMobile = isAndroid;
+
 export const isLinux =
-  typeof navigator !== "undefined" && /Linux/.test(navigator.userAgent);
+  typeof navigator !== "undefined" && /Linux/.test(navigator.userAgent) && !isAndroid;
 
 export const isWindows =
   typeof navigator !== "undefined" && /Windows NT/.test(navigator.userAgent);
@@ -31,6 +38,7 @@ export function subscribeTilingWindowManager(callback: () => void): () => void {
 }
 
 export async function detectTilingWindowManager(): Promise<void> {
+  if (isMobile) return;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     const desktop = await invoke<string>("desktop_environment");
@@ -47,6 +55,7 @@ export const primaryModifierLabel = isMacOS ? "⌘" : "Ctrl";
 
 export function applyPlatformAttributes() {
   document.documentElement.toggleAttribute("data-platform-linux", isLinux);
+  document.documentElement.toggleAttribute("data-platform-mobile", isMobile);
 }
 
 export function hasPrimaryModifierOnly(event: KeyboardEvent): boolean {
