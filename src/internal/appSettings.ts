@@ -17,16 +17,45 @@ export function getInvokeErrorMessage(error: unknown): string {
   return String(error);
 }
 
-export async function getAppSetting<T>(key: string): Promise<T | null> {
-  try {
-    return await invoke<T | null>("app_setting_get", { key });
-  } catch (error) {
-    logInternalWarn("appSetting.get failed", {
-      key,
-      error: getInvokeErrorMessage(error),
+/*
+ * Reads requested in the same tick go out as one `app_settings_get_many` call. Startup hydrates
+ * ~30 settings back to back, and on a phone each round trip through the IPC bridge costs more
+ * than the lookup itself. Every read still sees the store as it is when the batch is sent.
+ */
+let pendingReads: Map<string, Array<(value: unknown) => void>> | null = null;
+
+function flushPendingReads(): void {
+  const batch = pendingReads;
+  pendingReads = null;
+  if (!batch) return;
+  const keys = [...batch.keys()];
+  invoke<Record<string, unknown>>("app_settings_get_many", { keys })
+    .then((values) => {
+      for (const [key, resolvers] of batch) {
+        for (const resolve of resolvers) resolve(values[key] ?? null);
+      }
+    })
+    .catch((error) => {
+      logInternalWarn("appSetting.get failed", {
+        keys,
+        error: getInvokeErrorMessage(error),
+      });
+      for (const resolvers of batch.values()) {
+        for (const resolve of resolvers) resolve(null);
+      }
     });
-    return null;
-  }
+}
+
+export function getAppSetting<T>(key: string): Promise<T | null> {
+  return new Promise((resolve) => {
+    if (!pendingReads) {
+      pendingReads = new Map();
+      queueMicrotask(flushPendingReads);
+    }
+    const resolvers = pendingReads.get(key) ?? [];
+    resolvers.push(resolve as (value: unknown) => void);
+    pendingReads.set(key, resolvers);
+  });
 }
 
 export async function setAppSetting<T>(key: string, value: T): Promise<void> {

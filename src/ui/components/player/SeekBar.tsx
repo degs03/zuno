@@ -133,6 +133,9 @@ export function SeekBar() {
     // Twice per commit threshold, so timer jitter cannot skip a commit; per-frame polling only
     // woke the CPU. Seeks and drags bypass this and stay frame-accurate.
     tick();
+    // Paused or stopped, the time cannot move on its own: one read, no timer waking the CPU
+    // four times a second for as long as the app sits idle. A status change re-runs this.
+    if (state.status !== "playing" && state.status !== "loading") return;
     const intervalId = window.setInterval(tick, state.status === "playing" ? PLAYING_POLL_MS : IDLE_POLL_MS);
     return () => window.clearInterval(intervalId);
   }, [uiState.isSeeking, state.status]);

@@ -636,12 +636,24 @@ export class YouTubeMusicDataSource extends DataSource {
    * costs nothing extra.
    */
   warmPlayback(): void {
-    void this.getDownloadClient().catch((error) => {
-      logInternalWarn("YouTubeMusicDataSource.warmPlayback download client failed", {
-        error: error instanceof Error ? error.message : String(error),
+    const warm = () => {
+      void this.getDownloadClient().catch((error) => {
+        logInternalWarn("YouTubeMusicDataSource.warmPlayback download client failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
-    });
-    warmPoToken();
+      warmPoToken();
+    };
+    /*
+     * On a phone the BotGuard challenge is seconds of main-thread JavaScript, and "the library
+     * just loaded" is exactly when someone starts scrolling it. Waiting for an idle moment (or
+     * at most a few seconds) keeps that work out of their first gestures.
+     */
+    if (/Android/i.test(navigator.userAgent) && typeof requestIdleCallback === "function") {
+      requestIdleCallback(warm, { timeout: 4_000 });
+      return;
+    }
+    warm();
   }
 
   /**

@@ -433,7 +433,6 @@ export default function App() {
     };
   }, []);
   const [availableUpdate, setAvailableUpdate] = useState<UpdateInfo | null>(null);
-  const [isExpandedPlayerBar,setIsExpandedPlayerBar]=  useState(false)
   const dismissAvailableUpdate = useCallback(() => {
     setAvailableUpdate(null);
   }, []);
@@ -1766,9 +1765,6 @@ export default function App() {
   }, []);
 
 
-  const handlePlayerBarClick=()=>{
-    setIsExpandedPlayerBar(!isExpandedPlayerBar)
-  }
 
 
 
@@ -2114,10 +2110,6 @@ useEffect(() => {
             <QueuePanel onClose={() => setIsQueuePanelOpen(false)} />
           ) : undefined}
         >
-{/* <ExpandedPlayerBar 
-        isOpen={isExpandedPlayerBar} 
-        onClose={() => setIsExpandedPlayerBar(false)} 
-      /> */}
 
           {/* Chunks resolve off local disk in single-digit ms, so an empty fallback reads as
               an instant transition rather than a flash of spinner. */}
@@ -2281,7 +2273,6 @@ useEffect(() => {
               onToggleQueue={handleToggleQueue}
               isQueueOpen={isQueuePanelOpen}
               onConnectionRestored={handleConnectionRestored}
-              handlePlayerBarClick={handlePlayerBarClick}
             />
           </ErrorBoundary>
         </div>

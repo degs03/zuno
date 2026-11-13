@@ -11,6 +11,7 @@ import {
   readLocalJsonSetting,
   writeLocalJsonSetting,
 } from "../../internal/durableLocalSetting";
+import { isMobile } from "../platform";
 
 /**
  * Per-effect kill switches, for finding out which visual effect is actually costing the GPU.
@@ -154,10 +155,34 @@ export async function hydrateRenderEffects(): Promise<void> {
   if (readPaperPcMode() && readLocalJsonSetting(STORAGE_KEY, isEffectIdList) === null) {
     writeLocalJsonSetting(STORAGE_KEY, [...(EFFECT_IDS as RenderEffectId[])]);
   }
+  if (isMobile && readLocalJsonSetting(STORAGE_KEY, isEffectIdList) === null) {
+    applyMobileDefaults();
+  }
 
   invalidateSnapshot();
   applyRenderEffects();
   window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
+/** Effects a phone GPU pays the most for and that add the least on a small screen. */
+const MOBILE_DEFAULT_OFF: RenderEffectId[] = ["backdrop", "ambient", "lyrics-drift", "will-change"];
+
+/**
+ * First launch on a phone, before the user has touched any switch: start lean.
+ *
+ * `deviceMemory` (GB, rounded by the browser) and `hardwareConcurrency` are what the WebView
+ * exposes about the hardware. A 2 GB / dual-core device gets full Potato mode; anything else
+ * just skips the blur and ambient layers. Both are ordinary settings afterwards, so a user on
+ * a fast phone can turn everything back on in Settings → Appearance.
+ */
+function applyMobileDefaults(): void {
+  const memoryGb = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
+  const cores = navigator.hardwareConcurrency || 4;
+  if (memoryGb <= 2 || cores <= 2) {
+    setPotatoPcMode(true);
+    return;
+  }
+  writeLocalJsonSetting(STORAGE_KEY, MOBILE_DEFAULT_OFF);
 }
 
 /**

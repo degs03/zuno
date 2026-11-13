@@ -1338,6 +1338,22 @@ fn app_setting_get(app: tauri::AppHandle, key: String) -> Option<serde_json::Val
     read_app_setting(&app, &key)
 }
 
+/// Several settings in one round trip. Startup hydrates ~30 of them at once, and on a phone each
+/// separate IPC call costs more than the lookup it carries. Missing keys are simply absent.
+#[tauri::command(async)]
+fn app_settings_get_many(
+    app: tauri::AppHandle,
+    keys: Vec<String>,
+) -> Result<HashMap<String, serde_json::Value>, CommandError> {
+    with_settings(&app, |settings| {
+        let found = keys
+            .into_iter()
+            .filter_map(|key| settings.get(&key).cloned().map(|value| (key, value)))
+            .collect();
+        (found, false)
+    })
+}
+
 #[tauri::command(async)]
 fn app_setting_set(app: tauri::AppHandle, key: String, value: serde_json::Value) -> Result<(), CommandError> {
     if key == MINIMIZE_TO_TRAY_SETTING {
@@ -5190,6 +5206,7 @@ pub fn run() {
             quit_app,
             frontend_log,
             app_setting_get,
+            app_settings_get_many,
             app_setting_set,
             app_setting_remove,
             app_settings_clear,

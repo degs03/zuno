@@ -23,7 +23,6 @@ interface PlayerBarProps {
   onToggleQueue: () => void;
   isQueueOpen: boolean;
   onConnectionRestored: () => Promise<void>;
-  handlePlayerBarClick:()=>void;
 }
 
 /*
@@ -37,7 +36,7 @@ const CONNECTION_CHECK_URLS = [
   "https://cp.cloudflare.com/generate_204",
 ];
 
-export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnectionRestored,handlePlayerBarClick }: PlayerBarProps) {
+export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnectionRestored }: PlayerBarProps) {
   const isOnline = useOnline();
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
  
@@ -188,7 +187,6 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
          */
         <div
           className="flex shrink-0 flex-col gap-2 bg-background px-3 pb-2 pt-2"
-          onClick={handlePlayerBarClick}
         >
           <SeekBar />
           <div className="flex items-center gap-2">
@@ -217,7 +215,6 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
       ) : (
       <div
         className="group/playerbar flex shrink-0 flex-col gap-1 bg-background px-4 pb-3 pt-2"
-        onClick={handlePlayerBarClick}
       >
         {/* Expanded: the seek bar spans the full bar above everything. */}
         {!compactPlayerBar && <SeekBar />}

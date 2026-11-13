@@ -1,6 +1,8 @@
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import introVideo from "../../../assets/img/zuno.mp4";
+import introStill from "../../../assets/img/logo-72.png";
+import { isMobile } from "../platform";
 
 /*
  * The accent bloom, as a gradient rather than a blurred circle.
@@ -63,6 +65,18 @@ export function AppLoadingScreen({ isLeaving }: AppLoadingScreenProps) {
           alt=""
         />  */}
 
+{/* A phone gets the still logo: starting a video decoder (and fetching 660 KB) on the busiest
+    second of a slow device's startup is the opposite of what a loading screen is for. */}
+{isMobile ? (
+<motion.img
+  initial={{ opacity: 0, scale: 0.92 }}
+  animate={{ opacity: 1, scale: 1 }}
+  transition={{ type: "spring", stiffness: 260, damping: 24 }}
+  className="size-18 rounded-full object-cover"
+  src={introStill}
+  alt=""
+/>
+) : (
 <motion.video
   initial={{ opacity: 0, scale: 0.92 }}
   animate={{ opacity: 1, scale: 1 }}
@@ -80,6 +94,7 @@ export function AppLoadingScreen({ isLeaving }: AppLoadingScreenProps) {
 >
   <source src={introVideo} type="video/mp4" />
 </motion.video>
+)}
  
       <div className="flex items-end gap-4">
        {/*  <AudioLoader /> */}  <strong className="text-sm font-medium text-foreground">{loadingLine}</strong>

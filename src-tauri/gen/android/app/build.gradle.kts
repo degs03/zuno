@@ -38,6 +38,8 @@ android {
         }
         getByName("release") {
             isMinifyEnabled = true
+            // Drops resources nothing references once code shrinking has run.
+            isShrinkResources = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
                     .plus(getDefaultProguardFile("proguard-android-optimize.txt"))
