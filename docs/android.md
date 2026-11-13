@@ -4,8 +4,26 @@ Zuno builds for Android from the same codebase. Tauri 2 compiles the Rust crate 
 the React UI runs in the system WebView, and a small Kotlin layer under
 `src-tauri/gen/android` handles what a WebView cannot do on its own.
 
-Only arm64 (`aarch64`) is built and tested. Android 8.0 (API 26) is the minimum, because that
-is the first version with AAudio, which the Rust audio engine plays through.
+arm64 (`aarch64`) and 32-bit ARM (`armv7`) are built, one APK per ABI, so older and Android Go
+phones are covered too. Android 8.0 (API 26) is the minimum, because that is the first version
+with AAudio, which the Rust audio engine plays through.
+
+## Running well on slow phones
+
+- **Audio never waits on the network inside the realtime callback.** `prefetch.rs` decodes on
+  its own thread into ~0.7 s of chunks. If the download falls behind, the deck plays silence and
+  increments `prefetch::UNDERRUNS` (logged with every `native_audio_load`) instead of stalling the
+  callback. Android also gets an ~85 ms device buffer.
+- **Per-sample work is minimal.** The equaliser runs only the bands that filter, and the
+  position clock publishes in batches.
+- **First launch picks lean defaults** (`renderEffects.ts`, `applyMobileDefaults`): no backdrop
+  blur or ambient artwork, and full Potato mode on 2 GB or dual-core devices. Users can change all
+  of these later in Settings → Appearance.
+- **Startup and idle cost is cut.** Settings are hydrated in a single IPC round trip, the intro is
+  a still image instead of a video, the BotGuard warm-up waits for idle, and the seek bar does not
+  poll while paused. The data cache is capped at 512 MB.
+- **Measuring:** `app_memory_report` returns the process's VmRSS/RssAnon on Android. The
+  WebView renderer is a separate process; `adb shell dumpsys meminfo` shows both.
 
 ## How it maps onto the desktop app
 
@@ -36,11 +54,11 @@ You need Android Studio (SDK and NDK 27.1), Java 17 (the one bundled with Androi
 and Rust with the target:
 
 ```sh
-rustup target add aarch64-linux-android
+rustup target add aarch64-linux-android armv7-linux-androideabi
 npm ci
-npx tauri android build --apk --target aarch64          # release, unsigned
-npx tauri android build --apk --target aarch64 --debug  # debug, installable as is
-npx tauri android dev                                   # live reload on a device/emulator
+npx tauri android build --apk --target aarch64 --target armv7 --split-per-abi  # release, unsigned
+npx tauri android build --apk --target aarch64 --debug                          # debug, installable
+npx tauri android dev                                                           # live reload
 ```
 
 **Windows:** the Tauri CLI links the built library into `jniLibs` with a symlink, and creating
@@ -49,8 +67,8 @@ symlinks needs Developer Mode (Settings → System → For developers). The alte
 resulting `libzuno_lib.so` into `gen/android/app/src/main/jniLibs/arm64-v8a/`, and then run
 `gradlew :app:assembleArm64Debug -x rustBuildArm64Debug`.
 
-CI (`.github/workflows/android.yml`) runs clippy for the Android target and uploads an APK
-signed with a throwaway key, so a pull request can be tried on a phone.
+CI (`.github/workflows/android.yml`) runs clippy for both Android targets and uploads one APK per
+ABI, signed with a throwaway key, so a pull request can be tried on a phone.
 
 ## Known gaps
 

@@ -310,7 +310,36 @@ scan (the reference dumps in there are full of class names the app never uses).
     animation, box-shadow and backdrop-filter. That only stops *CSS* animation; beUI's JS-driven
     motion is stopped by the `<MotionConfig reducedMotion>` bridge in `App.tsx`.
   - `html[data-platform-linux]` — disables backdrop filters (WebKitGTK performance).
+  - `html[data-platform-mobile]` — Android. Removes hover-only controls (`opacity-0` +
+    `group-hover`), which on touch are invisible but still tappable. Turns `[data-menu-sheet]`
+    menus into bottom sheets and `[data-scroll-row]` tab rows into one sideways-scrolling row.
+    Sizes the `[data-mobile-player]` controls for fingers.
   - `html[data-native-window-controls]` — hides the custom window buttons.
+
+### Cards and surfaces
+
+Shape and elevation are tokens in `@theme`, so they generate utilities (`rounded-art`,
+`shadow-card`, …). Pick by role, not by look:
+
+| Token | Utility | Use for |
+|---|---|---|
+| `--radius-art` | `rounded-art` | Every cover and thumbnail. `TrackArtwork` applies it by default unless the caller passes its own `rounded-*` (artists use `rounded-full`). |
+| `--radius-row` | `rounded-row` | List rows, menu items. |
+| `--radius-card` | `rounded-card` | Tiles, settings cards, panels. |
+| `--radius-sheet` | `rounded-[var(--radius-sheet)]` | The floating mobile player, sheets, dialogs. |
+| `--shadow-card` / `--shadow-pop` | `shadow-card` / `shadow-pop` | Resting / floating elevation. Both start with a 1px top highlight, so they read in the dark theme. |
+| `--color-hairline`, `--color-pressed`, `--color-scrim` | `ring-[var(--color-hairline)]` … | Theme-aware replacements for `white/x` and `black/x` literals. Don't hard-code those; they break the light theme. |
+
+Two shared utilities live in `global.css`:
+- `pressable` gives a short scale-down on `:active`. Use it on anything tappable, because
+  touch has no hover to acknowledge a press.
+- `card-surface` combines `bg-card`, `rounded-card` and `shadow-card`.
+
+Shadows and blur stay under the existing `data-fx-off` switches, so Potato mode removes them.
+
+On a phone, a context menu opens from a visible ⋯ or from a long-press (`useLongPress` in
+`src/lib/hooks`). The long-press delivers the same event shape as a right-click, so existing
+`onContextMenu` handlers need no changes.
 
 ### Component vocabulary
 
