@@ -37,6 +37,12 @@ export class AuthExpiredError extends Error {
   }
 }
 
+/** How a stream request should be scheduled. */
+export type StreamRequestOptions = {
+  /** A preload of an upcoming track: yields to whatever the user is playing right now. */
+  background?: boolean;
+};
+
 export type StreamData = {
   bytes?: ArrayBuffer;
   mimeType?: string;
@@ -61,7 +67,8 @@ export abstract class DataSource {
   resolveLink?(url: string): Promise<ResolvedLink | null>;
   searchTracks?(query: string, onUpdate?: (tracks: Track[]) => void): Promise<Track[]>;
   getSearchSuggestions?(query: string, onUpdate?: (suggestions: string[]) => void): Promise<string[]>;
-  getStreamData?(track: Track): Promise<StreamData>;
+  /** `background` marks a preload of an upcoming track: it yields to anything played now. */
+  getStreamData?(track: Track, options?: StreamRequestOptions): Promise<StreamData>;
   /**
    * Pre-pays whatever first-play latency can be paid before there is a play — e.g. warming a
    * lazily-created client or a slow one-time attestation. Fire-and-forget: called when the

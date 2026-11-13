@@ -8,7 +8,7 @@
  */
 export {};
 
-import { createSerialQueue } from "./asyncQueue";
+import { createPriorityQueue, createSerialQueue } from "./asyncQueue";
 
 function check(condition: boolean, message: string): void {
   if (!condition) throw new Error(`FAILED: ${message}`);
@@ -67,6 +67,34 @@ async function main() {
       rejected = true;
     }
     check(rejected, "the failing call's own rejection reaches its caller");
+  }
+
+  // Priority queue: a foreground call overtakes background work that has not started yet,
+  // but never interrupts the job already running.
+  {
+    const run = createPriorityQueue();
+    const order: string[] = [];
+    let releaseFirst: () => void = () => {};
+    const first = run(() => new Promise<void>((resolve) => {
+      order.push("bg-running");
+      releaseFirst = resolve;
+    }), true);
+    const bgWaiting = run(async () => { order.push("bg-waiting"); }, true);
+    const fg = run(async () => { order.push("foreground"); });
+    await Promise.resolve();
+    releaseFirst();
+    await Promise.all([first, bgWaiting, fg]);
+    equal(order.join(","), "bg-running,foreground,bg-waiting", "foreground jumps waiting background work");
+  }
+
+  {
+    const run = createPriorityQueue();
+    const order: number[] = [];
+    await Promise.all([1, 2, 3].map((n) => run(async () => { order.push(n); })));
+    equal(order.join(","), "1,2,3", "same priority stays first-in, first-out");
+    const failing = run(async () => { throw new Error("boom"); });
+    await failing.catch(() => {});
+    equal(await run(async () => "ok"), "ok", "a rejection does not wedge the priority queue");
   }
 }
 

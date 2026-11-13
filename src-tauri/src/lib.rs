@@ -3018,6 +3018,10 @@ struct ProxyHttpResponse {
 pub(crate) struct MediaBuffer {
     /// Sized on creation; each slot's length is its own chunk size, so no stride is stored.
     chunks: Vec<Option<Vec<u8>>>,
+    /// The chunk currently streaming in, as far as it has arrived. Counted as servable when it is
+    /// the next chunk after the complete prefix, so a decoder can read a long range while it is
+    /// still downloading instead of waiting for all of it — MP4's probe walks the whole file.
+    partial: Option<(usize, Vec<u8>)>,
     pub(crate) total: usize,
     /// Set when the download gave up. The server answers 503 rather than waiting out the clock.
     pub(crate) failed: bool,
@@ -3026,41 +3030,76 @@ pub(crate) struct MediaBuffer {
 impl MediaBuffer {
     fn complete(bytes: Vec<u8>) -> Self {
         let total = bytes.len();
-        Self { chunks: vec![Some(bytes)], total, failed: false }
+        Self { chunks: vec![Some(bytes)], partial: None, total, failed: false }
     }
 
     fn pending(total: usize, chunk_count: usize) -> Self {
-        Self { chunks: vec![None; chunk_count], total, failed: false }
+        Self { chunks: vec![None; chunk_count], partial: None, total, failed: false }
     }
 
     /// Bytes servable from offset 0 without a hole.
     pub(crate) fn contiguous_len(&self) -> usize {
-        let mut len = 0;
-        for chunk in &self.chunks {
-            match chunk {
-                Some(bytes) => len += bytes.len(),
-                None => break,
+        let prefix = self.complete_prefix();
+        let complete: usize = self.chunks[..prefix].iter().flatten().map(Vec::len).sum();
+        complete + self.streaming_after(prefix).map_or(0, Vec::len)
+    }
+
+    /// Leading run of finished chunks.
+    fn complete_prefix(&self) -> usize {
+        self.chunks.iter().take_while(|chunk| chunk.is_some()).count()
+    }
+
+    /// The partial chunk, if it is the one right after `prefix` (and so contiguous with it).
+    fn streaming_after(&self, prefix: usize) -> Option<&Vec<u8>> {
+        self.partial.as_ref().filter(|(index, _)| *index == prefix).map(|(_, bytes)| bytes)
+    }
+
+    /// Appends newly arrived bytes of chunk `index`.
+    fn append(&mut self, index: usize, bytes: &[u8]) {
+        match &mut self.partial {
+            Some((current, data)) if *current == index => data.extend_from_slice(bytes),
+            _ => self.partial = Some((index, bytes.to_vec())),
+        }
+    }
+
+    /// How much of chunk `index` has streamed in so far — where a retry should resume.
+    fn partial_len(&self, index: usize) -> usize {
+        self.partial.as_ref().filter(|(current, _)| *current == index).map_or(0, |(_, data)| data.len())
+    }
+
+    /// Chunk `index` finished streaming: it becomes an ordinary complete chunk.
+    fn finish_partial(&mut self, index: usize) {
+        if self.partial.as_ref().is_some_and(|(current, _)| *current == index) {
+            if let Some((_, data)) = self.partial.take() {
+                if index < self.chunks.len() {
+                    self.chunks[index] = Some(data);
+                }
             }
         }
-        len
     }
 
     /// Replaces everything with one finished body, for the whole-file fallback.
     fn adopt_complete(&mut self, bytes: Vec<u8>) {
         self.total = bytes.len();
         self.chunks = vec![Some(bytes)];
+        self.partial = None;
     }
 
     fn put(&mut self, index: usize, bytes: Vec<u8>) {
         if index < self.chunks.len() {
             self.chunks[index] = Some(bytes);
         }
+        if self.partial.as_ref().is_some_and(|(current, _)| *current == index) {
+            self.partial = None;
+        }
     }
 
     /// Copies from `start` straight into `out`, across chunk boundaries; returns bytes copied.
     pub(crate) fn read_into(&self, start: usize, out: &mut [u8]) -> usize {
         let (mut copied, mut offset) = (0, 0);
-        for bytes in self.chunks.iter().map_while(Option::as_ref) {
+        let prefix = self.complete_prefix();
+        let servable = self.chunks[..prefix].iter().flatten().chain(self.streaming_after(prefix));
+        for bytes in servable {
             let chunk_end = offset + bytes.len();
             let position = start + copied;
             if position >= offset && position < chunk_end {
@@ -3533,6 +3572,54 @@ const PLAYBACK_RETRY_BACKOFF: Duration = Duration::from_millis(250);
  * into a skipped track.
  */
 static LOAD_GENERATION: [AtomicU64; 2] = [AtomicU64::new(0), AtomicU64::new(0)];
+
+/**
+ * The buffers whose fills are worth finishing: the playing deck's (`0`) and the preloaded
+ * next track's (`1`).
+ *
+ * A preload used to claim generation slot 1 for its fill. But after a handover the track now
+ * *playing* came from slot 1 too, so the very next preload superseded the playing track's own
+ * still-running fill — and that track died ~20 s later waiting for bytes that would never come.
+ * Roles move with the handover instead (`promote_standby_fill`), so a preload only ever cancels
+ * the preload before it. Cancelling marks the buffer failed, which every fill checks between
+ * pieces, so an orphan stops downloading — and gives up `PLAYBACK_FILL_LOCK` — right away.
+ */
+static ROLE_BUFFERS: Mutex<[Option<Arc<Mutex<MediaBuffer>>>; 2]> = Mutex::new([None, None]);
+
+/// Stops a fill nobody needs any more. A body that already finished is left untouched.
+fn cancel_fill(buffer: &Arc<Mutex<MediaBuffer>>) {
+    if let Ok(mut guard) = buffer.lock() {
+        if guard.contiguous_len() < guard.total {
+            guard.failed = true;
+        }
+    }
+}
+
+/// `buffer` becomes the fill for `role`; whatever held the role before is cancelled.
+fn claim_fill_role(role: usize, buffer: &Arc<Mutex<MediaBuffer>>) {
+    let previous = ROLE_BUFFERS.lock().ok().and_then(|mut roles| roles[role].replace(Arc::clone(buffer)));
+    if let Some(previous) = previous {
+        if !Arc::ptr_eq(&previous, buffer) {
+            cancel_fill(&previous);
+        }
+    }
+}
+
+/// The deck for `role` was dropped or stopped: its fill, if still running, is pointless.
+fn cancel_fill_role(role: usize) {
+    let previous = ROLE_BUFFERS.lock().ok().and_then(|mut roles| roles[role].take());
+    if let Some(previous) = previous {
+        cancel_fill(&previous);
+    }
+}
+
+/// A handover made the preloaded track the playing one; its fill now belongs to the playing role.
+/// The outgoing track is not cancelled — during a crossfade it is still being heard.
+fn promote_standby_fill() {
+    if let Ok(mut roles) = ROLE_BUFFERS.lock() {
+        roles[0] = roles[1].take();
+    }
+}
 
 /// True once a fill's slot has moved on to a newer load. `None` opts out, for the media-server
 /// (`<audio>`) path, which has no load slots to be superseded in.
@@ -4227,7 +4314,7 @@ async fn fill_media_buffer(
 
     // The wait for the permit above is where a superseded fill most likely spent its time —
     // recheck now, before spending a request on a track that moved on while this was queued.
-    if load_superseded(slot) {
+    if load_superseded(slot) || buffer.lock().map(|guard| guard.failed).unwrap_or(true) {
         eprintln!(
             "[internal][tauri][info] fill_media_buffer superseded before start track_id={}",
             track_id
@@ -4267,28 +4354,72 @@ async fn fill_media_buffer(
                  * the assembly on the first one sent every such track down the whole-file
                  * path, which can be refused in turn and then the play simply fails.
                  */
-                let ranged = audio_url_with_range(&url, start as u64, end as u64);
                 let mut backoff = PLAYBACK_RETRY_BACKOFF;
                 let mut last: CommandError = cache_error("range never attempted");
 
                 for attempt in 0..PLAYBACK_RANGE_ATTEMPTS {
                     // Re-checked every attempt: a supersede mid-backoff must not spend the next
                     // request anyway, and this is what stops it doing that.
-                    if load_superseded(slot) {
+                    if load_superseded(slot)
+                        || abandoned.lock().map(|guard| guard.failed).unwrap_or(true)
+                    {
                         return Err((index, cache_error("fill abandoned")));
                     }
                     if attempt > 0 {
                         tokio::time::sleep(backoff).await;
                         backoff *= 2;
                     }
+                    // A retry resumes where a dropped stream left off rather than starting over.
+                    let resume = abandoned.lock().map(|guard| guard.partial_len(index)).unwrap_or(0);
+                    let ranged = audio_url_with_range(&url, (start + resume) as u64, end as u64);
                     match googlevideo_audio_request(&client, &ranged, cookie.as_deref())
                         .send()
                         .await
                     {
-                        Ok(response) if response.status().is_success() => {
+                        // The head is small and has to be verified whole before anything trusts it.
+                        Ok(response) if response.status().is_success() && index == 0 => {
                             match response.bytes().await {
-                                Ok(body) => return Ok((index, body.to_vec())),
+                                Ok(body) => return Ok((index, Some(body.to_vec()))),
                                 Err(error) => {
+                                    last = cache_error(format!("audio range read failed: {error}"));
+                                }
+                            }
+                        }
+                        /*
+                         * Every later range streams into the buffer as it arrives. Two things
+                         * follow: the decoder can read it before it is complete (an MP4 probe
+                         * reads to the end of the file, so it used to wait for the whole body),
+                         * and a cancelled fill stops within one network read instead of after
+                         * downloading the rest of a track nobody will play.
+                         */
+                        Ok(response) if response.status().is_success() => {
+                            let mut pieces = response.bytes_stream();
+                            let mut broken = None;
+                            while let Some(piece) = pieces.next().await {
+                                match piece {
+                                    Ok(piece) => {
+                                        let Ok(mut guard) = abandoned.lock() else {
+                                            return Err((index, cache_error("fill abandoned")));
+                                        };
+                                        if guard.failed {
+                                            return Err((index, cache_error("fill abandoned")));
+                                        }
+                                        guard.append(index, &piece);
+                                    }
+                                    Err(error) => {
+                                        broken = Some(error);
+                                        break;
+                                    }
+                                }
+                            }
+                            match broken {
+                                None => {
+                                    if let Ok(mut guard) = abandoned.lock() {
+                                        guard.finish_partial(index);
+                                    }
+                                    return Ok((index, None));
+                                }
+                                Some(error) => {
                                     last = cache_error(format!("audio range read failed: {error}"));
                                 }
                             }
@@ -4301,7 +4432,7 @@ async fn fill_media_buffer(
                         }
                     }
                 }
-                Err::<(usize, Vec<u8>), (usize, CommandError)>((index, last))
+                Err::<(usize, Option<Vec<u8>>), (usize, CommandError)>((index, last))
             }
         },
     ))
@@ -4309,7 +4440,9 @@ async fn fill_media_buffer(
 
     while let Some(result) = stream.next().await {
         match result {
-            Ok((index, body)) => {
+            // Streamed ranges are already in the buffer; only the head arrives as a body.
+            Ok((_, None)) => {}
+            Ok((index, Some(body))) => {
                 // The first chunk is the only one that can prove the container.
                 if index == 0 {
                     if let Err(error) = verify_audio_container(&body, &mime_type) {
@@ -4342,7 +4475,7 @@ async fn fill_media_buffer(
                 // Same reasoning, for the one case above cannot see: superseded rather than
                 // failed. The whole-file fallback below is the expensive part of this function —
                 // not worth starting for a track nobody is playing or preloading any more.
-                if load_superseded(slot) {
+                if load_superseded(slot) || buffer.lock().map(|guard| guard.failed).unwrap_or(true) {
                     eprintln!(
                         "[internal][tauri][info] fill_media_buffer superseded, skipping fallback track_id={}",
                         track_id
@@ -4452,8 +4585,11 @@ fn open_native_audio_reader(
 
             let ranges = playback_ranges(total);
             let buffer = Arc::new(Mutex::new(MediaBuffer::pending(total, ranges.len())));
-            let slot_index = standby as usize;
-            let generation = LOAD_GENERATION[slot_index].fetch_add(1, Ordering::SeqCst) + 1;
+            claim_fill_role(standby as usize, &buffer);
+            // Foreground loads still supersede each other by generation (a reload of a track that
+            // died must not queue behind the dead one). Preloads are governed by their role only:
+            // a generation slot cannot follow a track across the handover. See ROLE_BUFFERS.
+            let slot = (!standby).then(|| (0, LOAD_GENERATION[0].fetch_add(1, Ordering::SeqCst) + 1));
             tauri::async_runtime::spawn(fill_media_buffer(
                 url,
                 track_id.to_string(),
@@ -4461,7 +4597,7 @@ fn open_native_audio_reader(
                 mime_type.clone(),
                 Arc::clone(&buffer),
                 ranges,
-                Some((slot_index, generation)),
+                slot,
             ));
             Ok(NativeAudioReader {
                 reader: Box::new(audio::BufferReader::new(Arc::clone(&buffer))),
@@ -4727,6 +4863,8 @@ fn native_audio_pause(state: tauri::State<'_, audio::NativeAudio>) -> Result<(),
 
 #[tauri::command(async)]
 fn native_audio_stop(state: tauri::State<'_, audio::NativeAudio>) -> Result<(), CommandError> {
+    cancel_fill_role(0);
+    cancel_fill_role(1);
     state.send(audio::Command::Stop).map_err(cache_error)
 }
 
@@ -4771,12 +4909,16 @@ fn native_audio_transition(
     track_id: String,
     fade_ms: u64,
 ) -> Result<bool, CommandError> {
-    audio::request(&state, |reply| audio::Command::Transition {
+    let switched = audio::request(&state, |reply| audio::Command::Transition {
         track_id,
         fade_ms,
         reply,
     })
-    .map_err(cache_error)
+    .map_err(cache_error)?;
+    if switched {
+        promote_standby_fill();
+    }
+    Ok(switched)
 }
 
 #[tauri::command(async)]
@@ -4792,6 +4934,7 @@ fn native_audio_has_standby(
 fn native_audio_drop_standby(
     state: tauri::State<'_, audio::NativeAudio>,
 ) -> Result<(), CommandError> {
+    cancel_fill_role(1);
     state.send(audio::Command::DropStandby).map_err(cache_error)
 }
 
@@ -4801,6 +4944,7 @@ fn native_audio_drop_standby(
 fn native_audio_drop_active(
     state: tauri::State<'_, audio::NativeAudio>,
 ) -> Result<(), CommandError> {
+    cancel_fill_role(0);
     state.send(audio::Command::DropActive).map_err(cache_error)
 }
 
@@ -5292,7 +5436,7 @@ mod tests {
         error_cause_chain, is_slow_persist_cookie, is_youtube_cookie_host, parse_cookie_header, sanitize_log_url,
         audio_chunk_size, playback_ranges, serialize_cookie_pairs, MediaBuffer, AUDIO_HEAD_CHUNK_BYTES, signed_content_length, store_media_item,
         MediaItem, AUDIO_MIN_CHUNK_BYTES, MEDIA_SERVER_MAX_ITEMS, OFFLINE_CHUNK_BYTES,
-        load_superseded, LOAD_GENERATION, bytes_preview,
+        load_superseded, LOAD_GENERATION, bytes_preview, cancel_fill_role, claim_fill_role, promote_standby_fill,
         YoutubeAccountStore, generate_slot_id, login_partition_directory_name,
         decode_slot_id_bytes, LEGACY_ACCOUNT_SLOT_ID,
         enforce_cache_limit, is_public_http_target, load_settings_file, write_settings_file, SettingsMap,
@@ -5580,6 +5724,51 @@ mod tests {
      * fallback to completion first, which is what starved the one retry
      * `recoverFromPrematureEnd` sends right behind it.
      */
+    /// A range that is still streaming counts as servable once it follows the complete prefix,
+    /// so the decoder reads it as it arrives; it becomes a normal chunk when it finishes.
+    #[test]
+    fn a_streaming_range_is_readable_before_it_finishes() {
+        let mut buffer = MediaBuffer::pending(8, 2);
+        buffer.append(1, &[5, 6]);
+        assert_eq!(buffer.contiguous_len(), 0, "a partial after a hole is not servable yet");
+        buffer.put(0, vec![1, 2, 3, 4]);
+        assert_eq!(buffer.contiguous_len(), 6, "head plus the streamed part of range 1");
+        assert_eq!(buffer.read(2, 5), vec![3, 4, 5, 6], "reads run across into the partial");
+        assert_eq!(buffer.partial_len(1), 2, "a retry resumes after what already arrived");
+        buffer.append(1, &[7, 8]);
+        buffer.finish_partial(1);
+        assert_eq!(buffer.contiguous_len(), 8);
+        assert_eq!(buffer.read(0, 7), vec![1, 2, 3, 4, 5, 6, 7, 8]);
+    }
+
+    /// The preload role follows the track across a handover, so preloading the next track
+    /// cancels only the previous preload — never the fill of the track that is now playing.
+    #[test]
+    fn a_preload_never_cancels_the_playing_tracks_fill() {
+        let pending = || Arc::new(Mutex::new(MediaBuffer::pending(10, 2)));
+        let failed = |buffer: &Arc<Mutex<MediaBuffer>>| buffer.lock().unwrap().failed;
+
+        let first_preload = pending();
+        claim_fill_role(1, &first_preload);
+        promote_standby_fill(); // gapless handover: the preload is now what plays
+        let second_preload = pending();
+        claim_fill_role(1, &second_preload);
+        assert!(!failed(&first_preload), "the playing track's fill keeps going");
+
+        let third_preload = pending();
+        claim_fill_role(1, &third_preload);
+        assert!(failed(&second_preload), "a newer preload cancels the stale one");
+
+        cancel_fill_role(1);
+        assert!(failed(&third_preload), "dropping the standby deck stops its download");
+
+        let finished = Arc::new(Mutex::new(MediaBuffer::complete(vec![1, 2, 3])));
+        claim_fill_role(0, &finished);
+        claim_fill_role(0, &pending());
+        assert!(!failed(&finished), "a body that already finished is never marked failed");
+        cancel_fill_role(0);
+    }
+
     #[test]
     fn a_fill_notices_its_slot_was_taken_by_a_newer_load() {
         let slot_index = 1; // Standby — kept off slot 0 so a parallel test on the other slot can't race this one.

@@ -380,6 +380,7 @@ export class PlayerController {
     autoplayWhenQueueEnds = false,
     shufflePlaylist = false,
   ): Promise<boolean> {
+    const requestedAt = performance.now();
     // Close out whatever was playing first: this is the funnel every track change goes
     // through, so it catches a natural end and a skip with the same one call.
     this.finishPlayReport();
@@ -503,6 +504,11 @@ export class PlayerController {
       if (this.isTabActive) {
         const playbackStarted = await this.playLoadedTrack();
         if (!playbackStarted) return false;
+        // Tap-to-sound, the number "this song takes a while to load" is about.
+        logInternalInfo("PlayerController.playTrackById first audio", {
+          trackId: videoId,
+          firstAudioMs: Math.round(performance.now() - requestedAt),
+        });
       }
       if (requestId !== this.playTrackRequestId) return false;
 
@@ -1553,7 +1559,7 @@ export class PlayerController {
 
     const getStreamData = this.dataSource.getStreamData.bind(this.dataSource);
     this.warmingStream = true;
-    void getStreamData(next)
+    void getStreamData(next, { background: true })
       .then(async (data) => {
         this.warmedStream = { trackId: next.id, data };
         logInternalDebug("PlayerController.warmNextTrack audio ready", { trackId: next.id });
@@ -1564,6 +1570,9 @@ export class PlayerController {
          * finds the resolved URL rather than paying for it twice.
          */
         if (!data.rustSource || !this.audioEngine.usesRustAudio()) return;
+        // The queue may have moved while this resolved (a skip, a reorder). Decoding a track
+        // that is no longer next would start a download that competes with the one playing.
+        if (this.peekNextTrack()?.id !== next.id) return;
         await this.audioEngine.preloadRustTrack(next.id, data.rustSource, next.durationSec ?? 0);
       })
       .catch((error) => {

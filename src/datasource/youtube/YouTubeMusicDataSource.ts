@@ -11,11 +11,11 @@ import { Window } from "@tauri-apps/api/window";
  */
 import { ClientType, Innertube, Platform, Types, YTNodes } from "youtubei.js";
 import { getAppSetting, removeAppSetting, setAppSetting } from "../../internal/appSettings";
-import { createSerialQueue } from "../../internal/asyncQueue";
+import { createPriorityQueue } from "../../internal/asyncQueue";
 import { clearCache, getCachedJson, setCachedJson } from "../../internal/cache";
 import { logInternalDebug, logInternalError, logInternalInfo, logInternalWarn } from "../../internal/logging";
 import { mintPoToken, warmPoToken } from "./poToken";
-import { AuthExpiredError, DataSource, type StreamData } from "../DataSource";
+import { AuthExpiredError, DataSource, type StreamData, type StreamRequestOptions } from "../DataSource";
 import type {
   AccountOption,
   GoogleAccountOption,
@@ -406,7 +406,7 @@ export class YouTubeMusicDataSource extends DataSource {
   private webClientPromise: Promise<Innertube> | null = null;
   private downloadClientPromise: Promise<Innertube> | null = null;
   /** See `withDownloadLock`. */
-  private readonly downloadQueue = createSerialQueue();
+  private readonly downloadQueue = createPriorityQueue();
   /*
    * An accessor rather than a field, so the ~30 readers of `this.musicCookie` observe the
    * rotations the proxy folds in instead of the value captured at sign-in. Both sides of the
@@ -696,8 +696,9 @@ export class YouTubeMusicDataSource extends DataSource {
    * A plain queue, not a broader lock: only resolves against the download client need this, so
    * music/web fallbacks and everything else on the data source run exactly as before.
    */
-  private withDownloadLock<T>(fn: () => Promise<T>): Promise<T> {
-    return this.downloadQueue(fn);
+  private withDownloadLock<T>(fn: () => Promise<T>, background = false): Promise<T> {
+    // Background (next-track preload) waits behind anything the user is waiting on right now.
+    return this.downloadQueue(fn, background);
   }
 
   private async getClient(label: ClientLabel): Promise<Innertube> {
@@ -2992,6 +2993,12 @@ export class YouTubeMusicDataSource extends DataSource {
       this.musicCookie = await invoke<string | null>("load_youtube_music_cookie");
       if (!this.musicCookie) {
         logInternalInfo("YouTubeMusicDataSource.restoreSession no stored session");
+        /*
+         * Signed out there is no library fetch to warm playback after, so the first play used
+         * to pay for the download client and the ~3s BotGuard challenge in full. Warm now; it is
+         * idle-deferred on phones and memoized, so a play that comes first just shares it.
+         */
+        this.warmPlayback();
         return false;
       }
       logInternalInfo("YouTubeMusicDataSource.restoreSession credential loaded", {
@@ -5687,6 +5694,7 @@ export class YouTubeMusicDataSource extends DataSource {
     track: Track,
     quality: AudioQuality,
     clientOrder: readonly ClientLabel[],
+    background = false,
   ): Promise<{ url: string; mimeType: string; cookie?: string }> {
     let streamUrl: string | null = null;
     let streamMimeType = "audio/mp4";
@@ -5787,7 +5795,7 @@ export class YouTubeMusicDataSource extends DataSource {
         };
 
         if (label === "download") {
-          await this.withDownloadLock(resolveWithClient);
+          await this.withDownloadLock(resolveWithClient, background);
         } else {
           await resolveWithClient();
         }
@@ -5826,11 +5834,12 @@ export class YouTubeMusicDataSource extends DataSource {
   async resolveStreamUrl(
     track: Track,
     quality: AudioQuality = getStreamingQuality(),
+    options: StreamRequestOptions = {},
   ): Promise<{ url: string; mimeType: string; cookie?: string }> {
     const order: ClientLabel[] = usesAuthenticatedStreaming()
       ? ["music", "download", "web"]
       : ["download", "music", "web"];
-    return this.resolveStream(track, quality, order);
+    return this.resolveStream(track, quality, order, options.background);
   }
 
   /**
@@ -6298,9 +6307,9 @@ export class YouTubeMusicDataSource extends DataSource {
     return links;
   }
 
-  async getStreamData(track: Track): Promise<StreamData> {
+  async getStreamData(track: Track, options: StreamRequestOptions = {}): Promise<StreamData> {
     if (usesRustAudioEngine()) {
-      return this.getRustStreamData(track);
+      return this.getRustStreamData(track, options);
     }
 
     if (track.source === "local") {
@@ -6383,7 +6392,7 @@ export class YouTubeMusicDataSource extends DataSource {
    * every case Rust already has, or can get, the bytes — asking the webview to carry them first
    * was only ever in service of an `<audio>` element that no longer exists on this path.
    */
-  private async getRustStreamData(track: Track): Promise<StreamData> {
+  private async getRustStreamData(track: Track, options: StreamRequestOptions = {}): Promise<StreamData> {
     if (track.source === "local") {
       if (!track.localPath) {
         throw new Error("Local track path is missing.");
@@ -6404,7 +6413,7 @@ export class YouTubeMusicDataSource extends DataSource {
       return { mimeType, rustSource: { kind: "offline", trackId: track.id, mimeType } };
     }
 
-    const { url, mimeType, cookie } = await this.resolveStreamUrl(track);
+    const { url, mimeType, cookie } = await this.resolveStreamUrl(track, undefined, options);
     logInternalInfo("YouTubeMusicDataSource.getRustStreamData resolved", {
       trackId: track.id,
       mimeType,
