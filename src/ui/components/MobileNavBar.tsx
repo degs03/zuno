@@ -66,7 +66,7 @@ export function MobileNavBar({
               className={cn(
                 "grid h-8 w-14 place-items-center rounded-full transition-[background-color,color,transform] duration-200 group-active:scale-95",
                 isActive
-                  ? "bg-primary/15 text-primary"
+                  ? "bg-primary/15 text-primary glow"
                   : "group-active:bg-[var(--color-pressed)]",
               )}
             >

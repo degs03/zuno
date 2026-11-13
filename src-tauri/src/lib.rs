@@ -5423,7 +5423,9 @@ pub fn run() {
             #[cfg(target_os = "android")]
             android::android_cancel_sign_in,
             #[cfg(target_os = "android")]
-            android::android_set_system_bars
+            android::android_set_system_bars,
+            #[cfg(target_os = "android")]
+            android::android_set_accent
         ])
         .run(context)
         .expect("error while running tauri application");

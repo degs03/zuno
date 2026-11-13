@@ -3,13 +3,17 @@ import {
   type ReactNode,
   useEffect,
   useId,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 import { Switch } from "@/components/motion/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/motion/tabs";
 import { RangeSlider } from "@/components/motion/range-slider";
-import appLogo from "../../../assets/img/logo-72.png";
+import appLogo from "../../../assets/img/ghost-256.png";
+import { registerBackHandler } from "../android";
+import { FloatingPanel } from "../components/FloatingPanel";
+import { ColorPicker } from "../components/ColorPicker";
 import { playerController } from "../../player/playerStore";
 import { setEqualizerEnabled, useEqualizerEnabled } from "../settings/equalizer";
 import { EqualizerPanel } from "../components/Equalizer";
@@ -40,6 +44,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   CheckActiveIcon,
+  ChevronDownIcon,
   HomeIcon,
   KeyIcon,
   LastFmIcon,
@@ -48,6 +53,7 @@ import {
   LyricsIcon,
   PaletteIcon,
   PlayIcon,
+  PlusIcon,
   QueuePanelIcon,
   RefreshIcon,
   SettingsIcon,
@@ -65,6 +71,7 @@ import {
 } from "../settings/theme";
 import {
   ACCENTS,
+  foregroundFor,
   STYLES,
   setAccent,
   setCustomAccent,
@@ -267,6 +274,7 @@ function AppearancePicker() {
   const accent = useAccent();
   const customAccent = useCustomAccent();
   const style = useStyle();
+  const [pickerOpen, setPickerOpen] = useState(false);
   return (
     <>
       <div className="flex flex-col gap-2.5">
@@ -287,36 +295,60 @@ function AppearancePicker() {
                   "pressable grid size-10 place-items-center rounded-full ring-offset-2 ring-offset-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   selected && "ring-2 ring-foreground",
                 )}
-                style={{ backgroundColor: option.swatch }}
+                style={{
+                  backgroundColor: option.swatch,
+                  // Each neon glows in its own colour, which is what makes it read as "neon".
+                  boxShadow: `0 0 18px -6px ${option.swatch}`,
+                }}
               >
-                {selected ? <CheckActiveIcon size={18} className="text-white" aria-hidden="true" /> : null}
+                {selected ? (
+                  <CheckActiveIcon size={18} style={{ color: foregroundFor(option.swatch) }} aria-hidden="true" />
+                ) : null}
               </button>
             );
           })}
-          <label
-            className={cn(
-              "pressable relative grid size-10 cursor-pointer place-items-center overflow-hidden rounded-full ring-offset-2 ring-offset-card focus-within:ring-2 focus-within:ring-ring",
-              accent === "custom" && "ring-2 ring-foreground",
-            )}
-            title="Custom colour"
-            style={{
-              background:
-                accent === "custom"
-                  ? customAccent
-                  : "conic-gradient(#e8002e, #c2410c, #ca8a04, #047857, #2563eb, #7c3aed, #be185d, #e8002e)",
-            }}
+          {/* Our own picker in a panel (a bottom sheet on phones), not the platform's dialog. */}
+          <FloatingPanel
+            open={pickerOpen}
+            onOpenChange={setPickerOpen}
+            side="top"
+            className="w-80"
+            trigger={
+              <button
+                type="button"
+                role="radio"
+                aria-checked={accent === "custom"}
+                aria-label="Custom colour"
+                title="Custom colour"
+                onClick={() => setPickerOpen((open) => !open)}
+                className={cn(
+                  "pressable grid size-10 place-items-center rounded-full ring-offset-2 ring-offset-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  accent === "custom" && "ring-2 ring-foreground",
+                )}
+                style={{
+                  background:
+                    accent === "custom"
+                      ? customAccent
+                      : "conic-gradient(#ff2e88, #ff6a00, #ffe600, #a6ff00, #00ffa3, #00d1ff, #b026ff, #ff2e88)",
+                }}
+              >
+                {accent === "custom" ? (
+                  <CheckActiveIcon size={18} style={{ color: foregroundFor(customAccent) }} aria-hidden="true" />
+                ) : (
+                  <PlusIcon size={18} className="text-white drop-shadow" aria-hidden="true" />
+                )}
+              </button>
+            }
           >
-            <input
-              type="color"
-              aria-label="Custom accent colour"
-              className="absolute inset-0 size-full cursor-pointer opacity-0"
+            <ColorPicker
               value={customAccent}
-              onChange={(event) => setCustomAccent(event.target.value)}
+              onCancel={() => setPickerOpen(false)}
+              onApply={(hex) => {
+                setCustomAccent(hex);
+                setPickerOpen(false);
+              }}
             />
-            {accent === "custom" ? (
-              <CheckActiveIcon size={18} className="pointer-events-none text-white" aria-hidden="true" />
-            ) : null}
-          </label>
+          </FloatingPanel>
         </div>
       </div>
 
@@ -907,6 +939,33 @@ export function SettingsPage({
   const [lastFmBusy, setLastFmBusy] = useState(false);
   const [lastFmError, setLastFmError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("about");
+  /*
+   * Phones show Settings as an accordion: every section is a row, and one opens in place under
+   * its own header. Closed at first, so the four sections read as a menu, not a wall of cards.
+   */
+  const [sectionOpen, setSectionOpen] = useState(!isMobile);
+  const mobileTabs = SETTINGS_TABS.filter((tab) => tab.id !== "window" && tab.id !== "shortcuts");
+  const activeIndex = Math.max(0, mobileTabs.findIndex((tab) => tab.id === activeTab));
+  const sectionHeaderRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  useEffect(() => {
+    if (!isMobile || !sectionOpen) return;
+    return registerBackHandler(() => {
+      setSectionOpen(false);
+      return true;
+    });
+  }, [sectionOpen]);
+  const toggleSection = (id: SettingsTab) => {
+    if (id === activeTab && sectionOpen) {
+      setSectionOpen(false);
+      return;
+    }
+    setActiveTab(id);
+    setSectionOpen(true);
+    // After the open renders: bring the opened header to the top of the page.
+    requestAnimationFrame(() =>
+      sectionHeaderRefs.current[id]?.scrollIntoView({ block: "start", behavior: "smooth" }),
+    );
+  };
   const [settingsQuery, setSettingsQuery] = useState("");
   const themePreference = useThemePreference();
   const [listeningShortcut, setListeningShortcut] = useState<KeyboardShortcutAction | null>(null);
@@ -1335,7 +1394,50 @@ export function SettingsPage({
 
       {/* The category rail follows this pane's width, not the application viewport: an embedded
           or scaled Settings pane can be narrow even on a wide desktop window. */}
-      <div className="flex min-h-0 flex-1 items-start gap-10 @max-4xl/settings:flex-col @max-4xl/settings:gap-4">
+      <div className="flex min-h-0 flex-1 items-start gap-10 @max-4xl/settings:flex-col @max-4xl/settings:gap-4 max-sm:gap-2">
+        {isMobile ? (
+          /* Accordion headers. `order` interleaves them with the one content column below, so
+             the open section's content sits directly under its own header. */
+          mobileTabs.map((tab, index) => {
+            const Icon = tab.icon;
+            const open = sectionOpen && activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                ref={(node) => {
+                  sectionHeaderRefs.current[tab.id] = node;
+                }}
+                type="button"
+                aria-expanded={open}
+                aria-controls="settings-section-content"
+                onClick={() => toggleSection(tab.id)}
+                style={{ order: index * 2 }}
+                className={cn(
+                  "pressable flex w-full scroll-mt-2 items-center gap-3 rounded-card p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  open ? "bg-primary/10 ring-1 ring-primary/30" : "bg-card/60 shadow-card",
+                )}
+              >
+                <span
+                  className={cn(
+                    "grid size-10 shrink-0 place-items-center rounded-row",
+                    open ? "glow bg-primary text-primary-foreground" : "bg-primary/15 text-primary",
+                  )}
+                >
+                  <Icon size={20} aria-hidden="true" />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-base font-semibold text-foreground">{tab.label}</span>
+                  <span className="truncate text-sm text-muted-foreground">{tab.description}</span>
+                </span>
+                <ChevronDownIcon
+                  size={20}
+                  aria-hidden="true"
+                  className={cn("shrink-0 text-muted-foreground transition-transform duration-200", open && "rotate-180")}
+                />
+              </button>
+            );
+          })
+        ) : (
         <nav
           className="sticky top-0 flex w-56 shrink-0 flex-col gap-0.5 @max-4xl/settings:relative @max-4xl/settings:w-full @max-4xl/settings:flex-row @max-4xl/settings:overflow-x-auto @max-4xl/settings:rounded-xl @max-4xl/settings:bg-card/50 @max-4xl/settings:p-1"
           role="tablist"
@@ -1383,13 +1485,24 @@ export function SettingsPage({
             );
           })}
         </nav>
+        )}
 
-        <div className="flex min-h-0 w-full min-w-0 max-w-2xl flex-1 flex-col @max-4xl/settings:max-w-none">
+        <div
+          id="settings-section-content"
+          className={cn(
+            "flex min-h-0 w-full min-w-0 max-w-2xl flex-1 flex-col @max-4xl/settings:max-w-none",
+            // Phones: hidden while every section is closed (search results always show).
+            isMobile && !sectionOpen && !settingsQuery.trim() && "hidden",
+            isMobile && "animate-in fade-in slide-in-from-top-1",
+          )}
+          style={isMobile ? { order: settingsQuery.trim() ? -1 : activeIndex * 2 + 1 } : undefined}
+        >
           {settingsQuery.trim() ? (
             <SettingsSearchResults
               query={settingsQuery}
               onSelect={(tab) => {
                 setActiveTab(tab);
+                setSectionOpen(true);
                 setSettingsQuery("");
               }}
             />

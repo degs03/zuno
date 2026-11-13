@@ -107,6 +107,17 @@ class PlaybackService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     MediaButtonReceiver.handleIntent(session, intent)
+    if (state == null) {
+      // Started by a stale media button (widget/headset) with nothing loaded: Android still
+      // requires the foreground promise to be kept before we can go away.
+      ServiceCompat.startForeground(
+        this, NOTIFICATION_ID,
+        NotificationCompat.Builder(this, CHANNEL_ID).setSmallIcon(R.mipmap.ic_launcher).build(),
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0,
+      )
+      stopSelf()
+      return START_NOT_STICKY
+    }
     render()
     return START_NOT_STICKY
   }
@@ -124,6 +135,7 @@ class PlaybackService : Service() {
     if (noisyRegistered) unregisterReceiver(noisy)
     session.release()
     io.shutdown()
+    NowPlayingWidget.idle(this)
     super.onDestroy()
   }
 
@@ -173,6 +185,7 @@ class PlaybackService : Service() {
       this, NOTIFICATION_ID, buildNotification(s, playing),
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0,
     )
+    NowPlayingWidget.push(this, s.title, s.artist, playing, artwork)
     loadArtwork(s.artworkUrl)
   }
 
@@ -182,6 +195,7 @@ class PlaybackService : Service() {
     )
     return NotificationCompat.Builder(this, CHANNEL_ID)
       .setSmallIcon(R.mipmap.ic_launcher)
+      .setColor(NowPlayingWidget.accent(this))
       .setContentTitle(s.title)
       .setContentText(s.artist)
       .setLargeIcon(artwork)
@@ -263,6 +277,8 @@ class PlaybackService : Service() {
 
     @Volatile
     private var instance: PlaybackService? = null
+
+    fun isRunning(): Boolean = instance != null
 
     /** Called for every state change from the frontend's media-session hook. */
     fun update(context: Context, next: State) {

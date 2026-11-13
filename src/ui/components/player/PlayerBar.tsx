@@ -13,6 +13,7 @@ import { PlaybackOptions } from "./PlaybackOptions";
 import { VolumeControl } from "./VolumeControl";
 import { LyricsButton } from "./LyricsButton";
 import { isMobile } from "../../platform";
+import { MobilePlayerPill } from "./MobilePlayer";
 import {
   useCompactPlayerBar,
   useExtraPlayerControlsAlwaysVisible,
@@ -23,6 +24,8 @@ interface PlayerBarProps {
   onToggleQueue: () => void;
   isQueueOpen: boolean;
   onConnectionRestored: () => Promise<void>;
+  /** Phones: opens the full-screen Now Playing sheet from the pill. */
+  onExpandPlayer?: () => void;
 }
 
 /*
@@ -36,7 +39,7 @@ const CONNECTION_CHECK_URLS = [
   "https://cp.cloudflare.com/generate_204",
 ];
 
-export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnectionRestored }: PlayerBarProps) {
+export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnectionRestored, onExpandPlayer }: PlayerBarProps) {
   const isOnline = useOnline();
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
  
@@ -180,39 +183,8 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
       </AnimatePresence>
 
       {isMobile ? (
-        /*
-         * Phone width: track and its two panels on one row, the transport centred under it.
-         * No volume (the hardware keys own it), no hover-revealed controls (there is no hover),
-         * and no 22rem minimum that would push the bar wider than the screen.
-         */
-        <div
-          data-mobile-player
-          className="mx-2 mb-1 flex shrink-0 flex-col gap-1 rounded-[var(--radius-sheet)] bg-card px-3 pb-1.5 pt-2.5 shadow-[var(--shadow-pop)]"
-        >
-          <div className="flex items-center gap-1">
-            <div className="min-w-0 flex-1">
-              <TrackInfo />
-            </div>
-            <DownloadButton />
-            <LyricsButton onToggle={onToggleLyrics} />
-          </div>
-          <SeekBar />
-          <div className="flex items-center justify-between gap-1">
-            <button
-              type="button"
-              className={cn(
-                "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-muted",
-                isQueueOpen ? "text-primary" : "text-muted-foreground",
-              )}
-              onClick={onToggleQueue}
-              aria-label={isQueueOpen ? "Close queue" : "Open queue"}
-            >
-              <QueuePanelIcon size={20} />
-            </button>
-            <PlaybackControls extraControlsAlwaysVisible />
-            <PlaybackOptions />
-          </div>
-        </div>
+        // Phones: a floating pill that opens the full Now Playing sheet (MobilePlayer.tsx).
+        <MobilePlayerPill onExpand={() => onExpandPlayer?.()} />
       ) : (
       <div
         className="group/playerbar flex shrink-0 flex-col gap-1 bg-background px-4 pb-3 pt-2"

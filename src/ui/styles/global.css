@@ -179,12 +179,36 @@ html[data-theme="dark"] {
  * the same bar the default red was raised to. A custom accent is not listed here: appearance.ts
  * writes it onto the root as inline variables.
  */
-html[data-accent="ocean"] { --color-primary: #2563eb; --color-ring: #2563eb; }
-html[data-accent="violet"] { --color-primary: #7c3aed; --color-ring: #7c3aed; }
-html[data-accent="mint"] { --color-primary: #047857; --color-ring: #047857; }
-html[data-accent="sunset"] { --color-primary: #c2410c; --color-ring: #c2410c; }
-html[data-accent="rose"] { --color-primary: #be185d; --color-ring: #be185d; }
-html[data-accent="mono"] { --color-primary: #52525b; --color-ring: #71717a; }
+/*
+ * Fluorescent accents. In the dark theme they are the neon itself, with near-black label text
+ * (white on a bright neon fails contrast; black clears 7:1). In the light theme a neon is
+ * unreadable as text on white, so the same hue goes deeper, with white labels.
+ */
+html[data-accent="neon-pink"] { --color-primary: #ff2e88; --color-ring: #ff2e88; --color-primary-foreground: #0a0a0a; }
+html[data-accent="neon-pink"][data-theme="light"] { --color-primary: #c8005f; --color-ring: #c8005f; --color-primary-foreground: #ffffff; }
+html[data-accent="electric"] { --color-primary: #00d1ff; --color-ring: #00d1ff; --color-primary-foreground: #0a0a0a; }
+html[data-accent="electric"][data-theme="light"] { --color-primary: #006f99; --color-ring: #006f99; --color-primary-foreground: #ffffff; }
+html[data-accent="lime"] { --color-primary: #a6ff00; --color-ring: #a6ff00; --color-primary-foreground: #0a0a0a; }
+html[data-accent="lime"][data-theme="light"] { --color-primary: #3d7a00; --color-ring: #3d7a00; --color-primary-foreground: #ffffff; }
+html[data-accent="neon-orange"] { --color-primary: #ff6a00; --color-ring: #ff6a00; --color-primary-foreground: #0a0a0a; }
+html[data-accent="neon-orange"][data-theme="light"] { --color-primary: #b84a00; --color-ring: #b84a00; --color-primary-foreground: #ffffff; }
+html[data-accent="ultraviolet"] { --color-primary: #b026ff; --color-ring: #b026ff; --color-primary-foreground: #0a0a0a; }
+html[data-accent="ultraviolet"][data-theme="light"] { --color-primary: #8a00d4; --color-ring: #8a00d4; --color-primary-foreground: #ffffff; }
+html[data-accent="cyber"] { --color-primary: #ffe600; --color-ring: #ffe600; --color-primary-foreground: #0a0a0a; }
+html[data-accent="cyber"][data-theme="light"] { --color-primary: #7a6600; --color-ring: #7a6600; --color-primary-foreground: #ffffff; }
+html[data-accent="neon-mint"] { --color-primary: #00ffa3; --color-ring: #00ffa3; --color-primary-foreground: #0a0a0a; }
+html[data-accent="neon-mint"][data-theme="light"] { --color-primary: #007a52; --color-ring: #007a52; --color-primary-foreground: #ffffff; }
+html[data-accent="mono"] { --color-primary: #a1a1aa; --color-ring: #a1a1aa; --color-primary-foreground: #0a0a0a; }
+html[data-accent="mono"][data-theme="light"] { --color-primary: #52525b; --color-ring: #52525b; --color-primary-foreground: #ffffff; }
+
+/*
+ * The fluorescent glow: a soft halo in the accent around the few things that should feel lit —
+ * the play button, the active nav pill, the progress fill. Under the `shadows` switch, so
+ * Potato mode turns it off with every other shadow.
+ */
+@utility glow {
+  box-shadow: 0 0 22px -4px color-mix(in oklab, var(--color-primary) 75%, transparent);
+}
 
 /*
  * Visual styles. Token overrides only — shape, elevation and surface opacity — so every
@@ -459,7 +483,8 @@ html[data-platform-mobile] [data-scroll-row] > * {
   --bottom-chrome: 7rem;
 }
 html[data-platform-mobile] {
-  --bottom-chrome: 13.5rem;
+  /* The player pill (~4rem) plus the nav bar and the gesture area. */
+  --bottom-chrome: 9rem;
 }
 
 html,
@@ -1029,4 +1054,18 @@ html[data-fx-off~="marquee"] .animate-marquee-vertical {
   --skin-lcd-bezel: oklch(0.3 0.08 258);
   --skin-lcd-glare: oklch(1 0 0 / 35%);
   --skin-danger: oklch(0.5 0.2 27);
+}
+
+/* Loading-screen mascot: a slow bob. Stopped by the `animations` switch and reduced motion. */
+.ghost-float {
+  animation: ghost-float 2.8s ease-in-out infinite;
+}
+@keyframes ghost-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
 }

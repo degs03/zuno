@@ -1,4 +1,10 @@
 <resources>
     <string name="app_name">"Zuno"</string>
     <string name="main_activity_title">"Zuno"</string>
+    <string name="widget_description">What\'s playing in Zuno, with play, pause and skip.</string>
+    <string name="widget_idle">Tap to open</string>
+    <string name="widget_art_description">Album art</string>
+    <string name="widget_play">Play or pause</string>
+    <string name="widget_next">Next</string>
+    <string name="widget_previous">Previous</string>
 </resources>

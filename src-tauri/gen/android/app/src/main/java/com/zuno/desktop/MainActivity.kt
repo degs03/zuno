@@ -6,9 +6,12 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
+    // Before super: swaps the launch (splash) theme for the app theme once drawing starts.
+    installSplashScreen()
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
 

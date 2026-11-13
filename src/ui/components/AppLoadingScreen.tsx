@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
 import introVideo from "../../../assets/img/zuno.mp4";
-import introStill from "../../../assets/img/logo-72.png";
+import introStill from "../../../assets/img/ghost-256.png";
 import { isMobile } from "../platform";
 
 /*
@@ -72,7 +72,8 @@ export function AppLoadingScreen({ isLeaving }: AppLoadingScreenProps) {
   initial={{ opacity: 0, scale: 0.92 }}
   animate={{ opacity: 1, scale: 1 }}
   transition={{ type: "spring", stiffness: 260, damping: 24 }}
-  className="size-18 rounded-full object-cover"
+  // The ghost, whole and floating gently — the same mascot the launcher icon shows.
+  className="ghost-float size-28 object-contain drop-shadow-xl"
   src={introStill}
   alt=""
 />

@@ -197,6 +197,17 @@ pub async fn android_set_system_bars(app: tauri::AppHandle, light: bool) -> Resu
     call::<serde_json::Value, _>(&app, "setSystemBars", SystemBarsArgs { light }).await.map(|_| ())
 }
 
+#[derive(Serialize)]
+struct AccentArgs {
+    color: String,
+}
+
+/// Accent colour (`#rrggbb`) for the home-screen widget and the media notification.
+#[tauri::command]
+pub async fn android_set_accent(app: tauri::AppHandle, color: String) -> Result<(), CommandError> {
+    call::<serde_json::Value, _>(&app, "setAccent", AccentArgs { color }).await.map(|_| ())
+}
+
 #[tauri::command]
 pub async fn android_cancel_sign_in(app: tauri::AppHandle) -> Result<(), CommandError> {
     call::<serde_json::Value, _>(&app, "cancelSignIn", ()).await.map(|_| ())

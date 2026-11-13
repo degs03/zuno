@@ -3,4 +3,12 @@
     <style name="Theme.zuno" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Customize your theme here. -->
     </style>
+
+    <!-- Launch theme: the ghost on the app background until the first frame is ready, then
+         MainActivity's installSplashScreen() hands over to Theme.zuno. Backported to API 26. -->
+    <style name="Theme.Zuno.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground_inset</item>
+        <item name="postSplashScreenTheme">@style/Theme.zuno</item>
+    </style>
 </resources>

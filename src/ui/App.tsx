@@ -52,6 +52,7 @@ import { useNativeWindowControls, useWindowOutline } from "./settings/windowCont
 const COLLAPSED_QUEUE_WIDTH = 62;
 import { Layout } from "./components/Layout";
 import { MobileNavBar, type MobileNavTarget } from "./components/MobileNavBar";
+import { NowPlayingSheet } from "./components/player/MobilePlayer";
 import { registerBackHandler } from "./android";
 import type { Tab, TabViewState } from "./types/tab";
 import {
@@ -380,6 +381,8 @@ export default function App() {
     () => restoredSession?.nextTabId ?? 2,
   );
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  // Phones: the full-screen Now Playing sheet the player pill opens.
+  const [isNowPlayingOpen, setIsNowPlayingOpen] = useState(false);
   /*
    * The sidebar is a fixed icon rail. 72px sits below the Sidebar's own text-hide threshold,
    * so every row renders as artwork only and explains itself through a tooltip on hover.
@@ -2274,12 +2277,21 @@ useEffect(() => {
               onToggleQueue={handleToggleQueue}
               isQueueOpen={isQueuePanelOpen}
               onConnectionRestored={handleConnectionRestored}
+              onExpandPlayer={() => setIsNowPlayingOpen(true)}
             />
           </ErrorBoundary>
         </div>
       </div>
       {isMobile && !playerUIState.isLyricsFullscreen && (
         <MobileNavBar active={mobileNavActive} onNavigate={handleMobileNavigate} />
+      )}
+      {isMobile && (
+        <NowPlayingSheet
+          open={isNowPlayingOpen}
+          onClose={() => setIsNowPlayingOpen(false)}
+          onToggleLyrics={handleToggleLyrics}
+          onToggleQueue={handleToggleQueue}
+        />
       )}
       {/* Mobile: the queue is a full-screen sheet over the page, not a side column. */}
       {isMobile && isQueuePanelOpen && (

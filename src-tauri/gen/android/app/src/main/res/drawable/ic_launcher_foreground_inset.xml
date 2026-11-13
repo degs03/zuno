@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ghost fills its whole bitmap; launchers mask adaptive icons to the centre ~66%, so it is
+     inset to keep the headphones inside every mask shape. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@mipmap/ic_launcher_foreground"
+    android:inset="20%" />

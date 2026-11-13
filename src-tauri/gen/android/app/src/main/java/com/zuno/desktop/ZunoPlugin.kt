@@ -70,6 +70,14 @@ class ZunoPlugin(private val activity: Activity) : Plugin(activity) {
     invoke.resolve()
   }
 
+  /** `#rrggbb` accent, persisted for the widget and notification (they outlive the WebView). */
+  @Command
+  fun setAccent(invoke: Invoke) {
+    val color = runCatching { android.graphics.Color.parseColor(invoke.getArgs().getString("color", "")) }.getOrNull()
+    if (color != null) NowPlayingWidget.setAccent(activity.applicationContext, color)
+    invoke.resolve()
+  }
+
   // ---- Sign-in ------------------------------------------------------------------------------
 
   @Command

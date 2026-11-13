@@ -14,7 +14,8 @@ import { HomeDestinations, type HomeDestinationHandlers } from "../components/Ho
 import { ArtistLinks } from "../components/ArtistLinks";
 import { usePlayHistory } from "../../player/playHistory";
 import { useMadeForYouVisible } from "../settings/homeSections";
-import { AlbumGridSkeleton, PickCardSkeleton, TrackRowSkeleton } from "../components/Skeleton";
+import { AlbumGridSkeleton, TrackRowSkeleton } from "../components/Skeleton";
+import { cn } from "@/lib/utils";
 import { TrackRow } from "../components/TrackRow";
 import { useNowPlaying } from "../hooks/useNowPlaying";
 import { isOnline, useOnline } from "../../internal/connectivity";
@@ -41,13 +42,6 @@ const PICKS_ITEM_SIZE = 250;
 /** How far the carousel shrinks its edge cards. */
 const PICKS_MIN_SCALE = 0.72;
 
-/*
- * Skeleton slots to feed the carousel while suggestions load. Unlike the other loading counts on
- * this page, there is no real count to match here — `topSuggestions` does not exist yet — so
- * this is just enough for the wraparound to feel like a shelf rather than three cards rattling
- * around an empty drum.
- */
-const PICKS_SKELETON_COUNT = 8;
 
 /*
  * Curve depth. The default is 35% of the item size, which on cards this large lifts the
@@ -310,8 +304,31 @@ export function HomePage({
         gets the same `ResizeObserver`-driven sizing, curve and taper — just measured for the
         content that is actually there.
       */}
+      {/* Loading: three placeholder cards side by side. The 3D carousel stacks its slides on
+          purpose, and translucent placeholders stacked like that showed through each other
+          as a smear. Same stage height as the carousel, so nothing jumps when picks arrive. */}
+      {isLoadingSuggestions ? (
+        <div
+          className="flex items-center justify-center gap-3 overflow-hidden"
+          style={{ height: `min(${PICKS_STAGE_HEIGHT}px, 62vw)` }}
+          aria-busy="true"
+          aria-label="Loading picks"
+        >
+          {[0, 1, 2].map((index) => (
+            <span
+              key={index}
+              aria-hidden="true"
+              className={cn(
+                "skeleton-shimmer aspect-[3/4] shrink-0 rounded-card bg-card shadow-card",
+                index === 1 ? "h-[82%]" : "h-[68%]",
+              )}
+              style={{ animationDelay: `${index * 120}ms` }}
+            />
+          ))}
+        </div>
+      ) : (
       <CylinderCarousel
-        key={isLoadingSuggestions ? "skeleton" : "content"}
+        key="content"
         itemSize={PICKS_ITEM_SIZE}
         height={PICKS_STAGE_HEIGHT}
         visibleItems={PICKS_VISIBLE_ITEMS}
@@ -327,11 +344,7 @@ export function HomePage({
         variant="convex"
         className="-mx-4 cursor-grab active:cursor-grabbing overflow-x-clip overflow-y-visible"
       >
-        {isLoadingSuggestions ? (
-          Array.from({ length: PICKS_SKELETON_COUNT }, (_, index) => (
-            <PickCardSkeleton key={index} />
-          ))
-        ) : (
+        {(
           /*
            * A real array, not a `<>Fragment</>` — `CylinderCarousel` walks its children with
            * `Children.toArray`, which flattens an array but does not reach inside a Fragment.
@@ -358,6 +371,7 @@ export function HomePage({
           ]
         )}
       </CylinderCarousel>
+      )}
       {isLoadingSuggestions && <span className="sr-only" role="status">Loading suggestions</span>}
 
     </section>
