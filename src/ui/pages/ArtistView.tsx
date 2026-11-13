@@ -326,7 +326,7 @@ export function ArtistView({
          */
         artworkSlot={
           <TrackArtwork
-            className="size-44 shrink-0 rounded-full bg-card shadow-2xl ring-1 ring-white/10"
+            className="size-44 shrink-0 rounded-full bg-card shadow-2xl ring-1 ring-[var(--color-hairline)]"
             size={176}
             artworkUrl={displayedArtist.artworkUrl}
             iconSize={72}
@@ -456,7 +456,7 @@ export function ArtistView({
                   type="button"
                   onClick={() => setShowAllSongs((current) => !current)}
                   aria-expanded={showAllSongs}
-                  className="self-start rounded-full bg-white/[0.04] px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.08] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="self-start rounded-full bg-muted/40 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {showAllSongs ? "Show less" : `Show all ${allSongs.length} songs`}
                 </button>
@@ -469,7 +469,7 @@ export function ArtistView({
               <div className="flex items-center justify-between gap-3">
                 <h2>Releases</h2>
                 <div
-                  className="flex flex-wrap items-center gap-1.5 self-start [&>button]:flex [&>button]:min-h-8 [&>button]:min-w-0 [&>button]:items-center [&>button]:justify-center [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:bg-white/[0.04] [&>button]:px-3 [&>button]:text-sm [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors hover:[&>button]:bg-white/[0.08] hover:[&>button]:text-foreground focus-visible:[&>button]:outline-none focus-visible:[&>button]:ring-2 focus-visible:[&>button]:ring-ring"
+                  className="flex flex-wrap items-center gap-1.5 self-start [&>button]:flex [&>button]:min-h-8 [&>button]:min-w-0 [&>button]:items-center [&>button]:justify-center [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:bg-muted/40 [&>button]:px-3 [&>button]:text-sm [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors hover:[&>button]:bg-muted/70 hover:[&>button]:text-foreground focus-visible:[&>button]:outline-none focus-visible:[&>button]:ring-2 focus-visible:[&>button]:ring-ring"
                   role="group"
                   aria-label="Release type"
                   style={{
@@ -495,7 +495,7 @@ export function ArtistView({
                     ))}
                 </div>
               </div>
-              <div key={filter} className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))]">
+              <div key={filter} className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))] grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
                 {visibleReleases.map((release) => {
                   const hasLinkedArtists = Boolean(release.artists?.length);
                   return (
@@ -526,7 +526,7 @@ export function ArtistView({
           {page.playlists.length > 0 && (
             <section className="flex flex-col gap-3">
               <h2>Playlists</h2>
-              <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))]">
+              <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
                 {page.playlists.map((playlist) => (
                   <AlbumCard
                     key={playlist.id}
@@ -543,7 +543,7 @@ export function ArtistView({
         </>
       )}
       {toast && createPortal(
-        <div className="fixed bottom-28 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-popover/95 px-4 py-2 text-sm text-foreground shadow-2xl backdrop-blur" role="status">
+        <div className="fixed bottom-[var(--bottom-chrome)] left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-popover/95 px-4 py-2 text-sm text-foreground shadow-2xl backdrop-blur" role="status">
           {toast === "Url copied to clipboard" && (
             <CheckIcon size={18} aria-hidden="true" />
           )}

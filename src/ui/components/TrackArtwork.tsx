@@ -246,6 +246,9 @@ export function TrackArtwork({
     <span
       className={cn(
         "relative flex shrink-0 items-center justify-center overflow-hidden text-muted-foreground",
+        // One cover shape everywhere (rows, queue, search, shelves) unless the caller asks for
+        // its own, e.g. round artist portraits.
+        !className?.includes("rounded") && "rounded-art",
         className,
       )}
     >

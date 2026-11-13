@@ -379,12 +379,20 @@ export function HomePage({
   return (
     <div className="flex flex-col gap-8">
       {libraryState.status === "signed-out" && (
-        <section className="flex items-center justify-between gap-4 rounded-xl bg-card/60 px-4 py-3 text-sm text-muted-foreground">
-          <div>
-            <h1>You&apos;re not signed in</h1>
-            <p>Sign in to access your history, playlists, and albums.</p>
+        <section className="card-surface flex items-center justify-between gap-4 px-5 py-4 max-sm:flex-col max-sm:items-stretch">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h1 className="text-lg font-semibold tracking-[-0.01em] text-foreground">
+              You&apos;re not signed in
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Sign in to see your history, playlists and albums.
+            </p>
           </div>
-          <button type="button" onClick={() => void onSignIn()}>
+          <button
+            type="button"
+            className="pressable inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            onClick={() => void onSignIn()}
+          >
             Sign in
           </button>
         </section>
@@ -400,7 +408,7 @@ export function HomePage({
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold text-foreground">Recently played</h2>
           <div
-            className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))]"
+            className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(min(16rem,100%),1fr))]"
             role="status"
             aria-label="Loading recently played"
           >
@@ -414,7 +422,7 @@ export function HomePage({
       {compactRecent.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold text-foreground">Recently played</h2>
-          <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(16rem,1fr))]">
+          <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(min(16rem,100%),1fr))]">
             {compactRecent.map((track) => (
               <button
                 key={track.id}
@@ -450,7 +458,7 @@ export function HomePage({
       {moreSuggestions.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold text-foreground">More recommendations</h2>
-          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))]">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
             {moreSuggestions.map((track) => (
               <AlbumCard
                 key={track.id}
@@ -475,7 +483,7 @@ export function HomePage({
       {largeRecent.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-semibold text-foreground">Listen again</h2>
-          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))]">
+          <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
             {largeRecent.map((track) => (
               <AlbumCard
                 key={track.id}
@@ -494,7 +502,11 @@ export function HomePage({
         <div className="px-2 py-10 text-center text-sm text-muted-foreground">
           <p>Recommendations could not be loaded.</p>
           {libraryState.status === "signed-out" && (
-            <button onClick={() => void onSignIn()}>
+            <button
+              type="button"
+              className="pressable mt-3 inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => void onSignIn()}
+            >
               Sign in with YouTube Music
             </button>
           )}

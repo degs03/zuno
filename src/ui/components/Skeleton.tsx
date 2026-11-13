@@ -112,7 +112,7 @@ export function AlbumGridSkeleton({
 }) {
   return (
     <div
-      className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))]"
+      className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]"
       role="status"
       aria-label={label}
     >

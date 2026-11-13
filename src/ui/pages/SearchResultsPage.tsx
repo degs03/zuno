@@ -319,7 +319,7 @@ export function SearchResultsPage({
         {/* Only offered when there is something to narrow to: a row of filters where every
             one but "All" is empty is just noise. */}
         {!isLoading && availableScopes.length > 2 && (
-          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter results">
+          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter results" data-scroll-row>
             {availableScopes.map((item) => (
               <button
                 key={item.value}
@@ -356,7 +356,7 @@ export function SearchResultsPage({
           {scopedResults.artists.length > 0 && (
             <section className="flex flex-col gap-3" style={{ order: songsFirst ? 1 : 0 }}>
               <h2>Artists</h2>
-              <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))]">
+              <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
                 {scopedResults.artists.map((artist) => {
                   const index = flatItems.findIndex(
                     (item) => item.kind === "artist" && item.artist.id === artist.id,
@@ -428,7 +428,7 @@ export function SearchResultsPage({
           {scopedResults.albums.length > 0 && (
             <section className="flex flex-col gap-3" style={{ order: 2 }}>
               <h2>Albums</h2>
-              <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))]">
+              <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
                 {scopedResults.albums.map((album) => {
                   const index = flatItems.findIndex(
                     (item) => item.kind === "album" && item.album.id === album.id,
@@ -460,7 +460,7 @@ export function SearchResultsPage({
           {scopedResults.playlists.length > 0 && (
             <section className="flex flex-col gap-3" style={{ order: 3 }}>
               <h2>Playlists</h2>
-              <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))]">
+              <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
                 {scopedResults.playlists.map((playlist) => {
                   const index = flatItems.findIndex(
                     (item) => item.kind === "playlist" && item.playlist.id === playlist.id,

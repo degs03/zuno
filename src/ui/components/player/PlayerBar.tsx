@@ -186,30 +186,31 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
          * and no 22rem minimum that would push the bar wider than the screen.
          */
         <div
-          className="flex shrink-0 flex-col gap-2 bg-background px-3 pb-2 pt-2"
+          data-mobile-player
+          className="mx-2 mb-1 flex shrink-0 flex-col gap-1 rounded-[var(--radius-sheet)] bg-card px-3 pb-1.5 pt-2.5 shadow-[var(--shadow-pop)]"
         >
-          <SeekBar />
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <div className="min-w-0 flex-1">
               <TrackInfo />
             </div>
+            <DownloadButton />
             <LyricsButton onToggle={onToggleLyrics} />
+          </div>
+          <SeekBar />
+          <div className="flex items-center justify-between gap-1">
             <button
               type="button"
               className={cn(
-                "flex size-10 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                isQueueOpen ? "bg-card text-primary" : "text-muted-foreground",
+                "flex size-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:bg-muted",
+                isQueueOpen ? "text-primary" : "text-muted-foreground",
               )}
               onClick={onToggleQueue}
               aria-label={isQueueOpen ? "Close queue" : "Open queue"}
             >
               <QueuePanelIcon size={20} />
             </button>
-            <DownloadButton />
-            <PlaybackOptions />
-          </div>
-          <div className="flex justify-center">
             <PlaybackControls extraControlsAlwaysVisible />
+            <PlaybackOptions />
           </div>
         </div>
       ) : (

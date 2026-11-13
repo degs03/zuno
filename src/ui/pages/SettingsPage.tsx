@@ -241,7 +241,9 @@ const SETTING_LABEL =
   "flex flex-col gap-0.5 text-sm text-muted-foreground [&>strong]:text-sm [&>strong]:font-medium [&>strong]:text-foreground";
 
 /** Section card. One shape for every group so the page reads as a single system. */
-const SETTINGS_CARD = "flex flex-col gap-5 rounded-2xl bg-card/50 p-6";
+// The shared card recipe at a softer fill: settings stack many cards, and full `bg-card` on
+// every one reads as a wall. Tighter padding on phones gives the rows back their width.
+const SETTINGS_CARD = "flex flex-col gap-5 rounded-card bg-card/60 p-6 shadow-card max-sm:gap-4 max-sm:p-4";
 
 /**
  * How long ago YouTube last answered as this account, in words.
@@ -376,7 +378,7 @@ function SettingRow({
   return (
     <div
       className={cn(
-        "flex items-start justify-between gap-6 py-2.5",
+        "flex items-start justify-between gap-6 py-2.5 max-sm:gap-3",
         disabled && "pointer-events-none opacity-50",
       )}
     >
@@ -1129,7 +1131,9 @@ export function SettingsPage({
             {/* `justify-between` with a `min-w-0 flex-1` text column: without both, the name
                 and description push the sign-out button off the right edge on long channel
                 names instead of truncating. */}
-            <div className="flex items-center justify-between gap-3">
+            {/* Wraps on a narrow phone, so the sign-in button drops under the name instead of
+                pushing past the card's edge. */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <AccountAvatar artworkUrl={account?.artworkUrl} className="size-11" iconSize={26} />
 
               <div className="flex min-w-0 flex-1 flex-col">

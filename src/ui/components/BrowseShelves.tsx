@@ -111,7 +111,7 @@ export function BrowseShelves({
           )}
 
           {onFollowLink && shelf.links.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5 max-sm:gap-2 max-sm:[&>button]:min-h-10">
               {shelf.links.map((link) => (
                 <button
                   key={link.browseId}

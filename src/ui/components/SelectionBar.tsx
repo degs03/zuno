@@ -55,7 +55,7 @@ export function SelectionBar({
           exit={{ opacity: 0, y: 12, transition: { duration: 0.12 } }}
           transition={{ type: "spring", stiffness: 460, damping: 34, mass: 0.6 }}
           className={cn(
-            "pointer-events-auto fixed bottom-28 left-1/2 z-50 flex -translate-x-1/2 items-center gap-1.5",
+            "pointer-events-auto fixed bottom-[var(--bottom-chrome)] left-1/2 z-50 flex -translate-x-1/2 items-center gap-1.5",
             "rounded-full bg-popover/95 px-2 py-1.5 shadow-2xl ring-1 ring-border backdrop-blur",
           )}
           role="toolbar"

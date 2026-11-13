@@ -3,6 +3,7 @@ import { TiltCard } from "@/components/motion/tilt-card";
 import { PlayActiveIcon } from "@/ui/icons";
 import { propsEqualIgnoringHandlers } from "../../internal/propsEqual";
 import { TrackArtwork } from "./TrackArtwork";
+import { useLongPress } from "@/lib/hooks/use-long-press";
 
 /**
  * Rendered card width in CSS pixels.
@@ -56,6 +57,10 @@ export const AlbumCard = memo(function AlbumCard({
   const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") handlersRef.current.onClick?.();
   }, []);
+  // Touch: holding a card opens its menu, the same as right-clicking it.
+  const longPress = useLongPress(
+    onContextMenu ? (handleContextMenu as (event: MouseEvent<HTMLElement>) => void) : undefined,
+  );
 
   return (
     <div
@@ -69,14 +74,15 @@ export const AlbumCard = memo(function AlbumCard({
        * `auto` keyword means the guess only ever applies to a card that has not yet been on
        * screen once; after that the browser uses the size it actually measured.
        */
-      className="group/card flex w-full cursor-pointer flex-col gap-2  p-2 transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [content-visibility:auto] [contain-intrinsic-size:auto_232px]"
+      className="group/card pressable flex w-full cursor-pointer flex-col gap-2 rounded-card p-2 hover:bg-card active:bg-[var(--color-pressed)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [content-visibility:auto] [contain-intrinsic-size:auto_232px]"
       onClick={handleClick}
       onContextMenu={handleContextMenu}
+      {...longPress}
       onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
     >
-      <TiltCard max={9} className="aspect-square w-full overflow-hidden rounded-none">
+      <TiltCard max={9} className="aspect-square w-full overflow-hidden rounded-art shadow-card">
         <div className="relative size-full" style={{ backgroundColor: color }}>
           <TrackArtwork
             className="size-full object-cover"

@@ -147,7 +147,7 @@ export function BrowsePage({
             {drillDown[drillDown.length - 1]?.title ?? (isDownloads ? "Downloads" : "Browse")}
           </h1>
         </div>
-        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Browse feed">
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Browse feed" data-scroll-row>
           {SURFACES.map((item) => (
             <button
               key={item.value}

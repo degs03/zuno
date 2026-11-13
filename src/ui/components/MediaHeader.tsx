@@ -159,7 +159,7 @@ export function MediaHeader({
   }, [artworkUrl]);
 
   return (
-    <header className="relative flex flex-wrap items-end gap-6 px-1 pb-6 pt-2">
+    <header className="relative flex flex-wrap items-end gap-6 px-1 pb-6 pt-2 max-sm:flex-col max-sm:items-center max-sm:gap-4 max-sm:text-center">
       {artworkSlot ?? (
         <CoverButton
           artworkUrl={artworkUrl}
@@ -168,8 +168,8 @@ export function MediaHeader({
         >
           <TrackArtwork
             className={cn(
-              "size-44 shrink-0 shadow-2xl ring-1 ring-white/10",
-              circularArtwork ? "rounded-full" : "rounded-none",
+              "size-44 shrink-0 shadow-pop ring-1 ring-[var(--color-hairline)] max-sm:size-40",
+              circularArtwork ? "rounded-full" : "rounded-card",
             )}
             artworkUrl={artworkUrl}
             iconSize={72}
@@ -186,18 +186,18 @@ export function MediaHeader({
         </CoverButton>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-2 max-sm:w-full max-sm:items-center">
         <span className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
           {eyebrow}
         </span>
         {/* Long album titles otherwise push the actions off the row entirely. */}
-        <h1 className="line-clamp-2 text-4xl font-bold tracking-[-0.03em] text-foreground">
+        <h1 className="line-clamp-2 text-4xl font-bold tracking-[-0.03em] break-words text-foreground max-sm:text-2xl">
           {title}
         </h1>
         {subtitle ? <div className="text-sm text-foreground/80">{subtitle}</div> : null}
         {meta ? <p className="text-xs text-muted-foreground">{meta}</p> : null}
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-center gap-2 max-sm:justify-center">
           {playback ? (
             /*
              * Reflects this collection's own state, not the player's: it only becomes a

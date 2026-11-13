@@ -5,6 +5,7 @@ import { SearchBar } from "./SearchBar";
 import { BlurredArtwork } from "./BlurredArtwork";
 import { useAmbientArtwork } from "../stores/ambientArtworkStore";
 import { Sidebar } from "./Sidebar";
+import { isMobile } from "../platform";
 import type { Album, Playlist } from "../../datasource/types";
 
 interface LayoutProps {
@@ -243,7 +244,9 @@ export function Layout({
         )}
         {/* No backdrop-blur: `bg-background` is fully opaque, so a backdrop filter here costs a
             composited layer and a blur pass to render something nothing can see through. */}
-        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col gap-3 px-4 pt-3 bg-background rounded-tl-lg">
+        {/* Mobile: one gutter, not two. This column's px-4 plus the scroll root's p-4 left a
+            320px phone with 256px of content. */}
+        <div className={cn("relative flex min-h-0 min-w-0 flex-1 flex-col gap-3 bg-background rounded-tl-lg", isMobile ? "px-0 pt-1" : "px-4 pt-3")}>
           {/*
             Ambient wash for the page beneath. Rendered here rather than inside the page so
             it can start at the very top of the column — behind the search bar — instead of
@@ -266,7 +269,8 @@ export function Layout({
             </span>
           ) : null}
 
-          {showSearchBar && (
+          {/* The bottom nav already has Search, and Android back replaces back/forward. */}
+          {showSearchBar && !isMobile && (
             <div className="relative">
               <SearchBar
                 onOpen={onOpenSearch}
@@ -284,7 +288,7 @@ export function Layout({
                 ref={pageContentRef}
                 className={cn(
                   "h-full overflow-y-auto overscroll-contain rounded-xl ",
-                  fullBleedContent ? "p-0" : "p-4",
+                  fullBleedContent ? "p-0" : isMobile ? "px-4 pb-4 pt-2" : "p-4",
                 )}
                 data-page-scroll-root
               >

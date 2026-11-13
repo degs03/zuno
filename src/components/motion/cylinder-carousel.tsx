@@ -513,7 +513,9 @@ export function CylinderCarousel({
         }}
         className={cn(
           // clip-path, not overflow: it also clips the GPU-composited balls
-          "relative w-full touch-none select-none outline-none overflow-x-clip [clip-path:inset(0)]",
+          // pan-y, not none: a vertical swipe that starts on the carousel must still scroll the
+          // page. The browser then takes that gesture and sends pointercancel, which settles.
+          "relative w-full touch-pan-y select-none outline-none overflow-x-clip [clip-path:inset(0)]",
           "cursor-grab active:cursor-grabbing",
           "focus-visible:ring-2 focus-visible:ring-foreground/20 overflow-y-visible",
           className,

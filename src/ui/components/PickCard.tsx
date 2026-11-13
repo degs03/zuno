@@ -88,7 +88,7 @@ export function PickCard({
       className={cn(
         // Portrait, centred in the square slot the carousel hands each item. The hit area is
         // the card itself rather than the slot, so the gaps between cards stay dead space.
-        "group/pick relative mx-auto block aspect-[3/4] h-full select-none rounded-2xl text-left",
+        "group/pick relative mx-auto block aspect-[3/4] h-full select-none rounded-card text-left",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         disabled ? "cursor-default opacity-60" : "cursor-pointer",
       )}
@@ -120,9 +120,9 @@ export function PickCard({
       */}
       <span
         className={cn(
-          "relative block size-full overflow-hidden rounded-xl bg-card shadow-md",
-          "ring-1 ring-white/10 transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
-          !disabled && "group-hover/pick:-translate-y-1.5 group-hover/pick:shadow-xl group-hover/pick:ring-white/25",
+          "relative block size-full overflow-hidden rounded-card bg-card shadow-card",
+          "ring-1 ring-[var(--color-hairline)] transition-all duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          !disabled && "group-hover/pick:-translate-y-1.5 group-hover/pick:shadow-xl group-hover/pick:ring-foreground/25",
         )}
       >
         <TrackArtwork

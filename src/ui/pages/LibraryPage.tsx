@@ -46,7 +46,7 @@ const TABS: Array<{ value: LibraryTab; label: string }> = [
 
 /* Roomier than the old 9rem: at that width a two-line title and an artist filled the card
    entirely, which is what made the grids read as dense rather than browsable. */
-const GRID = "grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(11rem,1fr))]";
+const GRID = "grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(11rem,1fr))] max-sm:gap-3 max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]";
 
 /** "recent" is YouTube's own order, which is newest-first — so it sorts by doing nothing. */
 
@@ -335,7 +335,7 @@ export function LibraryPage({
             the keyboard model is not.
           */}
           <div
-            className="flex shrink-0 gap-1 rounded-full bg-card/70 p-1"
+            className="flex shrink-0 gap-1 rounded-full bg-card/70 p-1 max-sm:max-w-full max-sm:overflow-x-auto max-sm:[scrollbar-width:none]"
             role="tablist"
             aria-label="Library section"
           >

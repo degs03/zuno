@@ -34,6 +34,7 @@ import { useLyricsFontScale } from "../settings/lyricsFontScale";
 import { TRANSLATION_OFF, useLyricsTranslationLang } from "../settings/lyricsTranslation";
 import { translateLines } from "../../datasource/translate";
 import { findActiveLineIndex, getLineProgress, isSyncedLyrics } from "./lyricsTiming";
+import { isMobile } from "../platform";
 
 /** How long a manual scroll keeps the auto-follow parked. */
 const AUTO_SCROLL_RESUME_MS = 4500;
@@ -458,6 +459,9 @@ export function LyricsView({ onClose }: LyricsViewProps) {
       </p>
 
       <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
+        {/* Not on a phone: full screen hides the player bar until hovered, and touch cannot
+            hover, so it would leave the music with no controls at all. */}
+        {!isMobile && (
         <button
           type="button"
           className="flex size-9 items-center justify-center rounded-full bg-card/60 text-muted-foreground backdrop-blur transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -468,9 +472,10 @@ export function LyricsView({ onClose }: LyricsViewProps) {
         >
           {isFullscreen ? <QuitFullScreenIcon size={18} /> : <FullScreenIcon size={18} />}
         </button>
+        )}
         <button
           type="button"
-          className="flex size-9 items-center justify-center rounded-full bg-card/60 text-muted-foreground backdrop-blur transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex size-10 items-center justify-center rounded-full bg-card/60 text-muted-foreground backdrop-blur transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onClose}
           aria-label="Close lyrics"
           title={isFullscreen ? "Close lyrics" : "Close lyrics (Esc)"}

@@ -54,6 +54,8 @@ import {
 import { isTrackKnownInPlaylist } from "../../player/playlistMembership";
 import { ArtistLinks } from "./ArtistLinks";
 import { TagEditor } from "./TagEditor";
+import { isMobile } from "../platform";
+import { registerBackHandler } from "../android";
 
 interface MenuPosition {
   x: number;
@@ -173,6 +175,15 @@ export function TrackContextMenuProvider({
       active = false;
     };
   }, [isPickerOpen, libraryController, track]);
+
+  // Android back closes the menu before anything behind it.
+  useEffect(() => {
+    if (!menuPosition) return;
+    return registerBackHandler(() => {
+      setMenuPosition(null);
+      return true;
+    });
+  }, [menuPosition]);
 
   useEffect(() => {
     if (!menuPosition) return;
@@ -554,9 +565,13 @@ export function TrackContextMenuProvider({
     <TrackContextMenuContext.Provider value={contextValue}>
       {children}
 
+      {/* Mobile: a scrim under the bottom sheet. Tapping it reaches the window mousedown
+          listener that closes the menu, the same as clicking away on desktop. */}
+      {isMobile && menuPosition && track && <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" />}
       {menuPosition && track && (
         <div
           ref={menuRef}
+          data-menu-sheet
           className="fixed z-50 flex min-w-56 flex-col gap-0.5 rounded-xl bg-popover/95 p-1.5 shadow-2xl backdrop-blur"
           style={{ left: menuPosition.x, top: menuPosition.y }}
           role="menu"
@@ -824,7 +839,7 @@ export function TrackContextMenuProvider({
       )}
 
       {toast && (
-        <div className="fixed bottom-28 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-popover/95 px-4 py-2 text-sm text-foreground shadow-2xl backdrop-blur" role="status">
+        <div className="fixed bottom-[var(--bottom-chrome)] left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-popover/95 px-4 py-2 text-sm text-foreground shadow-2xl backdrop-blur" role="status">
           {addingPlaylistId || isRemovingTrack || isLikeMutationPending ? (
             <Loader variant="spinner" size={18} />
           ) : toast === "Already in playlist" ? (

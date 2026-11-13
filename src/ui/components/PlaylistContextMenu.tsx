@@ -17,6 +17,8 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { forgetArtworkSource } from "../../internal/artworkCache";
 import { exportPlaylist } from "../../player/playlistTransfer";
 import { hidePlaylist, unhidePlaylist, useHiddenPlaylistIds } from "../settings/hiddenPlaylists";
+import { isMobile } from "../platform";
+import { registerBackHandler } from "../android";
 import { pinPlaylist, unpinPlaylist, usePinnedPlaylistIds } from "../settings/pinnedPlaylists";
 import {
   PlaylistContext,
@@ -39,6 +41,14 @@ export function PlaylistContextMenuProvider({
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [album, setAlbum] = useState<Album | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  // Android back closes the menu before anything behind it.
+  useEffect(() => {
+    if (!position) return;
+    return registerBackHandler(() => {
+      setPosition(null);
+      return true;
+    });
+  }, [position]);
   const [isSaving, setIsSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   /*
@@ -350,9 +360,13 @@ export function PlaylistContextMenuProvider({
   return (
     <PlaylistContext.Provider value={contextValue}>
       {children}
+      {/* Mobile: a scrim under the bottom sheet. Tapping it reaches the window mousedown
+          listener that closes the menu, the same as clicking away on desktop. */}
+      {isMobile && position && (album || playlist) && <div className="fixed inset-0 z-40 bg-black/40" aria-hidden="true" />}
       {position && (album || playlist) && (
         <div
           ref={menuRef}
+          data-menu-sheet
           className="fixed z-50 flex min-w-56 flex-col gap-0.5 rounded-xl bg-popover/95 p-1.5 shadow-2xl backdrop-blur"
           style={{ left: position.x, top: position.y }}
           role="menu"
@@ -525,7 +539,7 @@ export function PlaylistContextMenuProvider({
         </div>
       )}
       {toast && (
-        <div className="fixed bottom-28 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-popover/95 px-4 py-2 text-sm text-foreground shadow-2xl backdrop-blur" role="status">
+        <div className="fixed bottom-[var(--bottom-chrome)] left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-popover/95 px-4 py-2 text-sm text-foreground shadow-2xl backdrop-blur" role="status">
           {isSaving ? (
             <Loader variant="spinner" size={18} />
           ) : (toast.startsWith("Saved ") || toast.startsWith("Removed ") || toast === "Url copied to clipboard" || toast === "Local playlist deleted") && (

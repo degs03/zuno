@@ -94,6 +94,7 @@ import {
   type OnboardingStep,
 } from "./components/Onboarding";
 import { isLinux, isMacOS, isMobile } from "./platform";
+import { CloseIcon } from "@/ui/icons";
 import { useReduceMotion } from "./settings/renderEffects";
 
 import { emit, listen } from "@tauri-apps/api/event";
@@ -2283,7 +2284,22 @@ useEffect(() => {
       {/* Mobile: the queue is a full-screen sheet over the page, not a side column. */}
       {isMobile && isQueuePanelOpen && (
         <div className="absolute inset-0 z-40 flex flex-col bg-card pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-          <QueuePanel onClose={() => setIsQueuePanelOpen(false)} />
+          {/* Its own header: the panel's close control sits at the end of the list, which on a
+              long queue is a long way down. */}
+          <div className="flex shrink-0 items-center justify-between px-4 pb-1 pt-3">
+            <h2 className="text-lg font-semibold text-foreground">Queue</h2>
+            <button
+              type="button"
+              className="pressable grid size-10 place-items-center rounded-full text-muted-foreground active:bg-[var(--color-pressed)]"
+              aria-label="Close queue"
+              onClick={() => setIsQueuePanelOpen(false)}
+            >
+              <CloseIcon size={22} />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">
+            <QueuePanel onClose={() => setIsQueuePanelOpen(false)} />
+          </div>
         </div>
       )}
       <SearchOverlay

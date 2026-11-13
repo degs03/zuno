@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { isMobile } from "../../platform";
 import { Tooltip } from "@/components/motion/tooltip";
 import {
   CheckIcon,
@@ -40,7 +41,7 @@ const DRAG_SLOP_PX = 6;
 const AUTOMATIC_PAGE_SIZE = 30;
 
 const ICON_BUTTON =
-  "flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "flex size-7 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-background hover:text-foreground active:bg-[var(--color-pressed)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:size-10";
 
 type QueueSection = "manual" | "automatic";
 
@@ -191,7 +192,9 @@ const QueueRow = memo(function QueueRow({
           className={cn(
             "mr-1 flex shrink-0 items-center transition-opacity",
             // The stop marker stays visible unhovered — it is state, not an affordance.
-            isStopAfter
+            // Always shown on touch: there is no hover to reveal them, and invisible buttons
+            // that still take taps were removing tracks by accident.
+            isStopAfter || isMobile
               ? "opacity-100"
               : "opacity-0 focus-within:opacity-100 group-hover/queue-item:opacity-100",
           )}
@@ -354,7 +357,9 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
   const dropTargetRef = useRef(dropTarget);
   dropTargetRef.current = dropTarget;
 
-  const collapsed = useQueuePanelCollapsed();
+  // A phone shows the queue as a full-screen sheet: the narrow collapsed strip has no meaning
+  // there, and its saved desktop state must not leave the sheet as a 62px column.
+  const collapsed = useQueuePanelCollapsed() && !isMobile;
   const { queue, queueIndex, manualQueueLength, stopAfterQueueIndex, queueWindowStart } =
     usePlayerSessionSelector(selectQueueSlice, queueSliceEqual);
   // `stopAfterQueueIndex` comes off the session window-relative, like `queueIndex`; rebased once
@@ -597,7 +602,8 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
     absoluteIndex: number,
     section: QueueSection,
   ) => {
-    if (event.button !== 0) return;
+    // Touch drags scroll the queue; see PlaylistView's handlePointerDown.
+    if (event.button !== 0 || event.pointerType === "touch") return;
     const trackItem = event.currentTarget.closest<HTMLElement>("[data-queue-index]");
     if (!trackItem) return;
 

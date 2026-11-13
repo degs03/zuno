@@ -43,7 +43,7 @@ export function MobileNavBar({
 }) {
   return (
     <nav
-      className="flex shrink-0 items-stretch justify-around border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
+      className="flex shrink-0 items-stretch justify-around bg-background px-1 pb-[env(safe-area-inset-bottom)]"
       aria-label="Main"
     >
       {ITEMS.map(({ target, label, Icon, ActiveIcon }) => {
@@ -54,13 +54,24 @@ export function MobileNavBar({
             key={target}
             type="button"
             className={cn(
-              "flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "group flex min-h-14 flex-1 flex-col items-center justify-center gap-1 rounded-row text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
               isActive ? "text-foreground" : "text-muted-foreground",
             )}
             aria-current={isActive ? "page" : undefined}
             onClick={() => onNavigate(target)}
           >
-            <Glyph size={22} />
+            {/* The active destination wears a primary-tinted pill; pressing any item shows one
+                briefly, so a tap is acknowledged before the page has changed. */}
+            <span
+              className={cn(
+                "grid h-8 w-14 place-items-center rounded-full transition-[background-color,color,transform] duration-200 group-active:scale-95",
+                isActive
+                  ? "bg-primary/15 text-primary"
+                  : "group-active:bg-[var(--color-pressed)]",
+              )}
+            >
+              <Glyph size={22} />
+            </span>
             <span>{label}</span>
           </button>
         );

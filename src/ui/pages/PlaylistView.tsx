@@ -39,9 +39,9 @@ import {
  * the behaviour the original .playlistSearch width transition provided.
  */
 const SEARCH_FIELD =
-  "group/search flex min-h-8 items-center gap-1.5 overflow-hidden rounded-full bg-white/[0.04] px-2.5 " +
+  "group/search flex min-h-8 items-center gap-1.5 overflow-hidden rounded-full bg-muted/40 px-2.5 " +
   "text-muted-foreground transition-[width,background-color] duration-200 cursor-text " +
-  "hover:bg-white/[0.08] focus-within:bg-white/[0.08] focus-within:text-foreground " +
+  "hover:bg-muted/70 focus-within:bg-muted/70 focus-within:text-foreground " +
   "[&_input]:min-w-0 [&_input]:flex-1 [&_input]:bg-transparent [&_input]:text-sm " +
   "[&_input]:text-foreground [&_input]:outline-none [&_input]:placeholder:text-muted-foreground";
 const SEARCH_FIELD_COLLAPSED = "w-9 hover:w-56 focus-within:w-56";
@@ -158,7 +158,7 @@ function PlaylistDescription({
     return (
       <div className="flex flex-col gap-2">
         <textarea
-          className="min-h-20 w-full resize-y rounded-xl bg-white/[0.04] px-3 py-2 text-sm text-foreground outline-none ring-1 ring-white/10 placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-20 w-full resize-y rounded-xl bg-muted/40 px-3 py-2 text-sm text-foreground outline-none ring-1 ring-[var(--color-hairline)] placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
           value={draft}
           autoFocus
           maxLength={5000}
@@ -220,7 +220,7 @@ function PlaylistDescription({
       {canEdit && (
         <button
           type="button"
-          className="shrink-0 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="shrink-0 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setIsEditing(true)}
         >
           {description ? "Edit" : "Add description"}
@@ -715,7 +715,9 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
   };
 
   const handlePointerDown = (event: React.PointerEvent, track: Track) => {
-    if (!canReorderTracks || event.button !== 0) return;
+    // Touch drags scroll the list. Reordering on a phone would turn every scroll that starts on a
+    // row into a move, and a scroll the browser takes over arrives as pointercancel mid-drag.
+    if (!canReorderTracks || event.button !== 0 || event.pointerType === "touch") return;
     pointerDragRef.current = {
       pointerId: event.pointerId,
       localPath: track.localPath ?? track.playlistItemId ?? track.id,
@@ -736,7 +738,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
           artworkVariant="playlist"
           artworkSlot={isLikedSongs ? (
             <img
-              className="size-44 shrink-0 rounded-2xl object-cover shadow-2xl ring-1 ring-white/10"
+              className="size-44 shrink-0 rounded-2xl object-cover shadow-2xl ring-1 ring-[var(--color-hairline)]"
               src={likedSongsCover}
               alt=""
             />
@@ -815,7 +817,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
       {!error && (isLoading || tracks.length > 0 || hasMoreTracks) && (
         <>
           <div
-            className="flex flex-wrap items-center gap-1.5 self-start [&>button]:flex [&>button]:min-h-8 [&>button]:min-w-0 [&>button]:items-center [&>button]:justify-center [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:bg-white/[0.04] [&>button]:px-3 [&>button]:text-sm [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors hover:[&>button]:bg-white/[0.08] hover:[&>button]:text-foreground focus-visible:[&>button]:outline-none focus-visible:[&>button]:ring-2 focus-visible:[&>button]:ring-ring"
+            className="flex flex-wrap items-center gap-1.5 self-start [&>button]:flex [&>button]:min-h-8 [&>button]:min-w-0 [&>button]:items-center [&>button]:justify-center [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:bg-muted/40 [&>button]:px-3 [&>button]:text-sm [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors hover:[&>button]:bg-muted/70 hover:[&>button]:text-foreground focus-visible:[&>button]:outline-none focus-visible:[&>button]:ring-2 focus-visible:[&>button]:ring-ring"
             role="group"
             aria-label="Playlist song tools"
           >

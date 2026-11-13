@@ -85,7 +85,7 @@ export function HomeDestinations({
 
   return (
     <section className="flex flex-col gap-3" aria-label="Go to">
-      <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(12rem,1fr))]">
+      <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(min(12rem,100%),1fr))] max-sm:grid-cols-2">
         {cards.map((card) => (
           <motion.button
             key={card.key}
@@ -96,7 +96,7 @@ export function HomeDestinations({
             transition={{ type: "spring", stiffness: 520, damping: 34 }}
             className={cn(
               // `pl-12` is the icon's gutter: it ends at 38px, so the text clears it by 10px.
-              "group/dest relative flex items-center overflow-hidden rounded-xl bg-card/80 p-3 pl-12 text-left",
+              "group/dest relative flex min-h-14 items-center overflow-hidden rounded-card bg-card/80 p-3 pl-12 text-left shadow-card",
               "transition-colors hover:bg-card",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             )}

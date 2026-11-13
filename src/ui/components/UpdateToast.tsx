@@ -56,7 +56,7 @@ export function UpdateToast({ update, onDismiss }: UpdateToastProps) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 24, scale: 0.96 }}
       transition={{ type: "spring", stiffness: 400, damping: 32 }}
-      className="fixed bottom-28 right-5 z-50 flex max-w-md items-center gap-4 rounded-xl bg-card/95 px-4 py-3 shadow-2xl backdrop-blur"
+      className="fixed bottom-[var(--bottom-chrome)] right-5 z-50 flex max-w-md items-center gap-4 rounded-xl bg-card/95 px-4 py-3 shadow-2xl backdrop-blur"
       role="status"
       aria-live="polite"
     >

@@ -9,7 +9,9 @@ import {
 import { cn } from "@/lib/utils";
 import { propsEqualIgnoringHandlers } from "../../internal/propsEqual";
 import { Tooltip } from "@/components/motion/tooltip";
-import { CheckActiveIcon, CheckIcon, DislikeActiveIcon, DislikeIcon, DownloadIcon, HeartActiveIcon, HeartIcon, ListIcon, PlaylistAddIcon, PlayActiveIcon } from "@/ui/icons";
+import { CheckActiveIcon, CheckIcon, DislikeActiveIcon, DislikeIcon, DownloadIcon, HeartActiveIcon, HeartIcon, ListIcon, MoreIcon, PlaylistAddIcon, PlayActiveIcon } from "@/ui/icons";
+import { useLongPress } from "@/lib/hooks/use-long-press";
+import { isMobile } from "../platform";
 import { Loader, MusicVisualizer } from "@/components/motion/loader";
 import {
   useUnavailableOffline,
@@ -411,12 +413,31 @@ export const TrackRow = memo(function TrackRow({
      and must keep their play-on-hover glyph rather than gain a checkbox that does nothing. */
   const canSelect = Boolean(onToggleSelected);
   const unavailableOffline = useUnavailableOffline(track);
+  // Touch has no right button: holding the row opens the same menu.
+  const longPress = useLongPress(onContextMenu ? handleContextMenu : undefined);
 
   return (
     <button
       {...buttonProps}
       type="button"
       onClick={handleSelect}
+      onClickCapture={longPress.onClickCapture}
+      onPointerDown={(event) => {
+        longPress.onPointerDown(event);
+        buttonProps.onPointerDown?.(event);
+      }}
+      onPointerMove={(event) => {
+        longPress.onPointerMove(event);
+        buttonProps.onPointerMove?.(event);
+      }}
+      onPointerUp={(event) => {
+        longPress.onPointerUp();
+        buttonProps.onPointerUp?.(event);
+      }}
+      onPointerCancel={(event) => {
+        longPress.onPointerCancel();
+        buttonProps.onPointerCancel?.(event);
+      }}
       /* Kept conditional: whether the prop was supplied still decides whether a handler is
          attached at all, only its identity is ignored. */
       onContextMenu={onContextMenu ? handleContextMenu : undefined}
@@ -612,6 +633,36 @@ export const TrackRow = memo(function TrackRow({
       )}
 
       {trailing}
+
+      {/* Mobile: the row's actions live in its menu, reached from a visible ⋯ (or a long-press)
+          instead of hover-revealed icons. A span, not a button: the row already is one. */}
+      {isMobile && onContextMenu && (
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={`More options for ${track.title}`}
+          className="-mr-1 grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-card active:text-foreground"
+          onClick={(event) => {
+            event.stopPropagation();
+            handleContextMenu(event);
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            event.stopPropagation();
+            const box = event.currentTarget.getBoundingClientRect();
+            handleContextMenu({
+              ...event,
+              clientX: box.left,
+              clientY: box.bottom,
+              preventDefault() {},
+            } as unknown as MouseEvent<HTMLElement>);
+          }}
+        >
+          <MoreIcon size={20} aria-hidden="true" />
+        </span>
+      )}
 
       {/* Announced to screen readers only; the meter above is decorative. */}
       {isCurrent ? (

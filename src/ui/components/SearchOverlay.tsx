@@ -326,9 +326,22 @@ export function SearchOverlay({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex justify-center bg-muted/40 pt-[12vh] backdrop-blur-sm" onMouseDown={onDismiss ?? onClose}>
+    <div
+      className={cn(
+        "fixed inset-0 z-[70] flex justify-center bg-muted/40 backdrop-blur-sm",
+        isMobile ? "pt-[env(safe-area-inset-top)]" : "pt-[12vh]",
+      )}
+      onMouseDown={onDismiss ?? onClose}
+    >
+      {/* Phones: a full-screen sheet sized to the visible viewport (dvh), so the results list
+          ends at the keyboard instead of disappearing under it. */}
       <section
-        className="flex max-h-[70vh] w-[min(40rem,92vw)] flex-col overflow-hidden rounded-2xl bg-card shadow-2xl"
+        className={cn(
+          "flex flex-col overflow-hidden bg-card",
+          isMobile
+            ? "h-[100dvh] w-full"
+            : "max-h-[70vh] w-[min(40rem,92vw)] rounded-2xl shadow-2xl",
+        )}
         data-onboarding="search-panel"
         role="dialog"
         aria-modal="true"
@@ -350,6 +363,16 @@ export function SearchOverlay({
             aria-label="Search artists, songs, playlists, and albums"
           />
           {isLoading && <span className="px-4   text-center text-sm text-muted-foreground">Searching</span>}
+          {/* Full-screen on a phone, so there is no outside to tap: give it a way out. */}
+          {isMobile && (
+            <button
+              type="button"
+              className="pressable -mr-2 h-10 shrink-0 rounded-full px-3 text-sm font-medium text-foreground active:bg-[var(--color-pressed)]"
+              onClick={onClose}
+            >
+              Cancel
+            </button>
+          )}
         </div>
 
         {preview && (
