@@ -94,7 +94,7 @@ jobs:
               --out "zuno-android-$ABI-test-signed.apk" "zuno-$ABI-aligned.apk"
           done
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: zuno-android
           path: zuno-android-*-test-signed.apk
