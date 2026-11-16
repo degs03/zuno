@@ -19,7 +19,7 @@ import { startListenLog } from "./listenLog";
 import { startDynamicAccent } from "../ui/settings/dynamicAccent";
 import { startPersonalEq } from "../ui/settings/personalEq";
 
-const dataSource = new YouTubeMusicDataSource();
+export const dataSource = new YouTubeMusicDataSource();
 
 export const libraryController = new LibraryController(dataSource);
 export const searchController = new SearchController(dataSource);

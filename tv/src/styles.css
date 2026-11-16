@@ -1,0 +1,903 @@
+/*
+ * Zuno TV — written for Chromium 38 (LG webOS 3.5): no custom properties, no grid, no flex gap.
+ * Fixed colours, margins for spacing, -webkit- prefixes where that engine needs them.
+ * Designed at 1920×1080 and read from a sofa: nothing under 26px.
+ */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: #0b0b0c;
+  color: #f2f2f2;
+  font-family: "LG Smart UI", "Museo Sans", Roboto, Arial, sans-serif;
+  font-size: 28px;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  outline: none;
+}
+
+input {
+  font: inherit;
+  outline: none;
+}
+
+.muted {
+  color: #9a9aa0;
+}
+
+.logo {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: #b8f03c;
+  margin-bottom: 48px;
+}
+
+/* ---------------------------------------------------------------- focus */
+
+[data-focus] {
+  -webkit-transition: -webkit-transform 0.15s ease-out, background-color 0.15s, box-shadow 0.15s;
+  transition: transform 0.15s ease-out, background-color 0.15s, box-shadow 0.15s;
+}
+
+.is-focus {
+  box-shadow: 0 0 0 4px #b8f03c;
+}
+
+/* ---------------------------------------------------------------- shell */
+
+.shell {
+  display: -webkit-flex;
+  display: flex;
+  width: 1920px;
+  height: 1080px;
+}
+
+.sidebar {
+  width: 330px;
+  padding: 56px 24px;
+  background: #121214;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.nav-item {
+  white-space: nowrap;
+  overflow: hidden;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  height: 72px;
+  padding: 0 22px;
+  margin-bottom: 10px;
+  border-radius: 36px;
+  color: #c9c9ce;
+  font-weight: 600;
+}
+
+.nav-icon {
+  width: 44px;
+  font-size: 32px;
+}
+
+.nav-on {
+  background: #b8f03c;
+  color: #10120a;
+}
+
+.nav-item.is-focus {
+  -webkit-transform: scale(1.04);
+  transform: scale(1.04);
+}
+
+.main {
+  position: relative;
+  -webkit-flex: 1;
+  flex: 1;
+  height: 1080px;
+  overflow: hidden;
+}
+
+.screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.page {
+  height: 1080px;
+  overflow: hidden;
+  padding: 56px 64px 220px;
+}
+
+.page-title {
+  font-size: 56px;
+  margin-bottom: 32px;
+}
+
+/* ---------------------------------------------------------------- shelves and cards */
+
+.shelf {
+  margin-bottom: 40px;
+}
+
+.shelf-title {
+  font-size: 34px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.row {
+  display: -webkit-flex;
+  display: flex;
+  overflow: hidden;
+  padding: 8px 8px 12px;
+  margin: -8px;
+}
+
+.card {
+  width: 240px;
+  margin-right: 28px;
+  padding: 12px;
+  border-radius: 20px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.card.is-focus {
+  background: #1f1f23;
+  -webkit-transform: scale(1.06);
+  transform: scale(1.06);
+}
+
+.card .art {
+  width: 216px;
+  height: 216px;
+}
+
+.card-title {
+  margin-top: 12px;
+  font-size: 26px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.card-sub {
+  font-size: 22px;
+  color: #9a9aa0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.art {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background: #1c1c1f;
+}
+
+.art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.art-round {
+  border-radius: 50%;
+}
+
+.art-empty {
+  width: 100%;
+  height: 100%;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  font-size: 64px;
+  color: #55555a;
+}
+
+.liked-art {
+  width: 216px;
+  height: 216px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  font-size: 96px;
+  color: #10120a;
+  background: -webkit-linear-gradient(135deg, #b8f03c, #4fae5a);
+  background: linear-gradient(135deg, #b8f03c, #4fae5a);
+}
+
+/* ---------------------------------------------------------------- track rows */
+
+.tracks {
+  margin-top: 8px;
+}
+
+.track {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  height: 96px;
+  padding: 0 20px;
+  border-radius: 18px;
+}
+
+.track.is-focus {
+  background: #1f1f23;
+}
+
+.track .art {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.track-num {
+  width: 72px;
+  text-align: center;
+  color: #9a9aa0;
+}
+
+.track-text {
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  margin-left: 24px;
+}
+
+.track-title {
+  font-size: 28px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.track-sub {
+  font-size: 23px;
+  color: #9a9aa0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.track-time {
+  color: #9a9aa0;
+  font-size: 24px;
+  margin-left: 24px;
+}
+
+.track-playing .track-title {
+  color: #b8f03c;
+}
+
+.explicit {
+  display: inline-block;
+  margin-left: 12px;
+  padding: 0 8px;
+  font-size: 18px;
+  line-height: 26px;
+  border-radius: 4px;
+  background: #3a3a3f;
+  color: #d0d0d4;
+  vertical-align: middle;
+}
+
+/* ---------------------------------------------------------------- buttons and chips */
+
+.btn {
+  height: 72px;
+  padding: 0 40px;
+  margin-right: 20px;
+  border-radius: 36px;
+  background: #26262b;
+  font-weight: 700;
+}
+
+.btn-primary {
+  background: #b8f03c;
+  color: #10120a;
+}
+
+.btn.is-focus {
+  -webkit-transform: scale(1.06);
+  transform: scale(1.06);
+}
+
+.btn[disabled] {
+  opacity: 0.4;
+}
+
+.chips {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.chip {
+  height: 60px;
+  padding: 0 30px;
+  margin: 0 16px 16px 0;
+  border-radius: 30px;
+  background: #1f1f23;
+  font-size: 26px;
+  font-weight: 600;
+}
+
+.chip-on {
+  background: #b8f03c;
+  color: #10120a;
+}
+
+.chip[disabled] {
+  opacity: 0.4;
+}
+
+/* ---------------------------------------------------------------- hero (album/artist) */
+
+.hero {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: flex-end;
+  align-items: flex-end;
+  margin-bottom: 40px;
+}
+
+.hero .art {
+  width: 320px;
+  height: 320px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.hero-text {
+  margin-left: 48px;
+  min-width: 0;
+}
+
+.hero-text h1 {
+  font-size: 60px;
+  line-height: 1.1;
+  margin-bottom: 12px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.actions {
+  margin-top: 28px;
+}
+
+/* ---------------------------------------------------------------- search */
+
+.search-box {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.search-input {
+  width: 1000px;
+  height: 88px;
+  padding: 0 36px;
+  border-radius: 44px;
+  border: 0;
+  background: #1f1f23;
+  color: #f2f2f2;
+  font-size: 32px;
+}
+
+.search-input.is-focus {
+  background: #2a2a30;
+}
+
+.search-hint {
+  margin-left: 28px;
+  font-size: 24px;
+}
+
+/* ---------------------------------------------------------------- states, toast, dialog */
+
+.state {
+  height: 900px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+  padding: 0 120px;
+  text-align: center;
+}
+
+.state .btn {
+  margin-top: 28px;
+}
+
+.spinner {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 24px;
+  border-radius: 50%;
+  border: 6px solid #2a2a30;
+  border-top-color: #b8f03c;
+  -webkit-animation: spin 0.9s linear infinite;
+  animation: spin 0.9s linear infinite;
+}
+
+@-webkit-keyframes spin {
+  to {
+    -webkit-transform: rotate(360deg);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 170px;
+  width: 1000px;
+  margin-left: -500px;
+  padding: 24px 36px;
+  border-radius: 24px;
+  background: #2a2a30;
+  text-align: center;
+}
+
+.dialog {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  background: rgba(0, 0, 0, 0.75);
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  -webkit-justify-content: center;
+  justify-content: center;
+}
+
+.dialog-box {
+  width: 900px;
+  padding: 56px;
+  border-radius: 32px;
+  background: #1c1c1f;
+  text-align: center;
+}
+
+.dialog-box p {
+  margin-bottom: 36px;
+  font-size: 34px;
+}
+
+/* ---------------------------------------------------------------- mini player */
+
+.mini {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  bottom: 32px;
+  height: 120px;
+  padding: 0 32px 0 20px;
+  border-radius: 34px;
+  background: #1c1c1f;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.mini .art {
+  width: 84px;
+  height: 84px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.mini-text {
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  margin-left: 24px;
+}
+
+.mini-state {
+  font-size: 36px;
+  color: #b8f03c;
+  margin-left: 24px;
+}
+
+.mini .progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* ---------------------------------------------------------------- progress */
+
+.progress-track {
+  height: 6px;
+  background: #2a2a30;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 6px;
+  background: #b8f03c;
+}
+
+.progress-large {
+  margin-top: 28px;
+}
+
+.progress-large .progress-track {
+  height: 10px;
+  border-radius: 5px;
+}
+
+.progress-large .progress-fill {
+  height: 10px;
+}
+
+.progress-times {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 24px;
+  color: #9a9aa0;
+}
+
+/* ---------------------------------------------------------------- now playing */
+
+.np {
+  display: -webkit-flex;
+  display: flex;
+  height: 1080px;
+  padding: 64px;
+}
+
+.np-left {
+  width: 600px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+}
+
+.np-left > .art {
+  width: 600px;
+  height: 600px;
+  border-radius: 28px;
+}
+
+.np-title {
+  margin-top: 32px;
+  font-size: 44px;
+  line-height: 1.15;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.np-artist {
+  font-size: 30px;
+  color: #9a9aa0;
+  margin-top: 6px;
+}
+
+.controls {
+  display: -webkit-flex;
+  display: flex;
+  -webkit-justify-content: space-between;
+  justify-content: space-between;
+  -webkit-align-items: center;
+  align-items: center;
+  margin-top: 24px;
+}
+
+.ctl {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  font-size: 34px;
+  color: #d8d8dc;
+}
+
+.ctl-on {
+  color: #b8f03c;
+}
+
+.ctl-main {
+  width: 120px;
+  height: 120px;
+  background: #b8f03c;
+  color: #10120a;
+  font-size: 44px;
+}
+
+.ctl.is-focus {
+  background: #2a2a30;
+  -webkit-transform: scale(1.1);
+  transform: scale(1.1);
+}
+
+.ctl-main.is-focus {
+  background: #c9ff52;
+}
+
+.legend {
+  margin-top: 20px;
+  font-size: 22px;
+}
+
+.np-right {
+  -webkit-flex: 1;
+  flex: 1;
+  min-width: 0;
+  margin-left: 80px;
+}
+
+.lyrics {
+  height: 860px;
+  overflow: hidden;
+}
+
+.lyric {
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1.3;
+  padding: 12px 0;
+  color: #5d5d63;
+  -webkit-transition: color 0.3s;
+  transition: color 0.3s;
+}
+
+.lyric-past {
+  color: #8a8a90;
+}
+
+.lyric-on {
+  color: #ffffff;
+}
+
+.queue {
+  height: 860px;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------- karaoke */
+
+.karaoke {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  padding: 80px 160px;
+  background: #050506;
+  background: -webkit-radial-gradient(50% 40%, circle, #1c2410 0%, #050506 70%);
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-direction: column;
+  flex-direction: column;
+  -webkit-justify-content: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.karaoke-head {
+  position: absolute;
+  top: 60px;
+  left: 80px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-align-items: center;
+  align-items: center;
+  text-align: left;
+}
+
+.karaoke-head .art {
+  width: 96px;
+  height: 96px;
+  margin-right: 24px;
+}
+
+.k-line {
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.k-prev,
+.k-next {
+  font-size: 40px;
+  color: #55555b;
+  min-height: 60px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.k-now {
+  font-size: 80px;
+  margin: 48px 0;
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.k-word {
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: -webkit-linear-gradient(left, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.9));
+}
+
+.karaoke-progress {
+  position: absolute;
+  left: 160px;
+  right: 160px;
+  bottom: 80px;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+/* ---------------------------------------------------------------- connect */
+
+.connect {
+  width: 1920px;
+  height: 1080px;
+  padding: 80px 140px;
+}
+
+.connect h1 {
+  font-size: 52px;
+  margin-bottom: 16px;
+}
+
+.connect-help {
+  max-width: 1400px;
+  margin-bottom: 56px;
+}
+
+.connect-body {
+  display: -webkit-flex;
+  display: flex;
+}
+
+.connect-fields {
+  width: 760px;
+}
+
+.field {
+  height: 140px;
+  padding: 20px 36px;
+  margin-bottom: 24px;
+  border-radius: 28px;
+  background: #17171a;
+  border: 3px solid #17171a;
+}
+
+.field-on {
+  border-color: #3d4a1c;
+  background: #1c2210;
+}
+
+.field-label {
+  display: block;
+  font-size: 22px;
+  color: #9a9aa0;
+}
+
+.field-value {
+  display: block;
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.field-value.code {
+  letter-spacing: 16px;
+  color: #b8f03c;
+}
+
+.connect-go {
+  margin-top: 12px;
+}
+
+.connect-status {
+  margin-top: 28px;
+  color: #ffcf6b;
+  max-width: 740px;
+}
+
+.keypad {
+  width: 560px;
+  margin-left: 120px;
+  display: -webkit-flex;
+  display: flex;
+  -webkit-flex-wrap: wrap;
+  flex-wrap: wrap;
+}
+
+.key {
+  width: 160px;
+  height: 120px;
+  margin: 0 20px 20px 0;
+  border-radius: 28px;
+  background: #1f1f23;
+  font-size: 48px;
+  font-weight: 700;
+}
+
+.key-wide {
+  width: 520px;
+  font-size: 30px;
+}
+
+.key.is-focus {
+  background: #b8f03c;
+  color: #10120a;
+  box-shadow: none;
+}
+
+.settings-block {
+  margin-bottom: 48px;
+}
+
+.settings-block .btn {
+  margin-top: 16px;
+}

@@ -1,0 +1,16 @@
+{
+  "id": "com.zuno.tv",
+  "version": "1.0.0",
+  "vendor": "Zuno",
+  "type": "web",
+  "main": "index.html",
+  "title": "Zuno",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png",
+  "bgColor": "#0b0b0c",
+  "iconColor": "#0b0b0c",
+  "resolution": "1920x1080",
+  "disableBackHistoryAPI": true,
+  "transparent": false,
+  "requiredACG": []
+}

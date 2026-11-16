@@ -74,6 +74,7 @@ import { UpdateToast } from "./components/UpdateToast";
 import { GlobalNotice } from "./notice";
 import { ErrorSheet, type ErrorSheetState } from "./components/ErrorSheet";
 import { CarModeView, OPEN_CAR_MODE_EVENT } from "./components/CarModeView";
+import { initTvServer } from "../tv/tvServer";
 import { startSleepShake } from "./settings/sleepShake";
 import { ReleaseNoteDialog } from "./components/ReleaseNoteDialog";
 import { markReleaseNoteSeen, resolveReleaseNoteVersion } from "../internal/releaseNote";
@@ -394,6 +395,8 @@ export default function App() {
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState(false);
   const [isCarMode, setIsCarMode] = useState(false);
   useEffect(() => startSleepShake(), []);
+  // Zuno TV: back up if the user left "Allow the TV to use this computer" on.
+  useEffect(() => void initTvServer(), []);
   useEffect(() => {
     const open = () => setIsCarMode(true);
     window.addEventListener(OPEN_CAR_MODE_EVENT, open);

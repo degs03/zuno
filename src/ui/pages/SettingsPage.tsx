@@ -33,7 +33,8 @@ import { showNotice } from "../notice";
 import { setBitPerfect, useBitPerfect, useOutputFormat } from "../settings/bitPerfect";
 import { setCarDevice, useCarDevices } from "../settings/carDevices";
 import { clearPersonalEq, setPersonalEqEnabled, usePersonalEq } from "../settings/personalEq";
-import { formatNumber, getLocale, LANGUAGES, msg, resolveLanguage, setLanguage, t, tn, useLanguageSetting, useT, type LanguageSetting } from "../../i18n";
+import { formatNumber, getLocale, LANGUAGES, msg, relativeTimeFormat, resolveLanguage, setLanguage, t, tn, useLanguageSetting, useT, type LanguageSetting } from "../../i18n";
+import { newTvServerCode, refreshTvServerInfo, setTvServerEnabled, useTvServer } from "../../tv/tvServer";
 import { getInvokeErrorMessage } from "../../internal/appSettings";
 import {
   MAX_CROSSFADE_SEC,
@@ -1312,6 +1313,14 @@ export function SettingsPage({
   onDeleteAllAppData,
 }: SettingsPageProps) {
   const t = useT();
+  const tvServer = useTvServer();
+  useEffect(() => {
+    if (isMobile) return;
+    void refreshTvServerInfo();
+    // "TV connected 3 minutes ago" stays current while the page is open.
+    const id = window.setInterval(() => void refreshTvServerInfo(), 15000);
+    return () => window.clearInterval(id);
+  }, []);
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
   const [cacheSizeGb, setCacheSizeGb] = useState(DEFAULT_CACHE_SIZE_GB.toString());
   const [cacheBusy, setCacheBusy] = useState(false);
@@ -2763,6 +2772,50 @@ export function SettingsPage({
 
       {activeTab === "window" && (
         <div className="flex flex-col gap-5" role="tabpanel" aria-label={t("Style settings")}>
+          <section className={SETTINGS_CARD} aria-labelledby="tv-server-settings-title">
+            <SettingsCardHeader
+              title={t("Zuno on the TV")}
+              titleId="tv-server-settings-title"
+              icon={<GlobalIcon size={18} aria-hidden="true" />}
+              description={t("Lets the Zuno TV app on an LG webOS television use this computer to find and play music. Keep Zuno open on this computer while you listen on the TV.")}
+            />
+            <SettingToggle
+              title={t("Allow the TV to use this computer")}
+              description={t("Both devices must be on the same Wi-Fi network. Windows may ask you to allow Zuno on private networks.")}
+              checked={tvServer.info?.enabled ?? false}
+              onCheckedChange={(checked) => void setTvServerEnabled(checked)}
+            />
+            {tvServer.info?.enabled && (
+              <div className="flex flex-wrap items-center gap-6 rounded-xl bg-background/60 p-4">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("Computer address")}</span>
+                  <span className="font-mono text-2xl font-semibold tabular-nums text-foreground">
+                    {tvServer.info.ip ?? t("Not connected to a network")}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">{t("Pairing code")}</span>
+                  <span className="font-mono text-2xl font-semibold tracking-[0.3em] tabular-nums text-primary">
+                    {tvServer.info.code}
+                  </span>
+                </div>
+                <button type="button" className={CARD_BUTTON} onClick={() => void newTvServerCode()}>
+                  {t("New code")}
+                </button>
+                <span className="basis-full text-sm text-muted-foreground">
+                  {tvServer.info.lastSeenMs
+                    ? t("TV connected {time}", {
+                        time: relativeTimeFormat({ numeric: "auto" }).format(
+                          -Math.max(0, Math.round((Date.now() - tvServer.info.lastSeenMs) / 60000)),
+                          "minute",
+                        ),
+                      })
+                    : t("No TV has connected yet. Open Zuno TV and enter this address and code.")}
+                </span>
+              </div>
+            )}
+            {tvServer.error && <p className="text-sm text-destructive">{tvServer.error}</p>}
+          </section>
           <section className={SETTINGS_CARD} aria-labelledby="window-settings-title">
             <SettingsCardHeader
               title={t("Window controls")}

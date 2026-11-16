@@ -1335,6 +1335,16 @@ const catalog: Catalog = {
   "Top result": "Top-Ergebnis",
   "Recent searches": "Letzte Suchen",
   "Search for songs, artists, albums or playlists.": "Suche nach Songs, Künstlern, Alben oder Playlists.",
+  "Zuno on the TV": "Zuno auf dem Fernseher",
+  "Lets the Zuno TV app on an LG webOS television use this computer to find and play music. Keep Zuno open on this computer while you listen on the TV.": "Erlaubt der Zuno-TV-App auf einem LG-webOS-Fernseher, diesen Computer zum Suchen und Abspielen von Musik zu nutzen. Lass Zuno auf diesem Computer geöffnet, während du am Fernseher hörst.",
+  "Allow the TV to use this computer": "Fernseher darf diesen Computer nutzen",
+  "Both devices must be on the same Wi-Fi network. Windows may ask you to allow Zuno on private networks.": "Beide Geräte müssen im selben WLAN sein. Windows fragt eventuell, ob Zuno in privaten Netzwerken erlaubt werden soll.",
+  "Computer address": "Adresse des Computers",
+  "Not connected to a network": "Mit keinem Netzwerk verbunden",
+  "Pairing code": "Kopplungscode",
+  "New code": "Neuer Code",
+  "TV connected {time}": "Fernseher verbunden {time}",
+  "No TV has connected yet. Open Zuno TV and enter this address and code.": "Noch kein Fernseher verbunden. Öffne Zuno TV und gib diese Adresse und diesen Code ein.",
 };
 
 export default catalog;

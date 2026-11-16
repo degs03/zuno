@@ -59,6 +59,8 @@ mod ota;
 mod opus_source;
 mod prefetch;
 mod lastfm;
+#[cfg(desktop)]
+mod tv_server;
 
 // Keep the legacy service name so existing sign-in credentials survive the product rename.
 const KEYRING_SERVICE: &str = "com.ytmusicdock.app";
@@ -4458,7 +4460,9 @@ async fn fill_media_buffer(
      * The warmed track waits, which is the right way round: it is an optimisation, and the one
      * making sound is not.
      */
+    eprintln!("[internal][tauri][info] fill_media_buffer waiting track_id={}", track_id);
     let _fill_permit = PLAYBACK_FILL_LOCK.acquire().await;
+    eprintln!("[internal][tauri][info] fill_media_buffer start track_id={} ranges={}", track_id, ranges.len());
 
     // The wait for the permit above is where a superseded fill most likely spent its time —
     // recheck now, before spending a request on a track that moved on while this was queued.
@@ -4481,6 +4485,7 @@ async fn fill_media_buffer(
             let client = client.clone();
             let url = url.clone();
             let cookie = cookie.clone();
+            let track_id = track_id.clone();
             let abandoned = Arc::clone(&buffer);
             async move {
                 /*
@@ -4573,9 +4578,11 @@ async fn fill_media_buffer(
                             }
                         }
                         Ok(response) => {
+                            eprintln!("[internal][tauri][warn] fill range {} status {} track_id={}", index, response.status(), track_id);
                             last = cache_error(format!("range returned {}", response.status()));
                         }
                         Err(error) => {
+                            eprintln!("[internal][tauri][warn] fill range {} request error {} track_id={}", index, error, track_id);
                             last = cache_error(format!("audio range request failed: {error}"));
                         }
                     }
@@ -5627,7 +5634,17 @@ pub fn run() {
             android::android_keep_screen_on,
             ota::update_fetch_manifest,
             ota::update_abi,
-            ota::update_download_apk
+            ota::update_download_apk,
+            #[cfg(desktop)]
+            tv_server::tv_server_start,
+            #[cfg(desktop)]
+            tv_server::tv_server_stop,
+            #[cfg(desktop)]
+            tv_server::tv_server_info,
+            #[cfg(desktop)]
+            tv_server::tv_server_new_code,
+            #[cfg(desktop)]
+            tv_server::tv_respond
         ])
         .run(context)
         .expect("error while running tauri application");
