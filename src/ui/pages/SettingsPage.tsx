@@ -17,6 +17,24 @@ import { ColorPicker } from "../components/ColorPicker";
 import { playerController } from "../../player/playerStore";
 import { setEqualizerEnabled, useEqualizerEnabled } from "../settings/equalizer";
 import { EqualizerPanel } from "../components/Equalizer";
+import { SoundProfilesPanel } from "../components/SoundProfiles";
+import {
+  HEADSET_GESTURES,
+  setHeadsetSettings,
+  useHeadsetSettings,
+  type HeadsetGesture,
+  type HeadsetSettings as HeadsetSettingsValue,
+} from "../settings/headset";
+import { useCurrentOutputDevice } from "../settings/currentOutputDevice";
+import { setOfflineMode, useOfflineMode } from "../../internal/connectivity";
+import { exportBackup, pickBackup, restoreBackup } from "../../internal/backup";
+import type { BackupFile } from "../../internal/backupFormat";
+import { showNotice } from "../notice";
+import { setBitPerfect, useBitPerfect, useOutputFormat } from "../settings/bitPerfect";
+import { setCarDevice, useCarDevices } from "../settings/carDevices";
+import { clearPersonalEq, setPersonalEqEnabled, usePersonalEq } from "../settings/personalEq";
+import { formatNumber, getLocale, LANGUAGES, msg, resolveLanguage, setLanguage, t, tn, useLanguageSetting, useT, type LanguageSetting } from "../../i18n";
+import { getInvokeErrorMessage } from "../../internal/appSettings";
 import {
   MAX_CROSSFADE_SEC,
   setCrossfadeSec,
@@ -40,6 +58,13 @@ import {
   BugIcon,
   DownloadIcon,
   EqualizerIcon,
+  SoundProfileIcon,
+  HeadphonesIcon,
+  ImageIcon,
+  GlobalIcon,
+  BackupIcon,
+  ImportIcon,
+  ExportIcon,
   FolderAddIcon,
   FolderIcon,
   FolderOpenIcon,
@@ -231,7 +256,7 @@ import {
   setLastFmScrobblingEnabled,
   useLastFmScrobblingEnabled,
 } from "../settings/lastfm";
-import { isLinux, isMacOS, isMobile, isTilingWindowManager, subscribeTilingWindowManager } from "../platform";
+import { isAndroid, isLinux, isMacOS, isMobile, isTilingWindowManager, subscribeTilingWindowManager } from "../platform";
 import { GITHUB_NEW_ISSUE_URL, GITHUB_REPOSITORY_URL } from "../links";
 import { AccountAvatar, AccountSwitcher, AddGoogleAccountButton, GoogleAccountSwitcher } from "../components/AccountSwitcher";
 import {
@@ -271,6 +296,7 @@ const SETTING_LABEL =
  * wraps a native colour input. Style tiles preview their own shape, depth and translucency.
  */
 function AppearancePicker() {
+  const t = useT();
   const accent = useAccent();
   const customAccent = useCustomAccent();
   const style = useStyle();
@@ -278,7 +304,7 @@ function AppearancePicker() {
   return (
     <>
       <div className="flex flex-col gap-2.5">
-        <h3 className="text-sm font-medium text-foreground" id="accent-settings-title">Accent colour</h3>
+        <h3 className="text-sm font-medium text-foreground" id="accent-settings-title">{t("Accent colour")}</h3>
         <div className="flex flex-wrap gap-2.5" role="radiogroup" aria-labelledby="accent-settings-title">
           {ACCENTS.map((option) => {
             const selected = accent === option.id;
@@ -288,8 +314,8 @@ function AppearancePicker() {
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                aria-label={option.label}
-                title={option.label}
+                aria-label={t(option.label)}
+                title={t(option.label)}
                 onClick={() => setAccent(option.id)}
                 className={cn(
                   "pressable grid size-10 place-items-center rounded-full ring-offset-2 ring-offset-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -318,8 +344,8 @@ function AppearancePicker() {
                 type="button"
                 role="radio"
                 aria-checked={accent === "custom"}
-                aria-label="Custom colour"
-                title="Custom colour"
+                aria-label={t("Custom colour")}
+                title={t("Custom colour")}
                 onClick={() => setPickerOpen((open) => !open)}
                 className={cn(
                   "pressable grid size-10 place-items-center rounded-full ring-offset-2 ring-offset-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -349,11 +375,33 @@ function AppearancePicker() {
               }}
             />
           </FloatingPanel>
+          {/* Follows the playing song's cover: the whole app re-tints with each track. */}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={accent === "dynamic"}
+            aria-label={t("From the cover")}
+            title={t("From the cover: changes with each song")}
+            onClick={() => setAccent("dynamic")}
+            className={cn(
+              "pressable relative grid size-10 place-items-center overflow-hidden rounded-full ring-offset-2 ring-offset-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              accent === "dynamic" && "ring-2 ring-foreground",
+            )}
+            style={{
+              background: "radial-gradient(circle at 30% 30%, #ffe600, transparent 55%), radial-gradient(circle at 70% 70%, #00d1ff, transparent 55%), radial-gradient(circle at 70% 25%, #ff2e88, transparent 55%), #1c1c1c",
+            }}
+          >
+            {accent === "dynamic" ? (
+              <CheckActiveIcon size={18} className="text-white drop-shadow" aria-hidden="true" />
+            ) : (
+              <ImageIcon size={18} className="text-white drop-shadow" aria-hidden="true" />
+            )}
+          </button>
         </div>
       </div>
 
       <div className="flex flex-col gap-2.5">
-        <h3 className="text-sm font-medium text-foreground" id="style-settings-title">Style</h3>
+        <h3 className="text-sm font-medium text-foreground" id="style-settings-title">{t("Style")}</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-labelledby="style-settings-title">
           {STYLES.map((option) => {
             const selected = style === option.id;
@@ -375,8 +423,8 @@ function AppearancePicker() {
                 )}
               >
                 <StylePreview style={option.id} />
-                <span className="text-sm font-semibold text-foreground">{option.label}</span>
-                <span className="text-xs text-muted-foreground">{option.hint}</span>
+                <span className="text-sm font-semibold text-foreground">{t(option.label)}</span>
+                <span className="text-xs text-muted-foreground">{t(option.hint)}</span>
               </button>
             );
           })}
@@ -419,6 +467,9 @@ const SPEED_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] as const;
  * Settings too. Both are remembered across launches by the player itself.
  */
 function SpeedPitchSettings({ rustEngine }: { rustEngine: boolean }) {
+  const t = useT();
+  // Bit-perfect output plays at unity speed and pitch; the controls would do nothing.
+  const bitPerfect = useBitPerfect();
   const [rate, setRate] = useState(() => playerController.getPlaybackRate());
   const [pitch, setPitch] = useState(() => playerController.getPitch());
   const applyRate = (next: number) => {
@@ -435,12 +486,16 @@ function SpeedPitchSettings({ rustEngine }: { rustEngine: boolean }) {
       active ? "bg-primary text-primary-foreground" : "bg-muted/60 text-foreground hover:bg-muted",
     );
   return (
-    <section className={SETTINGS_CARD} aria-labelledby="speed-settings-title">
+    <section
+      className={cn(SETTINGS_CARD, bitPerfect && "pointer-events-none opacity-50")}
+      aria-labelledby="speed-settings-title"
+      aria-disabled={bitPerfect || undefined}
+    >
       <SettingsCardHeader
-        title="Speed & pitch"
+        title={t("Speed & pitch")}
         titleId="speed-settings-title"
         icon={<SpeedIcon size={18} aria-hidden="true" />}
-        description="Change tempo without chipmunk voices, or key without changing tempo."
+        description={t("Change tempo without chipmunk voices, or key without changing tempo.")}
         status={
           rate !== 1 || pitch !== 0 ? (
             <button
@@ -451,14 +506,14 @@ function SpeedPitchSettings({ rustEngine }: { rustEngine: boolean }) {
                 applyPitch(0);
               }}
             >
-              Reset
+              {t("Reset")}
             </button>
           ) : undefined
         }
       />
       <div className="flex flex-col gap-2">
         <span className="text-sm font-medium text-foreground" id="speed-row-label">
-          Speed <span className="tabular-nums text-muted-foreground">· {rate}×</span>
+          {t("Speed")} <span className="tabular-nums text-muted-foreground">· {rate}×</span>
         </span>
         <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-labelledby="speed-row-label">
           {SPEED_STEPS.map((value) => (
@@ -478,15 +533,15 @@ function SpeedPitchSettings({ rustEngine }: { rustEngine: boolean }) {
       {rustEngine ? (
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium text-foreground" id="pitch-row-label">
-            Pitch{" "}
+            {t("Pitch")}{" "}
             <span className="tabular-nums text-muted-foreground">
-              · {pitch === 0 ? "original key" : `${pitch > 0 ? "+" : ""}${pitch} semitone${Math.abs(pitch) === 1 ? "" : "s"}`}
+              · {pitch === 0 ? t("original key") : tn("{value} semitone", "{value} semitones", Math.abs(pitch), { value: `${pitch > 0 ? "+" : ""}${pitch}` })}
             </span>
           </span>
           <div className="flex items-center gap-2" role="group" aria-labelledby="pitch-row-label">
             <button
               type="button"
-              aria-label="Lower pitch a semitone"
+              aria-label={t("Lower pitch a semitone")}
               className={cn(chip(false), "flex-none text-lg")}
               disabled={pitch <= -12}
               onClick={() => applyPitch(pitch - 1)}
@@ -499,13 +554,13 @@ function SpeedPitchSettings({ rustEngine }: { rustEngine: boolean }) {
               max={12}
               step={1}
               value={pitch}
-              aria-label="Pitch in semitones"
+              aria-label={t("Pitch in semitones")}
               className="h-10 min-w-0 flex-1 accent-[var(--color-primary)]"
               onChange={(event) => applyPitch(Number(event.target.value))}
             />
             <button
               type="button"
-              aria-label="Raise pitch a semitone"
+              aria-label={t("Raise pitch a semitone")}
               className={cn(chip(false), "flex-none text-lg")}
               disabled={pitch >= 12}
               onClick={() => applyPitch(pitch + 1)}
@@ -515,7 +570,7 @@ function SpeedPitchSettings({ rustEngine }: { rustEngine: boolean }) {
           </div>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">Pitch needs the Rust audio engine.</p>
+        <p className="text-sm text-muted-foreground">{t("Pitch needs the Rust audio engine.")}</p>
       )}
     </section>
   );
@@ -561,12 +616,12 @@ const SETTINGS_CARD = "flex flex-col gap-5 rounded-card bg-card/60 p-6 shadow-ca
  * "liking songs stopped working" into a report somebody can act on.
  */
 function formatSessionAge(confirmedAt: number | null): string {
-  if (confirmedAt === null) return "not yet";
+  if (confirmedAt === null) return t("not yet");
   const minutes = Math.floor((Date.now() - confirmedAt) / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+  if (minutes < 1) return t("just now");
+  if (minutes < 60) return tn("{n} minute ago", "{n} minutes ago", minutes);
   const hours = Math.floor(minutes / 60);
-  return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  return tn("{n} hour ago", "{n} hours ago", hours);
 }
 
 /**
@@ -576,22 +631,364 @@ function formatSessionAge(confirmedAt: number | null): string {
 const SETTINGS_FIELD =
   "min-w-0 rounded-lg bg-background px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-inset focus:ring-ring/60";
 
+/** One file with settings, sound profiles, local playlists, history, stats and downloads list. */
+function BackupSettings() {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<BackupFile | null>(null);
+  const run = async (task: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await task();
+    } catch (error) {
+      showNotice(getInvokeErrorMessage(error), 6000);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className={SETTINGS_CARD} aria-labelledby="backup-settings-title">
+      <SettingsCardHeader
+        title={t("Backup")}
+        titleId="backup-settings-title"
+        icon={<BackupIcon size={18} aria-hidden="true" />}
+        description={t("Settings, sound profiles, local playlists, history, stats and what you downloaded, in one file. Never your sign-in.")}
+      />
+      {pending ? (
+        <div className="flex flex-col gap-3 rounded-row bg-background/40 p-3">
+          <p className="text-sm text-foreground">
+            {t("Restore the backup from {date}?", {
+              date: pending.createdAt ? new Date(pending.createdAt).toLocaleString(getLocale()) : t("this file"),
+            })}{" "}
+            {tn("{n} setting", "{n} settings", Object.keys(pending.settings).length)}
+            {pending.downloads.length
+              ? tn(", {n} song to download again", ", {n} songs to download again", pending.downloads.length)
+              : ""}.{" "}
+            {t("Your current settings are replaced and Zuno restarts.")}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              className={CARD_BUTTON_PRIMARY}
+              onClick={() => void run(() => restoreBackup(pending))}
+            >
+              {t("Restore and restart")}
+            </button>
+            <button type="button" className={CARD_BUTTON} onClick={() => setPending(null)}>
+              {t("Cancel")}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            className={CARD_BUTTON}
+            onClick={() => void run(async () => {
+              if (await exportBackup()) showNotice(t("Backup saved"));
+            })}
+          >
+            <ExportIcon size={18} aria-hidden="true" />
+            {t("Back up")}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            className={CARD_BUTTON}
+            onClick={() => void run(async () => {
+              const backup = await pickBackup();
+              if (backup) setPending(backup);
+            })}
+          >
+            <ImportIcon size={18} aria-hidden="true" />
+            {t("Restore…")}
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Downloads only, no network: Home, search and the queue all behave as if offline. */
+function OfflineModeSetting() {
+  const t = useT();
+  const on = useOfflineMode();
+  return (
+    <SettingRow
+      title={t("Offline mode")}
+      description={t("Play only what's downloaded. Nothing is streamed or fetched, so it saves mobile data.")}
+    >
+      {(labelId) => <Switch checked={on} onCheckedChange={setOfflineMode} aria-labelledby={labelId} />}
+    </SettingRow>
+  );
+}
+
+/** Learning a personal EQ from liked songs: on/off, what has been learned, and a reset. */
+function PersonalEqSettings() {
+  const t = useT();
+  const personal = usePersonalEq();
+  const [confirm, setConfirm] = useState(false);
+  return (
+    <div className="flex flex-col gap-2 rounded-row bg-background/40 p-3">
+      <SettingRow
+        title={t("Learn from my favourite songs")}
+        description={t("Builds \"For you\" and \"Made for you\" EQ curves from the songs you like. Everything stays on this device.")}
+      >
+        {(labelId) => (
+          <Switch checked={personal.enabled} onCheckedChange={setPersonalEqEnabled} aria-labelledby={labelId} />
+        )}
+      </SettingRow>
+      {personal.enabled && (personal.learnedSongs > 0 || personal.analysedSongs > 0) ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">
+            {t("Learned from {learned} plays · {analysed} songs analysed", {
+              learned: personal.learnedSongs,
+              analysed: personal.analysedSongs,
+            })}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              if (!confirm) {
+                setConfirm(true);
+                return;
+              }
+              clearPersonalEq();
+              setConfirm(false);
+            }}
+            onBlur={() => setConfirm(false)}
+            className={cn(CARD_BUTTON, confirm && "text-destructive")}
+          >
+            <TrashIcon size={16} aria-hidden="true" />
+            {confirm ? t("Tap again to clear") : t("Clear what was learned")}
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Interface language: follows the system unless the user picks one. */
+function LanguageSettings() {
+  const t = useT();
+  const setting = useLanguageSetting();
+  const system = LANGUAGES.find((language) => language.code === resolveLanguage(navigator.languages ?? [navigator.language]));
+  return (
+    <section className={SETTINGS_CARD} aria-labelledby="language-settings-title">
+      <SettingsCardHeader
+        title={t("Language")}
+        titleId="language-settings-title"
+        icon={<GlobalIcon size={18} aria-hidden="true" />}
+        description={t("The language of menus and buttons. Song titles and lyrics stay as they are.")}
+      />
+      <SettingRow title={t("App language")}>
+        {(labelId) => (
+          <Select
+            className="w-56 setting-wide"
+            value={setting}
+            onValueChange={(value) => void setLanguage(value as LanguageSetting)}
+          >
+            <SelectTrigger aria-labelledby={labelId}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="auto">
+                {t("Automatic")}{system ? ` (${system.label})` : ""}
+              </SelectItem>
+              {LANGUAGES.map((language) => (
+                <SelectItem key={language.code} value={language.code}>
+                  {language.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </SettingRow>
+    </section>
+  );
+}
+
+/** One-button headset gestures and resume-on-connect (Android). */
+function HeadsetSettingsCard() {
+  const t = useT();
+  const settings = useHeadsetSettings();
+  const carDevices = useCarDevices();
+  const device = useCurrentOutputDevice();
+  const gestureRow = (key: "double" | "triple" | "long", title: string, description: string) => (
+    <SettingRow title={title} description={description}>
+      {(labelId) => (
+        <Select
+          className="w-44"
+          value={settings[key]}
+          onValueChange={(value) => setHeadsetSettings({ [key]: value as HeadsetGesture } as Partial<HeadsetSettingsValue>)}
+        >
+          <SelectTrigger aria-labelledby={labelId}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {HEADSET_GESTURES.map((gesture) => (
+              <SelectItem key={gesture.value} value={gesture.value}>
+                {t(gesture.label)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+    </SettingRow>
+  );
+  return (
+    <section className={SETTINGS_CARD} aria-labelledby="headset-settings-title">
+      <SettingsCardHeader
+        title={t("Headphones")}
+        titleId="headset-settings-title"
+        icon={<HeadphonesIcon size={18} aria-hidden="true" />}
+        description={
+          device
+            ? t("Playing through {device}. Buttons work with the screen off.", { device: device.name })
+            : t("Earbud and headset buttons work with the screen off.")
+        }
+      />
+      <div className="flex flex-col">
+        <p className="text-sm text-muted-foreground">{t("One press always plays or pauses.")}</p>
+        {gestureRow("double", t("Double press"), t("Press the button twice quickly."))}
+        {gestureRow("triple", t("Triple press"), t("Press it three times."))}
+        {gestureRow("long", t("Press and hold"), t("Hold the button for a second."))}
+        {device && device.kind !== "speaker" ? (
+          <SettingRow
+            title={t("{device} is my car", { device: device.name })}
+            description={t("Open car mode automatically when it connects.")}
+          >
+            {(labelId) => (
+              <Switch
+                checked={carDevices.includes(device.key)}
+                onCheckedChange={(isCar) => setCarDevice(device.key, isCar)}
+                aria-labelledby={labelId}
+              />
+            )}
+          </SettingRow>
+        ) : null}
+        <SettingRow
+          title={t("Resume when headphones connect")}
+          description={t("Plugging in or pairing headphones picks up where you paused.")}
+        >
+          {(labelId) => (
+            <Switch
+              checked={settings.resumeOnConnect}
+              onCheckedChange={(resumeOnConnect) => setHeadsetSettings({ resumeOnConnect })}
+              aria-labelledby={labelId}
+            />
+          )}
+        </SettingRow>
+      </div>
+    </section>
+  );
+}
+
+/** Saved sound setups: save, recall, import/export, link to a device. */
+function SoundProfilesSettings({ engineMode }: { engineMode: AudioEngineMode }) {
+  const t = useT();
+  const available = engineMode === "rust";
+  return (
+    <section className={SETTINGS_CARD} aria-labelledby="sound-profiles-title">
+      <SettingsCardHeader
+        title={t("Sound profiles")}
+        titleId="sound-profiles-title"
+        icon={<SoundProfileIcon size={18} aria-hidden="true" />}
+        description={
+          available
+            ? t("EQ, bass, balance, speed and pitch together. Share them as files or link one to your headphones.")
+            : t("Needs the Rust playback method.")
+        }
+      />
+      <SoundProfilesPanel disabled={!available} />
+    </section>
+  );
+}
+
+/** Bit-perfect output for external DACs, with what the device is really receiving. */
+function BitPerfectSettings({ engineMode }: { engineMode: AudioEngineMode }) {
+  const t = useT();
+  const enabled = useBitPerfect();
+  const available = engineMode === "rust";
+  const format = useOutputFormat();
+  const exact = Boolean(format && format.sourceRate > 0 && format.deviceRate === format.sourceRate);
+  const khz = (hz: number) => `${formatNumber(hz / 1000, { maximumFractionDigits: 1 })} kHz`;
+  return (
+    <section className={SETTINGS_CARD} aria-labelledby="bit-perfect-title">
+      <SettingsCardHeader
+        title={t("Bit-perfect output (DAC)")}
+        titleId="bit-perfect-title"
+        icon={<HeadphonesIcon size={18} aria-hidden="true" />}
+        description={
+          available
+            ? t("Sends each song to your DAC exactly as decoded: its own sample rate, no EQ, effects or volume changes. Use the DAC's volume.")
+            : t("Needs the Rust playback method.")
+        }
+        status={
+          <Switch
+            checked={enabled}
+            onCheckedChange={(next) => {
+              setBitPerfect(next);
+              if (next) {
+                playerController.setPlaybackRate(1);
+                playerController.setPitch(0);
+              }
+            }}
+            disabled={!available}
+            aria-labelledby="bit-perfect-title"
+          />
+        }
+      />
+      {enabled && format && format.deviceRate > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-row bg-background/40 p-3 text-sm">
+          <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", exact ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground")}>
+            {exact ? t("Bit-perfect") : t("Resampled")}
+          </span>
+          <span className="tabular-nums text-foreground">
+            {format.sourceRate > 0 ? `${t("Song")} ${khz(format.sourceRate)} → ` : ""}
+            {t("Device")} {khz(format.deviceRate)} · {format.deviceFormat} · {format.deviceChannels} ch
+          </span>
+          {!exact && format.sourceRate > 0 ? (
+            <span className="w-full text-xs text-muted-foreground">
+              {t("This device does not accept {rate}, so it is converted. Try another output or DAC setting.", { rate: khz(format.sourceRate) })}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      {enabled ? (
+        <p className="text-xs text-muted-foreground">
+          {t("YouTube streams are compressed (Opus/AAC): they reach the DAC unaltered, but do not become lossless. Local FLAC/WAV files get the full benefit.")}{" "}
+          {isAndroid
+            ? t("On Android 14 or newer with a USB DAC, Zuno also asks the system for its direct (bit-perfect) path.")
+            : t("On Windows, set the DAC's format in Sound settings to match your music for a fully bit-perfect path.")}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 /** The equaliser card. The switch is a bypass: off dims the curve but leaves it editable. */
 function EqualizerSettings({ engineMode }: { engineMode: AudioEngineMode }) {
+  const t = useT();
   const enabled = useEqualizerEnabled();
+  const bitPerfect = useBitPerfect();
   // Only the Rust engine has the samples; the YouTube fallback plays unequalised.
-  const available = engineMode === "rust";
+  const available = engineMode === "rust" && !bitPerfect;
 
   return (
     <section className={SETTINGS_CARD} aria-labelledby="equalizer-settings-title">
       <SettingsCardHeader
-        title="Equaliser"
+        title={t("Equaliser")}
         titleId="equalizer-settings-title"
         icon={<EqualizerIcon size={18} aria-hidden="true" />}
         description={
-          available
-            ? "Ten bands, shaped live on the track that is playing."
-            : "Needs the Rust playback method."
+          bitPerfect
+            ? t("Off while bit-perfect output is on.")
+            : available
+              ? t("Ten bands, shaped live on the track that is playing.")
+              : t("Needs the Rust playback method.")
         }
         status={
           <Switch
@@ -603,6 +1000,7 @@ function EqualizerSettings({ engineMode }: { engineMode: AudioEngineMode }) {
         }
       />
       <EqualizerPanel disabled={!available} />
+      <PersonalEqSettings />
     </section>
   );
 }
@@ -614,6 +1012,7 @@ function EqualizerSettings({ engineMode }: { engineMode: AudioEngineMode }) {
  * and follow whatever the OS default routes to, same as any other browser tab.
  */
 function OutputDeviceSetting({ engineMode }: { engineMode: AudioEngineMode }) {
+  const t = useT();
   const selected = useOutputDevice();
   const [devices, setDevices] = useState<OutputDevice[]>([]);
   const available = engineMode === "rust";
@@ -633,8 +1032,8 @@ function OutputDeviceSetting({ engineMode }: { engineMode: AudioEngineMode }) {
 
   return (
     <SettingRow
-      title="Output device"
-      description="Which sound card the Rust engine plays to."
+      title={t("Output device")}
+      description={t("Which sound card the Rust engine plays to.")}
       disabled={!available}
     >
       {(labelId) => (
@@ -649,7 +1048,7 @@ function OutputDeviceSetting({ engineMode }: { engineMode: AudioEngineMode }) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={SYSTEM_DEFAULT_DEVICE}>System default</SelectItem>
+            <SelectItem value={SYSTEM_DEFAULT_DEVICE}>{t("System default")}</SelectItem>
             {devices.map((device) => (
               <SelectItem key={device.id} value={device.id}>
                 {device.name}
@@ -712,6 +1111,7 @@ function SettingRow({
  * and eleven of them sitting open in Settings read as eleven decisions the user has to make.
  */
 function PotatoPcSettings() {
+  const t = useT();
   const potatoPcMode = usePotatoPcMode();
   const [isManaging, setIsManaging] = useState(false);
   const panelId = useId();
@@ -719,8 +1119,8 @@ function PotatoPcSettings() {
   return (
     <>
       <SettingRow
-        title="Potato PC"
-        description="Turns off animations, blur, shadows and the ambient artwork, and switches to opaque surfaces. Manage picks them off one at a time."
+        title={t("Potato PC")}
+        description={t("Turns off animations, blur, shadows and the ambient artwork, and switches to opaque surfaces. Manage picks them off one at a time.")}
       >
         {(labelId) => (
           <>
@@ -731,7 +1131,7 @@ function PotatoPcSettings() {
               aria-controls={panelId}
               className="rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
-              {isManaging ? "Done" : "Manage"}
+              {isManaging ? t("Done") : t("Manage")}
             </button>
             <Switch
               checked={potatoPcMode}
@@ -745,8 +1145,7 @@ function PotatoPcSettings() {
       {isManaging && (
         <div id={panelId} className="flex flex-col">
           <p className="pb-1 pt-2 text-sm text-muted-foreground">
-            One switch per effect. Turn them off one at a time to find which one your machine is
-            paying for.
+            {t("One switch per effect. Turn them off one at a time to find which one your machine is paying for.")}
           </p>
           {RENDER_EFFECTS.map((effect) => (
             <RenderEffectToggle key={effect.id} effect={effect} />
@@ -765,11 +1164,12 @@ function PotatoPcSettings() {
  * empty list has to mean "nothing disabled" for a fresh install to look normal.
  */
 function RenderEffectToggle({ effect }: { effect: (typeof RENDER_EFFECTS)[number] }) {
+  const t = useT();
   const disabled = useEffectDisabled(effect.id);
   return (
     <SettingToggle
-      title={effect.label}
-      description={effect.description}
+      title={t(effect.label)}
+      description={t(effect.description)}
       checked={!disabled}
       onCheckedChange={(checked) => setEffectDisabled(effect.id, !checked)}
     />
@@ -778,11 +1178,12 @@ function RenderEffectToggle({ effect }: { effect: (typeof RENDER_EFFECTS)[number
 
 /** Its own component so each row can hold its own subscription rather than one per item here. */
 function ToolbarItemToggle({ item }: { item: (typeof TOOLBAR_ITEMS)[number] }) {
+  const t = useT();
   const visible = useToolbarItemVisible(item.id);
   return (
     <SettingToggle
-      title={item.label}
-      description={item.description}
+      title={t(item.label)}
+      description={t(item.description)}
       checked={visible}
       onCheckedChange={(checked) => setToolbarItemVisible(item.id, checked)}
     />
@@ -866,17 +1267,17 @@ const SETTINGS_TABS: Array<{
   description: string;
   icon: typeof UserIcon;
 }> = [
-  { id: "about", label: "Account", description: "Sign-in, integrations, updates", icon: UserIcon },
-  { id: "appearance", label: "Appearance", description: "Theme and motion", icon: PaletteIcon },
+  { id: "about", label: msg("Account"), description: msg("Sign-in, integrations, updates"), icon: UserIcon },
+  { id: "appearance", label: msg("Appearance"), description: msg("Theme and motion"), icon: PaletteIcon },
   {
     id: "playback",
-    label: "Playback",
-    description: "Transitions and session",
+    label: msg("Playback"),
+    description: msg("Transitions and session"),
     icon: PlayIcon,
   },
-  { id: "system", label: "Library", description: "Cache and local files", icon: FolderIcon },
-  { id: "window", label: "Window", description: "Chrome and mini player", icon: QueuePanelIcon },
-  { id: "shortcuts", label: "Shortcuts", description: "Keyboard bindings", icon: KeyIcon },
+  { id: "system", label: msg("Library"), description: msg("Cache and local files"), icon: FolderIcon },
+  { id: "window", label: msg("Window"), description: msg("Chrome and mini player"), icon: QueuePanelIcon },
+  { id: "shortcuts", label: msg("Shortcuts"), description: msg("Keyboard bindings"), icon: KeyIcon },
 ];
 
 const THEME_OPTIONS: Array<{
@@ -885,12 +1286,12 @@ const THEME_OPTIONS: Array<{
   hint: string;
   swatch: string;
 }> = [
-  { value: "light", label: "Light", hint: "Always light", swatch: "bg-white" },
-  { value: "dark", label: "Dark", hint: "Always dark", swatch: "bg-neutral-900" },
+  { value: "light", label: msg("Light"), hint: msg("Always light"), swatch: "bg-white" },
+  { value: "dark", label: msg("Dark"), hint: msg("Always dark"), swatch: "bg-neutral-900" },
   {
     value: "system",
-    label: "System",
-    hint: "Match the OS",
+    label: msg("System"),
+    hint: msg("Match the OS"),
     swatch: "bg-linear-to-br from-white to-neutral-900",
   },
 ];
@@ -910,6 +1311,7 @@ export function SettingsPage({
   onSignIn,
   onDeleteAllAppData,
 }: SettingsPageProps) {
+  const t = useT();
   const [cacheStats, setCacheStats] = useState<CacheStats | null>(null);
   const [cacheSizeGb, setCacheSizeGb] = useState(DEFAULT_CACHE_SIZE_GB.toString());
   const [cacheBusy, setCacheBusy] = useState(false);
@@ -1048,12 +1450,12 @@ export function SettingsPage({
         setCacheSizeGb((stats.maxBytes / 1024 ** 3).toString());
       })
       .catch(() => {
-        if (active) setCacheError("Unable to load cache settings.");
+        if (active) setCacheError(t("Unable to load cache settings."));
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let active = true;
@@ -1077,13 +1479,13 @@ export function SettingsPage({
       })
       .catch((error) => {
         if (active) {
-          setLastFmError(error instanceof Error ? error.message : "Unable to load Last.fm connection.");
+          setLastFmError(error instanceof Error ? error.message : t("Unable to load Last.fm connection."));
         }
       });
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!resetSettingsConfirming) return undefined;
@@ -1113,7 +1515,7 @@ export function SettingsPage({
     try {
       await installUpdate(updateResult, setUpdateProgress);
     } catch {
-      setUpdateError("Unable to install the update. You can download it from GitHub.");
+      setUpdateError(t("Unable to install the update. You can download it from GitHub."));
       setUpdateStatus("error");
     }
   };
@@ -1125,7 +1527,7 @@ export function SettingsPage({
         if (active) setAutostartEnabledState(enabled);
       })
       .catch(() => {
-        if (active) setAutostartError("Unable to load the startup setting.");
+        if (active) setAutostartError(t("Unable to load the startup setting."));
       })
       .finally(() => {
         if (active) setAutostartLoading(false);
@@ -1133,7 +1535,7 @@ export function SettingsPage({
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   const handleAutostartChange = async (enabled: boolean) => {
     setAutostartLoading(true);
@@ -1142,7 +1544,7 @@ export function SettingsPage({
       await setAutostartEnabled(enabled);
       setAutostartEnabledState(enabled);
     } catch {
-      setAutostartError("Unable to update the startup setting.");
+      setAutostartError(t("Unable to update the startup setting."));
     } finally {
       setAutostartLoading(false);
     }
@@ -1154,7 +1556,7 @@ export function SettingsPage({
     try {
       await invoke("open_current_log");
     } catch {
-      setLogError("Unable to open the log file.");
+      setLogError(t("Unable to open the log file."));
     } finally {
       setLogOpening(false);
     }
@@ -1172,7 +1574,7 @@ export function SettingsPage({
   const saveCacheSize = async (value: string = cacheSizeGb) => {
     const sizeGb = Number(value);
     if (!Number.isFinite(sizeGb) || sizeGb < 0.25 || sizeGb > 64) {
-      setCacheError("Cache size must be between 0.25 GB and 64 GB.");
+      setCacheError(t("Cache size must be between 0.25 GB and 64 GB."));
       return;
     }
 
@@ -1181,7 +1583,7 @@ export function SettingsPage({
     try {
       setCacheStats(await setCacheMaxBytes(Math.round(sizeGb * 1024 ** 3)));
     } catch {
-      setCacheError("Unable to save the cache size.");
+      setCacheError(t("Unable to save the cache size."));
     } finally {
       setCacheBusy(false);
     }
@@ -1193,7 +1595,7 @@ export function SettingsPage({
     try {
       setCacheStats(await clearCache());
     } catch {
-      setCacheError("Unable to clear cached content.");
+      setCacheError(t("Unable to clear cached content."));
     } finally {
       setCacheBusy(false);
     }
@@ -1213,7 +1615,7 @@ export function SettingsPage({
         window.location.reload();
       });
     } catch {
-      setResetSettingsError("Unable to delete all app data.");
+      setResetSettingsError(t("Unable to delete all app data."));
       setResetSettingsBusy(false);
       setResetSettingsConfirming(false);
     }
@@ -1225,7 +1627,7 @@ export function SettingsPage({
       createLocalPlaylist(localPlaylistName);
       setLocalPlaylistName("");
     } catch (error) {
-      setLocalPlaylistError(error instanceof Error ? error.message : "Unable to create local playlist.");
+      setLocalPlaylistError(error instanceof Error ? error.message : t("Unable to create local playlist."));
     }
   };
 
@@ -1236,7 +1638,7 @@ export function SettingsPage({
       const auth = await LastFmService.startAuth();
       setLastFmAuth(auth);
     } catch (error) {
-      setLastFmError(error instanceof Error ? error.message : "Unable to start Last.fm sign-in.");
+      setLastFmError(error instanceof Error ? error.message : t("Unable to start Last.fm sign-in."));
     } finally {
       setLastFmBusy(false);
     }
@@ -1252,7 +1654,7 @@ export function SettingsPage({
       setLastFmAuth(null);
       setLastFmScrobblingEnabled(true);
     } catch (error) {
-      setLastFmError(error instanceof Error ? error.message : "Unable to finish Last.fm sign-in.");
+      setLastFmError(error instanceof Error ? error.message : t("Unable to finish Last.fm sign-in."));
     } finally {
       setLastFmBusy(false);
     }
@@ -1266,7 +1668,7 @@ export function SettingsPage({
       setLastFmSession(null);
       setLastFmAuth(null);
     } catch (error) {
-      setLastFmError(error instanceof Error ? error.message : "Unable to disconnect Last.fm.");
+      setLastFmError(error instanceof Error ? error.message : t("Unable to disconnect Last.fm."));
     } finally {
       setLastFmBusy(false);
     }
@@ -1276,7 +1678,7 @@ export function SettingsPage({
     setLocalPlaylistError(null);
     const path = localPlaylistPathInputs[playlistId]?.trim() ?? "";
     if (!path) {
-      setLocalPlaylistError("Enter a folder path before adding it.");
+      setLocalPlaylistError(t("Enter a folder path before adding it."));
       return;
     }
     addLocalPlaylistPath(playlistId, path);
@@ -1290,7 +1692,7 @@ export function SettingsPage({
       const selected = await openDialog({
         directory: true,
         multiple: false,
-        title: "Choose music folder",
+        title: t("Choose music folder"),
       });
       if (typeof selected !== "string") return;
       addLocalPlaylistPath(playlistId, selected);
@@ -1299,7 +1701,7 @@ export function SettingsPage({
         [playlistId]: "",
       }));
     } catch {
-      setLocalPlaylistError("Unable to open the folder picker.");
+      setLocalPlaylistError(t("Unable to open the folder picker."));
     } finally {
       setLocalPlaylistBrowsingId(null);
     }
@@ -1359,9 +1761,9 @@ export function SettingsPage({
     <main className="@container/settings flex min-h-0 flex-1 flex-col gap-7">
       <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 @max-4xl/settings:flex-col @max-4xl/settings:items-stretch">
         <div className="flex flex-col gap-1.5">
-          <h1>Settings</h1>
+          <h1>{t("Settings")}</h1>
           <p className="text-sm text-muted-foreground">
-            Manage your account, library, appearance, and window behaviour.
+            {t("Manage your account, library, appearance, and window behaviour.")}
           </p>
         </div>
 
@@ -1379,12 +1781,12 @@ export function SettingsPage({
             <>
               <ExternalLinkButton
                 icon={<StarIcon size={16} aria-hidden="true" />}
-                label="Star on GitHub"
+                label={t("Star on GitHub")}
                 url={GITHUB_REPOSITORY_URL}
               />
               <ExternalLinkButton
                 icon={<BugIcon size={16} aria-hidden="true" />}
-                label="Report an issue"
+                label={t("Report an issue")}
                 url={GITHUB_NEW_ISSUE_URL}
               />
             </>
@@ -1426,8 +1828,8 @@ export function SettingsPage({
                   <Icon size={20} aria-hidden="true" />
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-base font-semibold text-foreground">{tab.label}</span>
-                  <span className="truncate text-sm text-muted-foreground">{tab.description}</span>
+                  <span className="truncate text-base font-semibold text-foreground">{t(tab.label)}</span>
+                  <span className="truncate text-sm text-muted-foreground">{t(tab.description)}</span>
                 </span>
                 <ChevronDownIcon
                   size={20}
@@ -1441,7 +1843,7 @@ export function SettingsPage({
         <nav
           className="sticky top-0 flex w-56 shrink-0 flex-col gap-0.5 @max-4xl/settings:relative @max-4xl/settings:w-full @max-4xl/settings:flex-row @max-4xl/settings:overflow-x-auto @max-4xl/settings:rounded-xl @max-4xl/settings:bg-card/50 @max-4xl/settings:p-1"
           role="tablist"
-          aria-label="Settings categories"
+          aria-label={t("Settings categories")}
         >
           {/* Mobile has no window chrome and no keyboard to bind. */}
           {SETTINGS_TABS.filter((tab) => !isMobile || (tab.id !== "window" && tab.id !== "shortcuts")).map((tab) => {
@@ -1476,9 +1878,9 @@ export function SettingsPage({
                   <Icon size={17} aria-hidden="true" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium">{tab.label}</span>
+                  <span className="block truncate text-sm font-medium">{t(tab.label)}</span>
                   <span className="block truncate text-xs text-muted-foreground @max-4xl/settings:hidden">
-                    {tab.description}
+                    {t(tab.description)}
                   </span>
                 </span>
               </button>
@@ -1506,19 +1908,19 @@ export function SettingsPage({
                 setSettingsQuery("");
               }}
             />
-          ) : (
+          ) : isMobile && !sectionOpen ? null /* Phones: a closed section mounts nothing. */ : (
             <>
       {activeTab === "about" && (
-        <div className="flex flex-col gap-5" role="tabpanel" aria-label="About settings">
+        <div className="flex flex-col gap-5" role="tabpanel" aria-label={t("About settings")}>
           <section className={SETTINGS_CARD} aria-labelledby="account-settings-title">
             <SettingsCardHeader
-              title="Account"
+              title={t("Account")}
               titleId="account-settings-title"
               icon={<UserIcon size={18} aria-hidden="true" />}
-              description={isSignedIn ? "Signed in to YouTube Music" : "No account connected"}
+              description={isSignedIn ? t("Signed in to YouTube Music") : t("No account connected")}
               status={
                 <span className={isSignedIn ? "text-primary" : "text-muted-foreground"}>
-                  {isSignedIn ? "Connected" : "Signed out"}
+                  {isSignedIn ? t("Connected") : t("Signed out")}
                 </span>
               }
             />
@@ -1538,12 +1940,12 @@ export function SettingsPage({
 
               <div className="flex min-w-0 flex-1 flex-col max-sm:w-full">
                 <span className="truncate text-base font-medium text-foreground">
-                  {isSignedIn ? account?.name || "YouTube Music" : "Not signed in"}
+                  {isSignedIn ? account?.name || "YouTube Music" : t("Not signed in")}
                 </span>
                 <span className="truncate text-sm text-muted-foreground">
                   {isSignedIn
-                    ? `Session confirmed ${formatSessionAge(libraryState.sessionConfirmedAt)}.`
-                    : "Sign in to load your library."}
+                    ? t("Session confirmed {age}.", { age: formatSessionAge(libraryState.sessionConfirmedAt) })
+                    : t("Sign in to load your library.")}
                 </span>
               </div>
 
@@ -1554,7 +1956,7 @@ export function SettingsPage({
                   onClick={() => void libraryController.signOut()}
                 >
                   <LogoutIcon size={18} aria-hidden="true" />
-                  Sign out
+                  {t("Sign out")}
                 </button>
               ) : (
                 <div className="max-sm:flex max-sm:w-full max-sm:justify-center">
@@ -1574,7 +1976,7 @@ export function SettingsPage({
                   libraryController={libraryController}
                   showSingle
                   allowRemove
-                  label="Accounts"
+                  label={t("Accounts")}
                 />
                 <AddGoogleAccountButton disabled={authBusy} onClick={() => void onSignIn()} />
               </div>
@@ -1583,7 +1985,7 @@ export function SettingsPage({
             {/* Renders nothing unless the account actually has more than one channel. */}
             {isSignedIn && (
               <div className="flex flex-col gap-1.5 empty:hidden">
-                <AccountSwitcher libraryController={libraryController} showSingle label="Channel" />
+                <AccountSwitcher libraryController={libraryController} showSingle label={t("Channel")} />
               </div>
             )}
 
@@ -1597,20 +1999,20 @@ export function SettingsPage({
               icon={<LastFmIcon size={18} aria-hidden="true" />}
               description={
                 lastFmSession
-                  ? `Connected as ${lastFmSession.username}`
-                  : "Connect Last.fm to scrobble your listening history."
+                  ? t("Connected as {username}", { username: lastFmSession.username })
+                  : t("Connect Last.fm to scrobble your listening history.")
               }
               status={
                 <span className={lastFmSession ? "text-primary" : "text-muted-foreground"}>
-                  {lastFmSession ? "Connected" : "Signed out"}
+                  {lastFmSession ? t("Connected") : t("Signed out")}
                 </span>
               }
             />
 
             <div className="flex flex-col gap-5">
               <SettingToggle
-                title="Scrobble plays"
-                description="Send now playing updates and scrobbles after a track reaches the Last.fm listening threshold."
+                title={t("Scrobble plays")}
+                description={t("Send now playing updates and scrobbles after a track reaches the Last.fm listening threshold.")}
                 checked={lastFmSession ? lastFmScrobblingEnabled : false}
                 disabled={!lastFmSession}
                 onCheckedChange={setLastFmScrobblingEnabled}
@@ -1618,13 +2020,13 @@ export function SettingsPage({
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                  <strong>Account connection</strong>
+                  <strong>{t("Account connection")}</strong>
                   <span>
                     {lastFmAuth
-                      ? "Approve the connection in your browser, then finish it here."
+                      ? t("Approve the connection in your browser, then finish it here.")
                       : lastFmSession
-                        ? "Disconnecting stops future Last.fm updates from this app."
-                        : "A browser window will open so you can approve this app on Last.fm."}
+                        ? t("Disconnecting stops future Last.fm updates from this app.")
+                        : t("A browser window will open so you can approve this app on Last.fm.")}
                   </span>
                 </span>
                 {lastFmSession ? (
@@ -1635,7 +2037,7 @@ export function SettingsPage({
                     onClick={() => void handleDisconnectLastFm()}
                   >
                     <LastFmIcon size={18} />
-                    {lastFmBusy ? "Disconnecting..." : "Disconnect"}
+                    {lastFmBusy ? t("Disconnecting...") : t("Disconnect")}
                   </button>
                 ) : lastFmAuth ? (
                   <button
@@ -1645,7 +2047,7 @@ export function SettingsPage({
                     onClick={() => void handleFinishLastFmAuth()}
                   >
                     <LastFmIcon size={18} />
-                    {lastFmBusy ? "Finishing..." : "Finish connection"}
+                    {lastFmBusy ? t("Finishing...") : t("Finish connection")}
                   </button>
                 ) : (
                   <button
@@ -1655,7 +2057,7 @@ export function SettingsPage({
                     onClick={() => void handleStartLastFmAuth()}
                   >
                     <LastFmIcon size={18} />
-                    {lastFmBusy ? "Opening..." : "Connect Last.fm"}
+                    {lastFmBusy ? t("Opening...") : t("Connect Last.fm")}
                   </button>
                 )}
               </div>
@@ -1673,14 +2075,14 @@ export function SettingsPage({
 
             <div className="flex flex-col gap-5">
               <SettingToggle
-                title="Show what you're playing"
-                description="Publishes the current track, artist and artwork to your Discord profile. Turning this off clears whatever is showing there now."
+                title={t("Show what you're playing")}
+                description={t("Publishes the current track, artist and artwork to your Discord profile. Turning this off clears whatever is showing there now.")}
                 checked={discordPresenceEnabled}
                 onCheckedChange={(enabled) => void DiscordRpcService.setEnabled(enabled)}
               />
               <SettingToggle
-                title="Hide status when paused"
-                description="Clear your Discord Rich Presence while playback is paused. It returns when playback resumes."
+                title={t("Hide status when paused")}
+                description={t("Clear your Discord Rich Presence while playback is paused. It returns when playback resumes.")}
                 checked={discordHideWhenPaused}
                 disabled={!discordPresenceEnabled}
                 onCheckedChange={(hidden) => void DiscordRpcService.setHideWhenPaused(hidden)}
@@ -1691,14 +2093,14 @@ export function SettingsPage({
 
           <section className={SETTINGS_CARD} aria-labelledby="about-settings-title">
             <SettingsCardHeader
-              title="About Zuno"
+              title={t("About Zuno")}
               titleId="about-settings-title"
               icon={<img src={appLogo} alt="" className="size-6 rounded-md" />}
-              description="Version, updates and help."
+              description={t("Version, updates and help.")}
               status={
                 <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium tabular-nums text-muted-foreground">
                   {installedVersion
-                    ? installedVersion === "Unknown" ? installedVersion : `v${installedVersion}`
+                    ? installedVersion === "Unknown" ? t("Unknown") : `v${installedVersion}`
                     : "…"}
                 </span>
               }
@@ -1706,11 +2108,11 @@ export function SettingsPage({
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                <strong>Updates</strong>
+                <strong>{t("Updates")}</strong>
                 <span>
                   {updateStatus === "current"
-                    ? "You're on the latest version."
-                    : "See whether a newer version is out."}
+                    ? t("You're on the latest version.")
+                    : t("See whether a newer version is out.")}
                 </span>
               </span>
               <button
@@ -1720,7 +2122,7 @@ export function SettingsPage({
                 onClick={() => void handleCheckForUpdates()}
               >
                 <RefreshIcon size={18} aria-hidden="true" />
-                {updateStatus === "checking" ? "Checking…" : "Check for updates"}
+                {updateStatus === "checking" ? t("Checking…") : t("Check for updates")}
               </button>
             </div>
 
@@ -1730,9 +2132,9 @@ export function SettingsPage({
                 <span className="font-medium text-foreground">
                   {updateStatus === "installing"
                     ? updateProgress?.percent !== undefined
-                      ? `Downloading version ${updateResult.version}: ${updateProgress.percent}%`
-                      : `Preparing version ${updateResult.version}…`
-                    : `Version ${updateResult.version} is available.`}
+                      ? t("Downloading version {version}: {percent}%", { version: updateResult.version, percent: updateProgress.percent })
+                      : t("Preparing version {version}…", { version: updateResult.version })
+                    : t("Version {version} is available.", { version: updateResult.version })}
                 </span>
                 <div className="flex flex-wrap gap-2">
                   {updateResult.canInstall && (
@@ -1742,13 +2144,13 @@ export function SettingsPage({
                       disabled={updateStatus === "installing"}
                       onClick={() => void handleInstallUpdate()}
                     >
-                      {updateStatus === "installing" ? "Installing…" : "Install update"}
+                      {updateStatus === "installing" ? t("Installing…") : t("Install update")}
                     </button>
                   )}
                   {/* The one link where a silent failure strands the user: if this cannot
                       open, they have no other route to the download. */}
                   <ExternalLinkButton
-                    label={updateResult.canInstall ? "View changes" : "Download"}
+                    label={updateResult.canInstall ? t("View changes") : t("Download")}
                     url={updateResult.releaseUrl}
                     className="px-4 py-2"
                   />
@@ -1763,18 +2165,18 @@ export function SettingsPage({
             {isMobile ? (
               <div className="flex flex-col gap-2">
                 <span className={SETTING_LABEL}>
-                  <strong>Help and feedback</strong>
-                  <span>Found a bug or have an idea? Tell us on GitHub.</span>
+                  <strong>{t("Help and feedback")}</strong>
+                  <span>{t("Found a bug or have an idea? Tell us on GitHub.")}</span>
                 </span>
                 <div className="flex flex-wrap gap-2">
                   <ExternalLinkButton
                     icon={<BugIcon size={16} aria-hidden="true" />}
-                    label="Report an issue"
+                    label={t("Report an issue")}
                     url={GITHUB_NEW_ISSUE_URL}
                   />
                   <ExternalLinkButton
                     icon={<StarIcon size={16} aria-hidden="true" />}
-                    label="Star on GitHub"
+                    label={t("Star on GitHub")}
                     url={GITHUB_REPOSITORY_URL}
                   />
                 </div>
@@ -1782,12 +2184,12 @@ export function SettingsPage({
             ) : (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                  <strong>Quick start</strong>
-                  <span>Replay the guided introduction.</span>
+                  <strong>{t("Quick start")}</strong>
+                  <span>{t("Replay the guided introduction.")}</span>
                 </span>
                 <button className={CARD_BUTTON} type="button" onClick={onRestartOnboarding}>
                   <RefreshIcon size={18} aria-hidden="true" />
-                  Start onboarding
+                  {t("Start onboarding")}
                 </button>
               </div>
             )}
@@ -1796,30 +2198,30 @@ export function SettingsPage({
       )}
 
       {activeTab === "system" && (
-        <div className="flex flex-col gap-5" role="tabpanel" aria-label="Library settings">
+        <div className="flex flex-col gap-5" role="tabpanel" aria-label={t("Library settings")}>
           {/* Desktop only: not meaningful on mobile. */}
           {!isMobile && (
           <section className={SETTINGS_CARD} aria-labelledby="library-local-title">
             <SettingsCardHeader
-              title="Local music"
+              title={t("Local music")}
               titleId="library-local-title"
               icon={<FolderIcon size={18} aria-hidden="true" />}
-              description="Folders on this computer, scanned into playlists."
+              description={t("Folders on this computer, scanned into playlists.")}
             />
 
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                  <strong>Local playlists</strong>
-                  <span>Create playlists from folders on this computer.</span>
+                  <strong>{t("Local playlists")}</strong>
+                  <span>{t("Create playlists from folders on this computer.")}</span>
                 </span>
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     className={cn(SETTINGS_FIELD, "w-44")}
                     type="text"
                     value={localPlaylistName}
-                    placeholder="Playlist name"
-                    aria-label="Local playlist name"
+                    placeholder={t("Playlist name")}
+                    aria-label={t("Local playlist name")}
                     onChange={(event) => setLocalPlaylistName(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") handleCreateLocalPlaylist();
@@ -1831,7 +2233,7 @@ export function SettingsPage({
                     onClick={handleCreateLocalPlaylist}
                   >
                     <FolderAddIcon size={18} />
-                    Create
+                    {t("Create")}
                   </button>
                 </div>
               </div>
@@ -1853,7 +2255,7 @@ export function SettingsPage({
                           onClick={() => deleteLocalPlaylist(playlist.id)}
                         >
                           <TrashIcon size={18} />
-                          Delete
+                          {t("Delete")}
                         </button>
                       </div>
 
@@ -1864,7 +2266,7 @@ export function SettingsPage({
                             type="text"
                             value={localPlaylistPathInputs[playlist.id] ?? ""}
                             placeholder="/Users/name/Music"
-                            aria-label={`Folder path for ${playlist.name}`}
+                            aria-label={t("Folder path for {name}", { name: playlist.name })}
                             onChange={(event) => setLocalPlaylistPathInputs((current) => ({
                               ...current,
                               [playlist.id]: event.target.value,
@@ -1877,8 +2279,8 @@ export function SettingsPage({
                             type="button"
                             className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                             disabled={localPlaylistBrowsingId === playlist.id}
-                            title="Browse for folder"
-                            aria-label={`Browse for a folder for ${playlist.name}`}
+                            title={t("Browse for folder")}
+                            aria-label={t("Browse for a folder for {name}", { name: playlist.name })}
                             onClick={() => void handleBrowseLocalPlaylistPath(playlist.id)}
                           >
                             <FolderOpenIcon size={17} aria-hidden="true" />
@@ -1889,7 +2291,7 @@ export function SettingsPage({
                           type="button"
                           onClick={() => handleAddLocalPlaylistPath(playlist.id)}
                         >
-                          Add
+                          {t("Add")}
                         </button>
                       </div>
 
@@ -1900,7 +2302,7 @@ export function SettingsPage({
                               <span>{path}</span>
                               <button
                                 type="button"
-                                aria-label={`Remove ${path}`}
+                                aria-label={t("Remove {path}", { path })}
                                 onClick={() => removeLocalPlaylistPath(playlist.id, path)}
                               >
                                 <TrashIcon size={16} aria-hidden="true" />
@@ -1909,7 +2311,7 @@ export function SettingsPage({
                           ))}
                         </div>
                       ) : (
-                        <p className="px-1 py-3 text-sm text-muted-foreground">No paths added yet.</p>
+                        <p className="px-1 py-3 text-sm text-muted-foreground">{t("No paths added yet.")}</p>
                       )}
                     </div>
                   ))}
@@ -1922,29 +2324,32 @@ export function SettingsPage({
 
           <section className={SETTINGS_CARD} aria-labelledby="library-storage-title">
             <SettingsCardHeader
-              title="Storage"
+              title={t("Storage")}
               titleId="library-storage-title"
               icon={<DownloadIcon size={18} aria-hidden="true" />}
-              description="How much disk Zuno is allowed to use."
+              description={t("How much disk Zuno is allowed to use.")}
             />
 
             {/* Each block: what it is, how full (figures + bar), then its actions on their own row. */}
             <div className="flex flex-col gap-3 rounded-row bg-background/40 p-3">
               <div className="flex items-baseline justify-between gap-3">
-                <strong className="text-sm font-medium text-foreground">Cache</strong>
+                <strong className="text-sm font-medium text-foreground">{t("Cache")}</strong>
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {cacheStats
-                    ? `${formatBytes(cacheStats.usedBytes)} of ${formatBytes(cacheStats.maxBytes)} · ${cacheStats.entryCount} items`
-                    : "Loading…"}
+                    ? tn("{used} of {total} · {n} item", "{used} of {total} · {n} items", cacheStats.entryCount, {
+                      used: formatBytes(cacheStats.usedBytes),
+                      total: formatBytes(cacheStats.maxBytes),
+                    })
+                    : t("Loading…")}
                 </span>
               </div>
               <UsageMeter
                 used={cacheStats?.usedBytes ?? 0}
                 total={cacheStats?.maxBytes ?? 0}
-                label="Cache used"
+                label={t("Cache used")}
               />
               <p className="text-xs text-muted-foreground">
-                Pages and covers Zuno keeps so the library opens instantly. Safe to clear.
+                {t("Pages and covers Zuno keeps so the library opens instantly. Safe to clear.")}
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <Select
@@ -1957,13 +2362,13 @@ export function SettingsPage({
                     void saveCacheSize(value);
                   }}
                 >
-                  <SelectTrigger aria-label="Maximum cache size">
+                  <SelectTrigger aria-label={t("Maximum cache size")}>
                     <SelectValue placeholder={`${cacheSizeGb} GB`} />
                   </SelectTrigger>
                   <SelectContent>
                     {CACHE_SIZE_PRESETS_GB.map((gb) => (
                       <SelectItem key={gb} value={gb}>
-                        Up to {formatGb(Number(gb))}
+                        {t("Up to {size}", { size: formatGb(Number(gb)) })}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1975,7 +2380,7 @@ export function SettingsPage({
                   onClick={() => void handleClearCache()}
                 >
                   <TrashIcon size={18} aria-hidden="true" />
-                  Clear cache
+                  {t("Clear cache")}
                 </button>
               </div>
             </div>
@@ -1984,26 +2389,31 @@ export function SettingsPage({
 
             <div className="flex flex-col gap-3 rounded-row bg-background/40 p-3">
               <div className="flex items-baseline justify-between gap-3">
-                <strong className="text-sm font-medium text-foreground">Downloads</strong>
+                <strong className="text-sm font-medium text-foreground">{t("Downloads")}</strong>
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {Object.keys(offlineState.entries).length > 0
-                    ? `${Object.keys(offlineState.entries).length} songs · ${formatBytes(offlineState.usedBytes)} of ${formatGb(Math.round(offlineMaxGb))}`
-                    : "No songs downloaded yet"}
+                    ? tn("{n} song · {used} of {total}", "{n} songs · {used} of {total}", Object.keys(offlineState.entries).length, {
+                      used: formatBytes(offlineState.usedBytes),
+                      total: formatGb(Math.round(offlineMaxGb)),
+                    })
+                    : t("No songs downloaded yet")}
                 </span>
               </div>
               <UsageMeter
                 used={offlineState.usedBytes}
                 total={Math.max(1, offlineMaxGb) * 1024 ** 3}
-                label="Download space used"
+                label={t("Download space used")}
               />
               {(offlineState.downloadingId || offlineState.queued.length > 0) && (
                 <p className="text-xs text-muted-foreground">
                   {offlineState.downloadingId
                     ? offlineState.progress !== null
-                      ? `Downloading ${offlineState.progress}%`
-                      : "Downloading"
+                      ? t("Downloading {progress}%", { progress: offlineState.progress })
+                      : t("Downloading")
                     : ""}
-                  {offlineState.queued.length > 0 ? ` · ${offlineState.queued.length} queued` : ""}
+                  {offlineState.queued.length > 0
+                    ? ` · ${tn("{n} queued", "{n} queued", offlineState.queued.length)}`
+                    : ""}
                 </p>
               )}
               <div className="flex flex-wrap items-center gap-2">
@@ -2017,7 +2427,7 @@ export function SettingsPage({
                     setOfflineMaxBytes(Math.max(1, next) * 1024 ** 3);
                   }}
                 >
-                  <SelectTrigger aria-label="Maximum download size">
+                  <SelectTrigger aria-label={t("Maximum download size")}>
                     <SelectValue placeholder={formatGb(Math.round(offlineMaxGb))} />
                   </SelectTrigger>
                   <SelectContent>
@@ -2025,7 +2435,7 @@ export function SettingsPage({
                       .sort((a, b) => a - b)
                       .map((gb) => (
                         <SelectItem key={gb} value={String(gb)}>
-                          Up to {formatGb(gb)}
+                          {t("Up to {size}", { size: formatGb(gb) })}
                         </SelectItem>
                       ))}
                   </SelectContent>
@@ -2040,24 +2450,27 @@ export function SettingsPage({
                   }}
                 >
                   <TrashIcon size={18} aria-hidden="true" />
-                  {clearingDownloads ? "Removing…" : "Remove all"}
+                  {clearingDownloads ? t("Removing…") : t("Remove all")}
                 </button>
               </div>
+              <OfflineModeSetting />
             </div>
 
           </section>
 
+          <BackupSettings />
+
           <section className={SETTINGS_CARD} aria-labelledby="library-quality-title">
             <SettingsCardHeader
-              title="Quality"
+              title={t("Quality")}
               titleId="library-quality-title"
               icon={<PlayIcon size={18} aria-hidden="true" />}
-              description="Bitrate picked when a track is streamed or saved."
+              description={t("Bitrate picked when a track is streamed or saved.")}
             />
 
             <SettingRow
-              title="Streaming quality"
-              description="Applies to songs played over the network. Lower uses less data."
+              title={t("Streaming quality")}
+              description={t("Applies to songs played over the network. Lower uses less data.")}
             >
               {(labelId) => (
                 <Select
@@ -2071,7 +2484,7 @@ export function SettingsPage({
                   <SelectContent>
                     {(Object.keys(AUDIO_QUALITY_LABELS) as AudioQuality[]).map((quality) => (
                       <SelectItem key={quality} value={quality}>
-                        {AUDIO_QUALITY_LABELS[quality]}
+                        {t(AUDIO_QUALITY_LABELS[quality])}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2081,8 +2494,8 @@ export function SettingsPage({
 
 
             <SettingRow
-              title="Download quality"
-              description="Applies to songs saved for offline. Higher sounds better and uses more disk."
+              title={t("Download quality")}
+              description={t("Applies to songs saved for offline. Higher sounds better and uses more disk.")}
             >
               {(labelId) => (
                 <Select
@@ -2096,7 +2509,7 @@ export function SettingsPage({
                   <SelectContent>
                     {(Object.keys(AUDIO_QUALITY_LABELS) as AudioQuality[]).map((quality) => (
                       <SelectItem key={quality} value={quality}>
-                        {AUDIO_QUALITY_LABELS[quality]}
+                        {t(AUDIO_QUALITY_LABELS[quality])}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2108,15 +2521,15 @@ export function SettingsPage({
 
           <section className={SETTINGS_CARD} aria-labelledby="library-lyrics-title">
             <SettingsCardHeader
-              title="Lyrics"
+              title={t("Lyrics")}
               titleId="library-lyrics-title"
               icon={<LyricsIcon size={18} aria-hidden="true" />}
-              description="Where lyrics come from and how they read."
+              description={t("Where lyrics come from and how they read.")}
             />
 
             <SettingRow
-              title="Translate lyrics"
-              description="Shows a translation under each line. Sends the lyrics to Google Translate."
+              title={t("Translate lyrics")}
+              description={t("Shows a translation under each line. Sends the lyrics to Google Translate.")}
             >
               {(labelId) => (
                 <Select
@@ -2128,7 +2541,7 @@ export function SettingsPage({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={TRANSLATION_OFF}>Off</SelectItem>
+                    <SelectItem value={TRANSLATION_OFF}>{t("Off")}</SelectItem>
                     {TRANSLATION_LANGUAGES.map((code) => (
                       <SelectItem key={code} value={code}>
                         {getLanguageLabel(code)}
@@ -2141,8 +2554,8 @@ export function SettingsPage({
 
 
             <SettingRow
-              title="Lyrics text size"
-              description="Scales the lyrics screen. The size still adapts to the window on top of this."
+              title={t("Lyrics text size")}
+              description={t("Scales the lyrics screen. The size still adapts to the window on top of this.")}
             >
               {(labelId) => (
                 <Select
@@ -2156,7 +2569,7 @@ export function SettingsPage({
                   <SelectContent>
                     {LYRICS_FONT_SCALES.map((option) => (
                       <SelectItem key={option.value} value={String(option.value)}>
-                        {option.label}
+                        {t(option.label)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2166,8 +2579,8 @@ export function SettingsPage({
 
 
             <SettingRow
-              title="Preferred lyrics source"
-              description="Tried first when a song opens. If it has nothing for that song, the others still run."
+              title={t("Preferred lyrics source")}
+              description={t("Tried first when a song opens. If it has nothing for that song, the others still run.")}
             >
               {(labelId) => (
                 <Select
@@ -2179,10 +2592,10 @@ export function SettingsPage({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={AUTO_LYRICS_SOURCE}>Automatic</SelectItem>
+                    <SelectItem value={AUTO_LYRICS_SOURCE}>{t("Automatic")}</SelectItem>
                     {LYRICS_SOURCES.map((source) => (
                       <SelectItem key={source.id} value={source.id}>
-                        {source.label}
+                        {t(source.label)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2196,15 +2609,15 @@ export function SettingsPage({
           {!isMobile && (
           <section className={SETTINGS_CARD} aria-labelledby="library-system-title">
             <SettingsCardHeader
-              title="System"
+              title={t("System")}
               titleId="library-system-title"
               icon={<SettingsIcon size={18} aria-hidden="true" />}
-              description="How Zuno behaves outside the window."
+              description={t("How Zuno behaves outside the window.")}
             />
 
             <SettingToggle
-              title="Launch at startup"
-              description="Start Zuno when your computer starts."
+              title={t("Launch at startup")}
+              description={t("Start Zuno when your computer starts.")}
               checked={autostartEnabled}
               disabled={autostartLoading}
               onCheckedChange={(checked) => void handleAutostartChange(checked)}
@@ -2213,8 +2626,8 @@ export function SettingsPage({
             {autostartError && <p className="text-sm text-destructive">{autostartError}</p>}
 
             <SettingToggle
-              title="Remember window size and location"
-              description="Reopen the main window with its last size and screen position."
+              title={t("Remember window size and location")}
+              description={t("Reopen the main window with its last size and screen position.")}
               checked={mainWindowGeometryPersistenceEnabled}
               onCheckedChange={setMainWindowGeometryPersistenceEnabled}
             />
@@ -2225,16 +2638,16 @@ export function SettingsPage({
 
           <section className={SETTINGS_CARD} aria-labelledby="library-trouble-title">
             <SettingsCardHeader
-              title="Troubleshooting"
+              title={t("Troubleshooting")}
               titleId="library-trouble-title"
               icon={<BugIcon size={18} aria-hidden="true" />}
-              description="Diagnostics, and the irreversible reset."
+              description={t("Diagnostics, and the irreversible reset.")}
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                <strong>Application log</strong>
-                <span>Open the current log file for sharing or troubleshooting.</span>
+                <strong>{t("Application log")}</strong>
+                <span>{t("Open the current log file for sharing or troubleshooting.")}</span>
               </span>
               <button
                 className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -2243,7 +2656,7 @@ export function SettingsPage({
                 onClick={() => void handleOpenLog()}
               >
                 <LogFileIcon size={18} />
-                {logOpening ? "Opening..." : "Open log"}
+                {logOpening ? t("Opening...") : t("Open log")}
               </button>
             </div>
 
@@ -2252,8 +2665,8 @@ export function SettingsPage({
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                <strong>Delete all app data</strong>
-                <span>Reset settings, cache, account, queue, tabs, onboarding, and local data.</span>
+                <strong>{t("Delete all app data")}</strong>
+                <span>{t("Reset settings, cache, account, queue, tabs, onboarding, and local data.")}</span>
               </span>
               <button
                 className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -2263,10 +2676,10 @@ export function SettingsPage({
               >
                 <TrashIcon size={18} />
                 {resetSettingsBusy
-                  ? "Deleting..."
+                  ? t("Deleting...")
                   : resetSettingsConfirming
-                    ? "Press again to confirm"
-                    : "Delete everything"}
+                    ? t("Press again to confirm")
+                    : t("Delete everything")}
               </button>
             </div>
 
@@ -2276,20 +2689,20 @@ export function SettingsPage({
       )}
 
       {activeTab === "shortcuts" && (
-        <div className="flex flex-col gap-5" role="tabpanel" aria-label="Keyboard shortcut settings">
+        <div className="flex flex-col gap-5" role="tabpanel" aria-label={t("Keyboard shortcut settings")}>
           <section className={SETTINGS_CARD} aria-labelledby="keyboard-shortcuts-settings-title">
             <h2
               className="text-lg font-semibold text-foreground"
               id="keyboard-shortcuts-settings-title"
             >
-              Keyboard shortcuts
+              {t("Keyboard shortcuts")}
             </h2>
 
             <div className="flex flex-col gap-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span className={cn(SETTING_LABEL, "min-w-0 flex-1")}>
-                  <strong>Reset shortcuts</strong>
-                  <span>Restore every keyboard shortcut to its default.</span>
+                  <strong>{t("Reset shortcuts")}</strong>
+                  <span>{t("Restore every keyboard shortcut to its default.")}</span>
                 </span>
                 <button
                   className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -2297,7 +2710,7 @@ export function SettingsPage({
                   onClick={resetKeyboardShortcuts}
                 >
                   <RefreshIcon size={18} />
-                  Reset all
+                  {t("Reset all")}
                 </button>
               </div>
 
@@ -2308,8 +2721,8 @@ export function SettingsPage({
                 return (
                   <div className="flex items-center justify-between gap-4 py-2" key={shortcutAction.id}>
                     <span className={SETTING_LABEL}>
-                      <strong>{shortcutAction.label}</strong>
-                      <span>{shortcutAction.description}</span>
+                      <strong>{t(shortcutAction.label)}</strong>
+                      <span>{t(shortcutAction.description)}</span>
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -2322,14 +2735,14 @@ export function SettingsPage({
                           if (isListening) setListeningShortcut(null);
                         }}
                       >
-                        {isListening ? "Press shortcut..." : formatKeyboardShortcut(shortcut)}
+                        {isListening ? t("Press shortcut...") : formatKeyboardShortcut(shortcut)}
                       </button>
                       <button
                         className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                         type="button"
                         onClick={() => resetKeyboardShortcut(shortcutAction.id)}
                       >
-                        Reset
+                        {t("Reset")}
                       </button>
                       <button
                         className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -2337,7 +2750,7 @@ export function SettingsPage({
                         disabled={!shortcut}
                         onClick={() => setKeyboardShortcut(shortcutAction.id, null)}
                       >
-                        Clear
+                        {t("Clear")}
                       </button>
                     </div>
                   </div>
@@ -2349,33 +2762,33 @@ export function SettingsPage({
       )}
 
       {activeTab === "window" && (
-        <div className="flex flex-col gap-5" role="tabpanel" aria-label="Style settings">
+        <div className="flex flex-col gap-5" role="tabpanel" aria-label={t("Style settings")}>
           <section className={SETTINGS_CARD} aria-labelledby="window-settings-title">
             <SettingsCardHeader
-              title="Window controls"
+              title={t("Window controls")}
               titleId="window-settings-title"
               icon={<QueuePanelIcon size={18} aria-hidden="true" />}
-              description="Choose the title bar buttons and compact player behavior."
+              description={t("Choose the title bar buttons and compact player behavior.")}
             />
 
             <SettingToggle
-              title="Mini player"
-              description="Show compact playback controls when the main window is not focused. Turning this off closes its window and frees around 30 MB."
+              title={t("Mini player")}
+              description={t("Show compact playback controls when the main window is not focused. Turning this off closes its window and frees around 30 MB.")}
               checked={miniPlayerEnabled}
               onCheckedChange={setMiniPlayerEnabled}
             />
 
             <div className="flex flex-col gap-3">
               <span id="mini-player-skin-label" className={SETTING_LABEL}>
-                <strong>Mini player skin</strong>
-                <span>How the mini player looks. It opens in the new skin the next time it appears.</span>
+                <strong>{t("Mini player skin")}</strong>
+                <span>{t("How the mini player looks. It opens in the new skin the next time it appears.")}</span>
               </span>
               <MiniPlayerSkinPicker labelledBy="mini-player-skin-label" />
             </div>
 
             <SettingRow
-              title="Library sidebar"
-              description="How much room the playlist rail takes. Expand on hover keeps the collapsed width while still letting you read the list."
+              title={t("Library sidebar")}
+              description={t("How much room the playlist rail takes. Expand on hover keeps the collapsed width while still letting you read the list.")}
             >
               {() => (
                 <Select
@@ -2389,7 +2802,7 @@ export function SettingsPage({
                   <SelectContent>
                     {SIDEBAR_MODES.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
-                        {option.label}
+                        {t(option.label)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2399,8 +2812,8 @@ export function SettingsPage({
 
             {miniPlayerSkin === "classic" && (
               <SettingRow
-                title="Mini player hover bar"
-                description="Choose what the expanded hover slider controls."
+                title={t("Mini player hover bar")}
+                description={t("Choose what the expanded hover slider controls.")}
               >
                 {() => (
                   <Select
@@ -2413,8 +2826,8 @@ export function SettingsPage({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="seek">Song position</SelectItem>
-                      <SelectItem value="volume">Volume</SelectItem>
+                      <SelectItem value="seek">{t("Song position")}</SelectItem>
+                      <SelectItem value="volume">{t("Volume")}</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
@@ -2423,8 +2836,8 @@ export function SettingsPage({
 
             <div className="flex items-center justify-between gap-4 py-2">
               <span className={SETTING_LABEL}>
-                <strong>Mini player position</strong>
-                <span>Move the mini player back to the bottom center of this screen.</span>
+                <strong>{t("Mini player position")}</strong>
+                <span>{t("Move the mini player back to the bottom center of this screen.")}</span>
               </span>
               <button
                 className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -2432,15 +2845,15 @@ export function SettingsPage({
                 disabled={miniPlayerResetting}
                 onClick={() => void handleResetMiniPlayerPosition()}
               >
-                {miniPlayerResetting ? "Resetting..." : "Reset position"}
+                {miniPlayerResetting ? t("Resetting...") : t("Reset position")}
               </button>
             </div>
 
             <SettingRow
-              title="Window controls"
+              title={t("Window controls")}
               description={isLinux
-                ? "How minimize, maximize and close are drawn. Switching OS native restarts the app."
-                : "How minimize, maximize and close are drawn."}
+                ? t("How minimize, maximize and close are drawn. Switching OS native restarts the app.")
+                : t("How minimize, maximize and close are drawn.")}
             >
               {(labelId) => (
                 <div role="group" aria-labelledby={labelId}>
@@ -2453,7 +2866,7 @@ export function SettingsPage({
                     <TabsList>
                       <TabsTrigger value="macos">macOS</TabsTrigger>
                       <TabsTrigger value="windows">Windows</TabsTrigger>
-                      <TabsTrigger value="native">OS native</TabsTrigger>
+                      <TabsTrigger value="native">{t("OS native")}</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -2462,8 +2875,8 @@ export function SettingsPage({
 
             {/* Next to the window buttons, because it decides what the close button does. */}
             <SettingToggle
-              title="Minimize to tray"
-              description="Closing the window hides Zuno to the system tray and keeps playing. When off, no tray icon is shown."
+              title={t("Minimize to tray")}
+              description={t("Closing the window hides Zuno to the system tray and keeps playing. When off, no tray icon is shown.")}
               checked={minimizeToTray}
               onCheckedChange={setMinimizeToTray}
             />
@@ -2472,8 +2885,8 @@ export function SettingsPage({
                 and off tiling compositors the buttons already show without this. */}
             {isLinux && tilingWindowManager && windowControlStyle !== "native" && (
               <SettingToggle
-                title="Show on this compositor"
-                description="Tiling compositors don't draw window buttons for apps, so they're hidden by default. Turn this on to show them anyway."
+                title={t("Show on this compositor")}
+                description={t("Tiling compositors don't draw window buttons for apps, so they're hidden by default. Turn this on to show them anyway.")}
                 checked={forceWindowControls}
                 onCheckedChange={setForceWindowControls}
               />
@@ -2482,8 +2895,8 @@ export function SettingsPage({
             {/* The OS frame replaces the outline, so the switch would do nothing there. */}
             {windowControlStyle !== "native" && (
               <SettingToggle
-                title="Window outline"
-                description="Draw a thin edge around the window so it stands apart from what's behind it."
+                title={t("Window outline")}
+                description={t("Draw a thin edge around the window so it stands apart from what's behind it.")}
                 checked={windowOutline}
                 onCheckedChange={setWindowOutline}
               />
@@ -2491,8 +2904,8 @@ export function SettingsPage({
 
             {isLinux && (
               <SettingToggle
-                title="Show in system media controls"
-                description="Expose playback to the desktop's media widget and media keys (MPRIS). Turning this off stops the now-playing notifications some desktops show."
+                title={t("Show in system media controls")}
+                description={t("Expose playback to the desktop's media widget and media keys (MPRIS). Turning this off stops the now-playing notifications some desktops show.")}
                 checked={linuxMediaSession}
                 onCheckedChange={setLinuxMediaSession}
               />
@@ -2501,19 +2914,19 @@ export function SettingsPage({
 
           <section className={SETTINGS_CARD} aria-labelledby="behavior-settings-title">
             <div className="flex items-center gap-2">
-              <h2 className="text-lg" id="behavior-settings-title">Behavior</h2>
+              <h2 className="text-lg" id="behavior-settings-title">{t("Behavior")}</h2>
             </div>
 
             <SettingToggle
-              title="Compact player bar"
-              description="Tuck the seek bar under the transport controls instead of spanning the full width."
+              title={t("Compact player bar")}
+              description={t("Tuck the seek bar under the transport controls instead of spanning the full width.")}
               checked={compactPlayerBar}
               onCheckedChange={setCompactPlayerBar}
             />
 
             <SettingToggle
-              title="Always show extra controls"
-              description="Keep lyrics and queue visible instead of showing them only on hover."
+              title={t("Always show extra controls")}
+              description={t("Keep lyrics and queue visible instead of showing them only on hover.")}
               checked={extraPlayerControlsAlwaysVisible}
               onCheckedChange={setExtraPlayerControlsAlwaysVisible}
             />
@@ -2522,19 +2935,19 @@ export function SettingsPage({
       )}
 
       {activeTab === "playback" && (
-        <div className="flex flex-col gap-5" role="tabpanel" aria-label="Playback settings">
+        <div className="flex flex-col gap-5" role="tabpanel" aria-label={t("Playback settings")}>
           <section className={SETTINGS_CARD} aria-labelledby="playback-engine-title">
             <SettingsCardHeader
-              title="Audio engine"
+              title={t("Audio engine")}
               titleId="playback-engine-title"
               icon={<PlayIcon size={18} aria-hidden="true" />}
-              description="What actually plays the sound."
+              description={t("What actually plays the sound.")}
             />
 
             {/* One card per engine with its own description, instead of a dropdown beside a
                 description that only knew two of the three engines (Rust showed the YouTube
                 player's text). Cards stack and wrap at any width. */}
-            <div className="flex flex-col gap-2" role="radiogroup" aria-label="Playback method">
+            <div className="flex flex-col gap-2" role="radiogroup" aria-label={t("Playback method")}>
               {AUDIO_ENGINE_MODES.map((option) => {
                 const selected = audioEngineMode === option.value;
                 return (
@@ -2562,16 +2975,16 @@ export function SettingsPage({
                     </span>
                     <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="text-sm font-semibold text-foreground">
-                        {option.label}
+                        {t(option.label)}
                         {option.value === "rust" ? (
                           <span className="ml-2 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary">
-                            Recommended
+                            {t("Recommended")}
                           </span>
                         ) : null}
                       </span>
-                      <span className="text-sm text-muted-foreground">{option.hint}</span>
+                      <span className="text-sm text-muted-foreground">{t(option.hint)}</span>
                       {selected ? (
-                        <span className="text-xs text-muted-foreground">Applies from the next track.</span>
+                        <span className="text-xs text-muted-foreground">{t("Applies from the next track.")}</span>
                       ) : null}
                     </span>
                   </button>
@@ -2582,15 +2995,15 @@ export function SettingsPage({
             <OutputDeviceSetting engineMode={audioEngineMode} />
 
             <SettingToggle
-              title="Resolve streams as your account"
-              description="Attaches your session when resolving a track — required for Premium bitrates. Downloads always resolve anonymously."
+              title={t("Resolve streams as your account")}
+              description={t("Attaches your session when resolving a track — required for Premium bitrates. Downloads always resolve anonymously.")}
               checked={authenticatedStreaming}
               onCheckedChange={setAuthenticatedStreaming}
             />
 
             <SettingToggle
-              title="Add plays to YouTube Music history"
-              description="Reports plays to YouTube, feeding its recommendations. Also enables the setting above. The YouTube frame always reports its own."
+              title={t("Add plays to YouTube Music history")}
+              description={t("Reports plays to YouTube, feeding its recommendations. Also enables the setting above. The YouTube frame always reports its own.")}
               checked={youtubeScrobbling}
               onCheckedChange={(enabled) => {
                 // Paired here rather than inside the setter, so the toolbar shortcut can flip
@@ -2603,22 +3016,25 @@ export function SettingsPage({
 
           <SpeedPitchSettings rustEngine={audioEngineMode === "rust"} />
 
+          <BitPerfectSettings engineMode={audioEngineMode} />
+          <SoundProfilesSettings engineMode={audioEngineMode} />
+          {isMobile && <HeadsetSettingsCard />}
           <EqualizerSettings engineMode={audioEngineMode} />
 
           <section className={SETTINGS_CARD} aria-labelledby="playback-settings-title">
             <SettingsCardHeader
-              title="Transitions"
+              title={t("Transitions")}
               titleId="playback-settings-title"
               icon={<PlayIcon size={18} aria-hidden="true" />}
-              description="How one track becomes the next."
+              description={t("How one track becomes the next.")}
             />
 
             <SettingToggle
-              title="Normalize volume"
+              title={t("Normalize volume")}
               description={
                 audioEngineMode === "rust"
-                  ? "Turns loud tracks down to YouTube's reference level, so a playlist plays at one volume."
-                  : "Needs the Rust audio engine. The YouTube player already levels volume on its own."
+                  ? t("Turns loud tracks down to YouTube's reference level, so a playlist plays at one volume.")
+                  : t("Needs the Rust audio engine. The YouTube player already levels volume on its own.")
               }
               checked={volumeNormalization}
               onCheckedChange={setVolumeNormalization}
@@ -2626,20 +3042,18 @@ export function SettingsPage({
             />
 
             <SettingToggle
-              title="Gapless playback"
-              description="Load the next track while the current one is still playing, so albums and live sets run without a pause between songs."
+              title={t("Gapless playback")}
+              description={t("Load the next track while the current one is still playing, so albums and live sets run without a pause between songs.")}
               checked={gaplessEnabled}
               onCheckedChange={setGaplessEnabled}
             />
 
             <SettingRow
-              title="Crossfade"
+              title={t("Crossfade")}
               description={
                 crossfadeSec > 0
-                  ? `Overlap each track with the next by ${crossfadeSec} second${
-                    crossfadeSec === 1 ? "" : "s"
-                  }.`
-                  : "Off. Move the slider to overlap the end of each track with the start of the next."
+                  ? tn("Overlap each track with the next by {n} second.", "Overlap each track with the next by {n} seconds.", crossfadeSec)
+                  : t("Off. Move the slider to overlap the end of each track with the start of the next.")
               }
             >
               {(labelId) => (
@@ -2651,13 +3065,13 @@ export function SettingsPage({
                     max={MAX_CROSSFADE_SEC}
                     step={1}
                     onValueChange={setCrossfadeSec}
-                    aria-label="Crossfade length in seconds"
+                    aria-label={t("Crossfade length in seconds")}
                   />
                   <span
                     id={labelId}
                     className="w-10 shrink-0 text-right text-sm tabular-nums text-muted-foreground"
                   >
-                    {crossfadeSec > 0 ? `${crossfadeSec}s` : "Off"}
+                    {crossfadeSec > 0 ? `${crossfadeSec}s` : t("Off")}
                   </span>
                 </span>
               )}
@@ -2669,21 +3083,21 @@ export function SettingsPage({
               leaving people to wonder why it only sometimes works.
             */}
             <p className="text-sm text-muted-foreground">
-              Both apply to streamed tracks. Downloaded and local files always play back to back.
+              {t("Both apply to streamed tracks. Downloaded and local files always play back to back.")}
             </p>
           </section>
 
           <section className={SETTINGS_CARD} aria-labelledby="session-settings-title">
             <SettingsCardHeader
-              title="Session"
+              title={t("Session")}
               titleId="session-settings-title"
               icon={<QueuePanelIcon size={18} aria-hidden="true" />}
-              description="What comes back when you reopen Zuno."
+              description={t("What comes back when you reopen Zuno.")}
             />
 
             <SettingToggle
-              title="Restore tabs and queues"
-              description="Reopen your tabs, queues and playback position on launch. Playback always starts paused."
+              title={t("Restore tabs and queues")}
+              description={t("Reopen your tabs, queues and playback position on launch. Playback always starts paused.")}
               checked={sessionRestoreEnabled}
               onCheckedChange={setSessionRestoreEnabled}
             />
@@ -2692,16 +3106,17 @@ export function SettingsPage({
       )}
 
       {activeTab === "appearance" && (
-        <div className="flex flex-col gap-5" role="tabpanel" aria-label="Appearance settings">
+        <div className="flex flex-col gap-5" role="tabpanel" aria-label={t("Appearance settings")}>
+          <LanguageSettings />
           <section className={SETTINGS_CARD} aria-labelledby="theme-settings-title">
             <SettingsCardHeader
-              title="Look & feel"
+              title={t("Look & feel")}
               titleId="theme-settings-title"
               icon={<PaletteIcon size={18} aria-hidden="true" />}
-              description="Theme, colour and style. Changes apply instantly."
+              description={t("Theme, colour and style. Changes apply instantly.")}
             />
 
-            <h3 className="-mb-2 text-sm font-medium text-foreground">Theme</h3>
+            <h3 className="-mb-2 text-sm font-medium text-foreground">{t("Theme")}</h3>
 
             <div
               className="grid grid-cols-3 gap-2"
@@ -2740,8 +3155,8 @@ export function SettingsPage({
                         )}
                       />
                     </span>
-                    <span className="text-sm font-medium text-foreground">{option.label}</span>
-                    <span className="text-xs text-muted-foreground">{option.hint}</span>
+                    <span className="text-sm font-medium text-foreground">{t(option.label)}</span>
+                    <span className="text-xs text-muted-foreground">{t(option.hint)}</span>
                   </button>
                 );
               })}
@@ -2752,8 +3167,8 @@ export function SettingsPage({
             {/* Desktop only: not meaningful on mobile. */}
             {!isMobile && (
             <SettingRow
-              title="App size"
-              description={`Zooms the whole app. ${isMacOS ? "⌘" : "Ctrl"} with + or − works too, and 0 resets it.`}
+              title={t("App size")}
+              description={t("Zooms the whole app. {key} with + or − works too, and 0 resets it.", { key: isMacOS ? "⌘" : "Ctrl" })}
             >
               {(labelId) => (
                 <Select
@@ -2781,10 +3196,10 @@ export function SettingsPage({
           {!isMobile && (
           <section className={SETTINGS_CARD} aria-labelledby="toolbar-settings-title">
             <SettingsCardHeader
-              title="Title bar"
+              title={t("Title bar")}
               titleId="toolbar-settings-title"
               icon={<QueuePanelIcon size={18} aria-hidden="true" />}
-              description="Which optional buttons sit next to the window controls."
+              description={t("Which optional buttons sit next to the window controls.")}
             />
 
             {TOOLBAR_ITEMS.map((item) => (
@@ -2795,15 +3210,15 @@ export function SettingsPage({
 
           <section className={SETTINGS_CARD} aria-labelledby="home-settings-title">
             <SettingsCardHeader
-              title="Home"
+              title={t("Home")}
               titleId="home-settings-title"
               icon={<HomeIcon size={18} aria-hidden="true" />}
-              description="Which sections the home page shows."
+              description={t("Which sections the home page shows.")}
             />
 
             <SettingToggle
-              title="Made for you"
-              description="The recommendation carousel at the top. Hiding it leaves the surprise button and More recommendations working."
+              title={t("Made for you")}
+              description={t("The recommendation carousel at the top. Hiding it leaves the surprise button and More recommendations working.")}
               checked={madeForYouVisible}
               onCheckedChange={setMadeForYouVisible}
             />
@@ -2811,10 +3226,10 @@ export function SettingsPage({
 
           <section className={SETTINGS_CARD} aria-labelledby="motion-settings-title">
             <SettingsCardHeader
-              title="Motion & performance"
+              title={t("Motion & performance")}
               titleId="motion-settings-title"
               icon={<SettingsIcon size={18} aria-hidden="true" />}
-              description="Turn these off on low-powered devices."
+              description={t("Turn these off on low-powered devices.")}
             />
 
             <PotatoPcSettings />

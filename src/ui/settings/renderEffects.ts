@@ -12,6 +12,7 @@ import {
   writeLocalJsonSetting,
 } from "../../internal/durableLocalSetting";
 import { isMobile } from "../platform";
+import { msg } from "../../i18n";
 
 /**
  * Per-effect kill switches, for finding out which visual effect is actually costing the GPU.
@@ -29,58 +30,58 @@ import { isMobile } from "../platform";
 export const RENDER_EFFECTS = [
   {
     id: "transitions",
-    label: "CSS transitions",
-    description: "Hover, colour and size fades on every control.",
+    label: msg("CSS transitions"),
+    description: msg("Hover, colour and size fades on every control."),
   },
   {
     id: "animations",
-    label: "CSS keyframe animations",
-    description: "Spinners, loaders, pulses, the visualiser bars.",
+    label: msg("CSS keyframe animations"),
+    description: msg("Spinners, loaders, pulses, the visualiser bars."),
   },
   {
     id: "motion",
-    label: "JS motion (Motion/React)",
-    description: "Panel, dialog and page enter/exit springs.",
+    label: msg("JS motion (Motion/React)"),
+    description: msg("Panel, dialog and page enter/exit springs."),
   },
   {
     id: "backdrop",
-    label: "Backdrop blur",
-    description: "The frosted glass behind panels, menus and overlays. Usually the most expensive.",
+    label: msg("Backdrop blur"),
+    description: msg("The frosted glass behind panels, menus and overlays. Usually the most expensive."),
   },
   {
     id: "filters",
-    label: "Blur and colour filters",
-    description: "Blurred artwork washes.",
+    label: msg("Blur and colour filters"),
+    description: msg("Blurred artwork washes."),
   },
   {
     id: "shadows",
-    label: "Shadows",
-    description: "Box and text shadows.",
+    label: msg("Shadows"),
+    description: msg("Box and text shadows."),
   },
   {
     id: "ambient",
-    label: "Ambient artwork layers",
-    description: "The oversized blurred cover behind the page and the lyrics screen.",
+    label: msg("Ambient artwork layers"),
+    description: msg("The oversized blurred cover behind the page and the lyrics screen."),
   },
   {
     id: "lyrics-drift",
-    label: "Lyrics parallax drift",
-    description: "The 44s scale-and-pan on the lyrics backdrop.",
+    label: msg("Lyrics parallax drift"),
+    description: msg("The 44s scale-and-pan on the lyrics backdrop."),
   },
   {
     id: "visualizer",
-    label: "Visualisers and loaders",
-    description: "The playing-row bars and the bouncing audio loader.",
+    label: msg("Visualisers and loaders"),
+    description: msg("The playing-row bars and the bouncing audio loader."),
   },
   {
     id: "marquee",
-    label: "Scrolling titles",
-    description: "Marquee on track titles too long for their column.",
+    label: msg("Scrolling titles"),
+    description: msg("Marquee on track titles too long for their column."),
   },
   {
     id: "will-change",
-    label: "Compositor hints (will-change)",
-    description: "Removes the promotion hints that give effects their own GPU layer.",
+    label: msg("Compositor hints (will-change)"),
+    description: msg("Removes the promotion hints that give effects their own GPU layer."),
   },
 ] as const;
 

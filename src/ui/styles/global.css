@@ -245,17 +245,18 @@ html[data-style="glass"][data-theme="light"] body {
     radial-gradient(90% 60% at 100% 100%, color-mix(in oklab, var(--color-primary) 20%, transparent), transparent 58%),
     oklch(0.96 0 0);
 }
-html[data-style="glass"] :is(.card-surface, .bg-card, .bg-popover, [data-mobile-player], [data-menu-sheet], [class*="bg-card/"], [class*="bg-popover/"]) {
+/* Not on phones: a 20px backdrop blur behind every card was the costliest thing on a WebView frame. */
+html[data-style="glass"]:not([data-platform-mobile]) :is(.card-surface, .bg-card, .bg-popover, [data-mobile-player], [data-mobile-nav], [data-menu-sheet], [class*="bg-card/"], [class*="bg-popover/"]) {
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   backdrop-filter: blur(20px) saturate(160%);
 }
 /* Where blur is unavailable or switched off, translucency would only lower contrast. */
-html[data-style="glass"]:is([data-fx-off~="backdrop"], [data-platform-linux]) {
+html[data-style="glass"]:is([data-fx-off~="backdrop"], [data-platform-linux], [data-platform-mobile]) {
   --color-card: oklch(0.285 0 0);
   --color-popover: oklch(0.205 0 0);
   --color-background: oklch(0.145 0 0);
 }
-html[data-style="glass"][data-theme="light"]:is([data-fx-off~="backdrop"], [data-platform-linux]) {
+html[data-style="glass"][data-theme="light"]:is([data-fx-off~="backdrop"], [data-platform-linux], [data-platform-mobile]) {
   --color-card: oklch(1 0 0);
   --color-popover: oklch(1 0 0);
   --color-background: oklch(0.954 0 0);
@@ -483,8 +484,14 @@ html[data-platform-mobile] [data-scroll-row] > * {
   --bottom-chrome: 7rem;
 }
 html[data-platform-mobile] {
-  /* The player pill (~4rem) plus the nav bar and the gesture area. */
-  --bottom-chrome: 9rem;
+  /* The player pill (~4rem) plus the floating nav buttons (~4.25rem) and the gesture area. */
+  --bottom-chrome: 9.5rem;
+}
+/* Reduced effects: the island keeps its shape but drops the blur, like every other surface. */
+html:is([data-fx-off~="backdrop"], [data-platform-linux]) [data-mobile-nav]:not([aria-current]) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background-color: var(--color-card);
 }
 
 html,

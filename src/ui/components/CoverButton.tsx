@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { CloseIcon } from "@/ui/icons";
 import { getFullSizeArtworkUrl } from "../../datasource/youtube/artwork";
 import { TrackArtwork } from "./TrackArtwork";
+import { useT } from "../../i18n";
 
 interface CoverButtonProps {
   artworkUrl?: string;
@@ -16,6 +17,7 @@ interface CoverButtonProps {
 
 /** Makes a cover clickable, opening it full size over the window (#174). */
 export function CoverButton({ artworkUrl, label, className, children }: CoverButtonProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -35,7 +37,7 @@ export function CoverButton({ artworkUrl, label, className, children }: CoverBut
     <>
       <button
         type="button"
-        aria-label={`View cover of ${label}`}
+        aria-label={t("View cover of {name}", { name: label })}
         onClick={() => setOpen(true)}
         className={cn(
           "shrink-0 cursor-zoom-in transition-opacity hover:opacity-90",
@@ -60,7 +62,7 @@ export function CoverButton({ artworkUrl, label, className, children }: CoverBut
               <motion.div
                 role="dialog"
                 aria-modal="true"
-                aria-label={`Cover of ${label}`}
+                aria-label={t("Cover of {name}", { name: label })}
                 className="relative"
                 initial={{ opacity: 0, scale: 0.94 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -76,7 +78,7 @@ export function CoverButton({ artworkUrl, label, className, children }: CoverBut
                 <button
                   ref={closeRef}
                   type="button"
-                  aria-label="Close cover"
+                  aria-label={t("Close cover")}
                   onClick={() => setOpen(false)}
                   className={cn(
                     "absolute -right-3 -top-3 grid size-9 place-items-center rounded-full bg-card text-foreground shadow-lg",

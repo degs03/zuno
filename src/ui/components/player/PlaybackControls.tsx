@@ -14,6 +14,7 @@ import {
 } from "@/ui/icons";
 import { shallowEqual, usePlayerSelector } from "../../../player/playerStore";
 import { playerController } from "../../../player/playerStore";
+import { useT } from "../../../i18n";
 
 interface PlaybackControlsProps {
   extraControlsAlwaysVisible?: boolean;
@@ -31,6 +32,7 @@ const GLYPH_MOTION = {
 };
 
 export function PlaybackControls({ extraControlsAlwaysVisible = true }: PlaybackControlsProps) {
+  const t = useT();
   const state = usePlayerSelector(
     (player) => ({
       currentTrack: player.currentTrack,
@@ -66,10 +68,10 @@ export function PlaybackControls({ extraControlsAlwaysVisible = true }: Playback
 
   const orderLabel =
     state.playbackOrderMode === "repeat-one"
-      ? "Loop current song"
+      ? t("Loop current song")
       : state.playbackOrderMode === "repeat-all"
-        ? "Loop the queue"
-        : "Play in order";
+        ? t("Loop the queue")
+        : t("Play in order");
 
   // In-order is the resting state, so it reads as Linear; the other two are Bold.
   const isOrderActive = state.playbackOrderMode !== "in-order";
@@ -94,8 +96,8 @@ export function PlaybackControls({ extraControlsAlwaysVisible = true }: Playback
           className={cn(CONTROL_BUTTON, isShuffled && "text-primary hover:text-primary")}
           onClick={handleShuffleToggle}
           aria-pressed={isShuffled}
-          aria-label={isShuffled ? "Turn off shuffle" : "Shuffle"}
-          title={isShuffled ? "Shuffle is on" : "Shuffle"}
+          aria-label={isShuffled ? t("Turn off shuffle") : t("Shuffle")}
+          title={isShuffled ? t("Shuffle is on") : t("Shuffle")}
         >
           {isShuffled ? <ShuffleActiveIcon size={20} /> : <ShuffleIcon size={20} />}
         </button>
@@ -106,7 +108,7 @@ export function PlaybackControls({ extraControlsAlwaysVisible = true }: Playback
         className={CONTROL_BUTTON}
         onClick={handleSkipPrevious}
         disabled={!hasCurrentTrack}
-        aria-label="Previous track"
+        aria-label={t("Previous track")}
       >
         <SkipPreviousIcon size={20} />
       </button>
@@ -116,7 +118,7 @@ export function PlaybackControls({ extraControlsAlwaysVisible = true }: Playback
         className="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground transition-[transform,background-color] hover:bg-primary/80 active:scale-95 disabled:pointer-events-none disabled:opacity-40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         onClick={handlePlayPause}
         disabled={isBusy || !hasCurrentTrack}
-        aria-label={isBusy ? "Loading song" : isPlaying ? "Pause" : "Play"}
+        aria-label={isBusy ? t("Loading song") : isPlaying ? t("Pause") : t("Play")}
       >
         <span className="relative grid size-5 place-items-center" aria-hidden="true">
           <AnimatePresence initial={false} mode="popLayout">
@@ -142,7 +144,7 @@ export function PlaybackControls({ extraControlsAlwaysVisible = true }: Playback
         className={CONTROL_BUTTON}
         onClick={handleSkipNext}
         disabled={!hasCurrentTrack}
-        aria-label="Next track"
+        aria-label={t("Next track")}
       >
         <SkipNextIcon size={20} />
       </button>

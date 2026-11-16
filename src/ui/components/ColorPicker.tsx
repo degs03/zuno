@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { cn } from "@/lib/utils";
+import { useT } from "../../i18n";
 
 /**
  * Zuno's own colour picker: a saturation/brightness square and a hue rail, both draggable with
@@ -93,6 +94,7 @@ export function ColorPicker({
   onApply: (hex: string) => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(value));
   const hex = hsvToHex(hsv);
   const [draft, setDraft] = useState(hex);
@@ -118,7 +120,7 @@ export function ColorPicker({
         {...square}
         role="slider"
         tabIndex={0}
-        aria-label="Saturation and brightness"
+        aria-label={t("Saturation and brightness")}
         aria-valuetext={`saturation ${Math.round(hsv.s * 100)}%, brightness ${Math.round(hsv.v * 100)}%`}
         onKeyDown={(event) => {
           if (event.key === "ArrowUp" || event.key === "ArrowDown") {
@@ -146,7 +148,7 @@ export function ColorPicker({
         {...rail}
         role="slider"
         tabIndex={0}
-        aria-label="Hue"
+        aria-label={t("Hue")}
         aria-valuemin={0}
         aria-valuemax={360}
         aria-valuenow={Math.round(hsv.h)}
@@ -174,7 +176,7 @@ export function ColorPicker({
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-row bg-muted/60 px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
           <span className="text-sm text-muted-foreground">#</span>
           <input
-            aria-label="Hex colour"
+            aria-label={t("Hex colour")}
             className="min-w-0 flex-1 bg-transparent font-mono text-sm uppercase text-foreground outline-none"
             value={draft.replace("#", "")}
             maxLength={6}
@@ -189,8 +191,7 @@ export function ColorPicker({
 
       {label.ratio < 4.5 ? (
         <p className="text-xs text-muted-foreground">
-          Labels on this colour will be hard to read. A slightly darker or lighter shade will work
-          better.
+          {t("Labels on this colour will be hard to read. A slightly darker or lighter shade will work better.")}
         </p>
       ) : null}
 
@@ -200,7 +201,7 @@ export function ColorPicker({
           onClick={onCancel}
           className="pressable min-h-10 flex-1 rounded-full bg-muted px-4 text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Cancel
+          {t("Cancel")}
         </button>
         <button
           type="button"
@@ -210,7 +211,7 @@ export function ColorPicker({
           )}
           style={{ backgroundColor: hex, color: label.color }}
         >
-          Use this colour
+          {t("Use this colour")}
         </button>
       </div>
     </div>

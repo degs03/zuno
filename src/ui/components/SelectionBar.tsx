@@ -5,6 +5,7 @@ import { Loader } from "@/components/motion/loader";
 import { CloseIcon, DownloadIcon, ListIcon, PlaylistAddIcon, TrashIcon } from "@/ui/icons";
 import type { Track } from "../../datasource/types";
 import type { TrackSelection } from "../hooks/useTrackSelection";
+import { useT } from "../../i18n";
 
 const ACTION =
   "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50";
@@ -21,7 +22,7 @@ export function SelectionBar({
   onAddToPlaylist,
   onDownload,
   onRemove,
-  removeLabel = "Remove",
+  removeLabel,
 }: {
   selection: TrackSelection;
   onAddToQueue: (tracks: Track[]) => void;
@@ -29,8 +30,10 @@ export function SelectionBar({
   onDownload: (tracks: Track[]) => void;
   /** Omit where removal makes no sense, e.g. a library view. */
   onRemove?: (tracks: Track[]) => void | Promise<void>;
+  /** Defaults to "Remove", translated. */
   removeLabel?: string;
 }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
 
   const run = async (action: (tracks: Track[]) => void | Promise<void>) => {
@@ -59,10 +62,10 @@ export function SelectionBar({
             "rounded-full bg-popover/95 px-2 py-1.5 shadow-2xl ring-1 ring-border backdrop-blur",
           )}
           role="toolbar"
-          aria-label="Selected songs"
+          aria-label={t("Selected songs")}
         >
           <span className="px-2 text-xs font-semibold tabular-nums text-foreground">
-            {selection.selectedCount} selected
+            {t("{count} selected", { count: selection.selectedCount })}
           </span>
 
           <button
@@ -72,7 +75,7 @@ export function SelectionBar({
             onClick={() => void run(onAddToQueue)}
           >
             <ListIcon size={15} aria-hidden="true" />
-            Queue
+            {t("Queue")}
           </button>
 
           <button
@@ -82,7 +85,7 @@ export function SelectionBar({
             onClick={() => void run(onAddToPlaylist)}
           >
             {busy ? <Loader variant="spinner" size={14} /> : <PlaylistAddIcon size={15} aria-hidden="true" />}
-            Playlist
+            {t("Playlist")}
           </button>
 
           <button
@@ -92,7 +95,7 @@ export function SelectionBar({
             onClick={() => void run(onDownload)}
           >
             <DownloadIcon size={15} aria-hidden="true" />
-            Download
+            {t("Download")}
           </button>
 
           {onRemove && (
@@ -103,7 +106,7 @@ export function SelectionBar({
               onClick={() => void run(onRemove)}
             >
               <TrashIcon size={15} aria-hidden="true" />
-              {removeLabel}
+              {removeLabel ?? t("Remove")}
             </button>
           )}
 
@@ -114,13 +117,13 @@ export function SelectionBar({
             className={cn(ACTION, "text-muted-foreground hover:text-foreground")}
             onClick={selection.selectAll}
           >
-            All
+            {t("All")}
           </button>
           <button
             type="button"
             className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={selection.clear}
-            aria-label="Clear selection"
+            aria-label={t("Clear selection")}
           >
             <CloseIcon size={16} />
           </button>

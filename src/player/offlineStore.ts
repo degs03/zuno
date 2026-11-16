@@ -7,6 +7,13 @@ import { getAppSetting, getInvokeErrorMessage, setAppSetting } from "../internal
 import { getDownloadQuality, type AudioQuality } from "../internal/audioQuality";
 import { artworkIdentity, getArtworkUrlCandidates } from "../datasource/youtube/artwork";
 import { isOnline, onReconnect, useOnline } from "../internal/connectivity";
+import {
+  hydrateLocalJsonSetting,
+  readLocalJsonSetting,
+  writeLocalJsonSetting,
+} from "../internal/durableLocalSetting";
+import { showNotice } from "../ui/notice";
+import { t, tn } from "../i18n";
 
 const MANIFEST_KEY = "zuno.offline-manifest.v1";
 const MAX_BYTES_KEY = "zuno.offline-max-bytes.v1";
@@ -195,12 +202,37 @@ export async function hydrateOfflineStore(): Promise<void> {
     commitEntries(entries);
     logInternalInfo("offlineStore.hydrate", { count: Object.keys(entries).length });
     void backfillArtwork();
+    void queueRestoredDownloads();
   } catch (error) {
     logInternalWarn("offlineStore.hydrate failed", {
       error: error instanceof Error ? error.message : String(error),
     });
     commitEntries(manifest);
   }
+}
+
+/** Set by a backup restore: tracks to download again, consumed once at the next launch. */
+export const REDOWNLOAD_KEY = "zuno.backup-redownload.v1";
+
+async function queueRestoredDownloads(): Promise<void> {
+  let tracks: unknown = await getAppSetting<unknown>(REDOWNLOAD_KEY);
+  if (!Array.isArray(tracks)) {
+    try {
+      tracks = JSON.parse(localStorage.getItem(REDOWNLOAD_KEY) ?? "null");
+    } catch {
+      tracks = null;
+    }
+  }
+  if (!Array.isArray(tracks) || tracks.length === 0) return;
+  try {
+    localStorage.removeItem(REDOWNLOAD_KEY);
+  } catch {
+    // Cleared durably below.
+  }
+  void setAppSetting(REDOWNLOAD_KEY, null);
+  const missing = (tracks as Track[]).filter((track) => track?.id && !state.entries[track.id]);
+  logInternalInfo("offlineStore.restoreQueue", { count: missing.length });
+  queueDownloads(missing);
 }
 
 /**
@@ -272,6 +304,12 @@ export function useUnavailableOffline(track: Track): boolean {
  * Matched on the image rather than the track, so it applies wherever that cover shows —
  * queue, playlists, the player bar — not only in the Downloads list.
  */
+/** The downloaded track whose saved cover matches `artworkUrl`, if any (non-React). */
+export function getOfflineArtworkTrackId(artworkUrl: string): string | undefined {
+  if (artworkUrl.startsWith(OFFLINE_ARTWORK_PREFIX)) return artworkUrl.slice(OFFLINE_ARTWORK_PREFIX.length);
+  return artworkIndex.get(artworkIdentity(artworkUrl));
+}
+
 export function useOfflineArtworkUrl(artworkUrl: string | undefined): string | undefined {
   const identity = useMemo(() => (artworkUrl ? artworkIdentity(artworkUrl) : null), [artworkUrl]);
   const trackId = useSyncExternalStore(
@@ -440,6 +478,10 @@ async function pump(): Promise<void> {
   pumping = true;
   try {
     while (state.queued.length > 0 && isOnline()) {
+      if (state.usedBytes >= getOfflineMaxBytes() && !(await makeRoom())) {
+        showNotice(t("Download storage is full. Raise the limit in Settings → Downloads."), 6000);
+        break;
+      }
       const [trackId, ...rest] = state.queued;
       const track = pendingTracks.get(trackId);
       setState({ queued: rest, downloadingId: trackId, progress: null });
@@ -461,6 +503,8 @@ async function pump(): Promise<void> {
         }
         logInternalInfo("offlineStore.download complete", { trackId, byteLength });
         const hasArtwork = await saveArtwork(track);
+        // Lyrics go next to the audio too (Rust keeps them only for downloaded tracks).
+        void lyricsFetcher?.(track).catch(() => {});
         pendingTracks.delete(trackId);
         {
           const { [trackId]: _done, ...pending } = state.pending;
@@ -501,19 +545,45 @@ async function pump(): Promise<void> {
   }
 }
 
-/** Trims the store back under its ceiling, oldest download first. */
-async function prune(): Promise<void> {
+/**
+ * Brings the store back under its ceiling by removing the oldest *loose* downloads — never a
+ * song that belongs to a collection kept offline — and says so. Returns whether it is now
+ * under the ceiling.
+ *
+ * This used to delete the oldest files silently, including ones the user had asked to keep.
+ */
+async function makeRoom(): Promise<boolean> {
   const maxBytes = getOfflineMaxBytes();
-  if (state.usedBytes <= maxBytes) return;
+  if (state.usedBytes < maxBytes) return true;
+  const protectedIds = pinnedTrackIds();
+  const candidates = Object.values(state.entries)
+    .filter((entry) => !protectedIds.has(entry.track.id))
+    .sort((left, right) => left.downloadedAt - right.downloadedAt);
+  let used = state.usedBytes;
+  const removed: string[] = [];
+  for (const entry of candidates) {
+    if (used < maxBytes) break;
+    removed.push(entry.track.id);
+    used -= entry.byteLength;
+  }
+  if (removed.length === 0) return false;
+  for (const trackId of removed) {
+    await invoke("offline_audio_remove", { trackId }).catch(() => {});
+  }
+  const gone = new Set(removed);
+  commitEntries(Object.fromEntries(Object.entries(state.entries).filter(([trackId]) => !gone.has(trackId))));
+  logInternalInfo("offlineStore.makeRoom", { removed: removed.length });
+  showNotice(tn("Storage limit reached: removed {n} oldest download", "Storage limit reached: removed {n} oldest downloads", removed.length), 5000);
+  return state.usedBytes < maxBytes;
+}
 
+/** After a download or a lowered limit: trims loose downloads, warns if that is not enough. */
+async function prune(): Promise<void> {
+  if (state.usedBytes <= getOfflineMaxBytes()) return;
   try {
-    await invoke("offline_audio_prune", { maxBytes });
-    const onDisk = await invoke<OnDiskEntry[]>("offline_audio_list");
-    const kept = new Set(onDisk.map((entry) => entry.trackId));
-    const entries = Object.fromEntries(
-      Object.entries(state.entries).filter(([trackId]) => kept.has(trackId)),
-    );
-    commitEntries(entries);
+    if (!(await makeRoom())) {
+      showNotice(t("Downloads are over the storage limit. Raise it, or remove some."), 6000);
+    }
   } catch (error) {
     logInternalWarn("offlineStore.prune failed", {
       error: error instanceof Error ? error.message : String(error),
@@ -521,9 +591,124 @@ async function prune(): Promise<void> {
   }
 }
 
+// ---- Lyrics ---------------------------------------------------------------------------------
+
+/** Fetches (and thereby stores) a downloaded track's lyrics. Injected like the stream resolver. */
+let lyricsFetcher: ((track: Track) => Promise<unknown>) | null = null;
+
+export function setOfflineLyricsFetcher(fetcher: (track: Track) => Promise<unknown>): void {
+  lyricsFetcher = fetcher;
+}
+
+// ---- Collections kept offline ---------------------------------------------------------------
+
+/**
+ * A playlist or album the user asked to *keep* offline: every song is downloaded now, new songs
+ * are downloaded whenever the app opens or reconnects, and none of them is ever removed to make
+ * room. `ref` is what the loader needs to fetch the tracks again.
+ */
+export interface PinnedCollection {
+  id: string;
+  kind: "playlist" | "album";
+  title: string;
+  trackIds: string[];
+  ref: unknown;
+}
+
+const PINS_KEY = "zuno.offline-pins.v1";
+const PINS_EVENT = "offline-pins-change";
+
+const isPinMap = (value: unknown): value is Record<string, PinnedCollection> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+let pinsCached: Record<string, PinnedCollection> | null = null;
+
+function readPins(): Record<string, PinnedCollection> {
+  if (pinsCached === null) pinsCached = readLocalJsonSetting(PINS_KEY, isPinMap) ?? {};
+  return pinsCached;
+}
+
+function writePins(pins: Record<string, PinnedCollection>): void {
+  pinsCached = pins;
+  writeLocalJsonSetting(PINS_KEY, pins);
+  window.dispatchEvent(new Event(PINS_EVENT));
+}
+
+function pinnedTrackIds(): Set<string> {
+  return new Set(Object.values(readPins()).flatMap((pin) => pin.trackIds));
+}
+
+type CollectionLoader = (pin: PinnedCollection) => Promise<Track[]>;
+let collectionLoader: CollectionLoader | null = null;
+
+export function setPinnedCollectionLoader(loader: CollectionLoader): void {
+  collectionLoader = loader;
+}
+
+/** Keeps a collection offline and downloads what it has now. */
+export function pinCollection(pin: Omit<PinnedCollection, "trackIds">, tracks: Track[]): void {
+  const playable = tracks.filter((track) => track.source !== "local");
+  writePins({ ...readPins(), [pin.id]: { ...pin, trackIds: playable.map((track) => track.id) } });
+  queueDownloads(playable);
+}
+
+/** Stops keeping it offline. Its songs stay downloaded, but can now be trimmed for space. */
+export function unpinCollection(id: string): void {
+  const { [id]: _removed, ...rest } = readPins();
+  writePins(rest);
+}
+
+export function isCollectionPinned(id: string): boolean {
+  return Boolean(readPins()[id]);
+}
+
+let syncing = false;
+
+/** Re-fetches every kept collection and queues its new songs. */
+export async function syncPinnedCollections(): Promise<void> {
+  if (syncing || !isOnline() || !collectionLoader) return;
+  syncing = true;
+  try {
+    for (const pin of Object.values(readPins())) {
+      try {
+        const tracks = (await collectionLoader(pin)).filter((track) => track.source !== "local");
+        const current = readPins();
+        if (!current[pin.id]) continue;
+        writePins({ ...current, [pin.id]: { ...pin, trackIds: tracks.map((track) => track.id) } });
+        queueDownloads(tracks);
+      } catch (error) {
+        logInternalWarn("offlineStore.syncPinned failed", { id: pin.id, error: String(error) });
+      }
+    }
+  } finally {
+    syncing = false;
+  }
+}
+
+export async function hydratePinnedCollections(): Promise<void> {
+  await hydrateLocalJsonSetting(PINS_KEY, isPinMap);
+  pinsCached = null;
+  window.dispatchEvent(new Event(PINS_EVENT));
+  void syncPinnedCollections();
+}
+
+function subscribePins(listener: () => void): () => void {
+  window.addEventListener(PINS_EVENT, listener);
+  return () => window.removeEventListener(PINS_EVENT, listener);
+}
+
+export function usePinnedCollections(): Record<string, PinnedCollection> {
+  return useSyncExternalStore(subscribePins, readPins, () => ({}));
+}
+
+export function useIsCollectionPinned(id: string | undefined): boolean {
+  return useSyncExternalStore(subscribePins, () => Boolean(id && readPins()[id]), () => false);
+}
+
 onReconnect(() => {
   void pump();
   void backfillArtwork();
+  void syncPinnedCollections();
 });
 
 function subscribe(listener: Listener): () => void {

@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { cn } from "@/lib/utils";
 import { CheckActiveIcon, LinkIcon } from "@/ui/icons";
 import { logInternalWarn } from "../../internal/logging";
+import { useT } from "../../i18n";
 
 /** How long the outcome stays on the button before it goes back to its label. */
 const FEEDBACK_MS = 2600;
@@ -40,6 +41,7 @@ export function ExternalLinkButton({
   variant = "card",
   className,
 }: ExternalLinkButtonProps) {
+  const t = useT();
   const [outcome, setOutcome] = useState<Outcome>("idle");
   const resetTimerRef = useRef<number | null>(null);
 
@@ -79,7 +81,7 @@ export function ExternalLinkButton({
   };
 
   const message =
-    outcome === "copied" ? "Link copied" : outcome === "failed" ? "Couldn't open" : label;
+    outcome === "copied" ? t("Link copied") : outcome === "failed" ? t("Couldn't open") : label;
 
   return (
     <button
@@ -88,7 +90,7 @@ export function ExternalLinkButton({
       // The destination, spelled out. An icon and two words do not tell anyone where they
       // are about to be sent, and this is the only place the URL is visible.
       title={url}
-      aria-label={`${label} — opens ${url} in your browser`}
+      aria-label={t("{label} — opens {url} in your browser", { label, url })}
       className={cn(
         "group/link flex items-center gap-2 rounded-full transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -115,9 +117,9 @@ export function ExternalLinkButton({
       {/* Announced rather than only coloured, so the outcome is not sight-only. */}
       <span role="status" aria-live="polite" className="sr-only">
         {outcome === "copied"
-          ? `Could not open the browser. ${url} copied to the clipboard.`
+          ? t("Could not open the browser. {url} copied to the clipboard.", { url })
           : outcome === "failed"
-            ? `Could not open ${url}.`
+            ? t("Could not open {url}.", { url })
             : ""}
       </span>
     </button>

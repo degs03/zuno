@@ -5,6 +5,7 @@ import { CheckActiveIcon, CloseIcon, UserIcon, UserPlusIcon } from "@/ui/icons";
 import type { AccountOption, GoogleAccountOption } from "../../datasource/types";
 import type { LibraryController } from "../../player/LibraryController";
 import { logInternalWarn } from "../../internal/logging";
+import { useT } from "../../i18n";
 
 /**
  * Small uppercase header a switcher renders directly above its own rows — never on its own, so
@@ -86,6 +87,7 @@ export function AccountSwitcher({
   label?: string;
   className?: string;
 }) {
+  const t = useT();
   const [accounts, setAccounts] = useState<AccountOption[] | null>(null);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
 
@@ -124,7 +126,7 @@ export function AccountSwitcher({
     return (
       <div className={cn("flex items-center gap-2 px-1  text-sm text-muted-foreground", className)}>
         <Loader variant="spinner" size={16} />
-        Loading channels...
+        {t("Loading channels...")}
       </div>
     );
   }
@@ -132,7 +134,7 @@ export function AccountSwitcher({
   if (accounts.length === 0) {
     return showSingle ? (
       <p className={cn("px-2 py-2 text-sm text-muted-foreground", className)}>
-        No channels were returned for this account.
+        {t("No channels were returned for this account.")}
       </p>
     ) : null;
   }
@@ -201,6 +203,7 @@ export function GoogleAccountSwitcher({
   label?: string;
   className?: string;
 }) {
+  const t = useT();
   const [accounts, setAccounts] = useState<GoogleAccountOption[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -266,7 +269,7 @@ export function GoogleAccountSwitcher({
     return (
       <div className={cn("flex items-center gap-2 px-1 text-sm text-muted-foreground", className)}>
         <Loader variant="spinner" size={16} />
-        Loading accounts...
+        {t("Loading accounts...")}
       </div>
     );
   }
@@ -312,7 +315,7 @@ export function GoogleAccountSwitcher({
                       event.preventDefault();
                       void handleRemove(account, event as unknown as React.MouseEvent);
                     }}
-                    aria-label={`Remove ${account.name}`}
+                    aria-label={t("Remove {name}", { name: account.name })}
                     // `[@media(hover:hover)]` scopes the hover reveal to mice: on touch the button
                     // is simply visible (and finger-sized) instead of an invisible tap target.
                     className="flex shrink-0 items-center justify-center rounded-md p-1 transition-opacity hover:bg-background hover:text-destructive [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:size-10 max-sm:rounded-full"
@@ -340,6 +343,7 @@ export function AddGoogleAccountButton({
   disabled?: boolean;
   className?: string;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
@@ -355,7 +359,7 @@ export function AddGoogleAccountButton({
       <span className="grid size-8 shrink-0 place-items-center rounded-full bg-card text-muted-foreground">
         <UserPlusIcon size={16} aria-hidden="true" />
       </span>
-      Add account
+      {t("Add account")}
     </button>
   );
 }

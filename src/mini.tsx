@@ -4,6 +4,7 @@ import { MotionConfig } from "motion/react";
 
 import "./ui/styles/global.css";
 import { applyPlatformAttributes } from "./ui/platform";
+import { initI18n } from "./i18n";
 import MiniPlayer from "./ui/components/mini-player/MiniPlayer";
 import { SkinnedMiniPlayer } from "./ui/components/mini-player/SkinnedMiniPlayer";
 import { hydrateMiniPlayerSettings, useMiniPlayerSkin } from "./ui/settings/miniPlayer";
@@ -29,11 +30,14 @@ applyRenderEffects();
 applyAppearance();
 void Promise.all([hydrateMiniPlayerSettings(), hydratePaperPcMode(), hydrateRenderEffects(), hydrateAppearance()]);
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <MiniPlayerRoot />
-  </React.StrictMode>,
-);
+// Same language as the main window (same durable key), loaded before the first frame.
+void initI18n().finally(() => {
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <MiniPlayerRoot />
+    </React.StrictMode>,
+  );
+});
 
 /** The MotionConfig App.tsx has, for the same reason: it is what reduces the beUI springs. */
 function MiniPlayerRoot() {

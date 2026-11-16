@@ -7,12 +7,14 @@
  * a list the user was not actually looking at. See sidebarLibrary.check.ts.
  */
 
+import { msg } from "../../i18n";
+
 export type LibrarySort = "custom" | "recent" | "name";
 
 export const LIBRARY_SORTS: ReadonlyArray<{ value: LibrarySort; label: string; hint: string }> = [
-  { value: "custom", label: "Custom", hint: "Your order — drag to rearrange" },
-  { value: "recent", label: "Recent", hint: "Most recently played first" },
-  { value: "name", label: "Name", hint: "Alphabetical" },
+  { value: "custom", label: msg("Custom"), hint: msg("Your order — drag to rearrange") },
+  { value: "recent", label: msg("Recent"), hint: msg("Most recently played first") },
+  { value: "name", label: msg("Name"), hint: msg("Alphabetical") },
 ];
 
 /** The shape both playlists and albums satisfy, so one path serves the whole sidebar. */
@@ -116,9 +118,9 @@ export function canReorderLibrary(sort: LibrarySort, query: string): boolean {
   return sort === "custom" && !query.trim();
 }
 
-/** Why dragging is unavailable, for the tooltip. Null when it is available. */
+/** Why dragging is unavailable, for the tooltip — untranslated, the caller passes it to `t`. Null when it is available. */
 export function reorderBlockedReason(sort: LibrarySort, query: string): string | null {
-  if (query.trim()) return "Clear the filter to rearrange";
-  if (sort !== "custom") return "Switch to Custom order to rearrange";
+  if (query.trim()) return msg("Clear the filter to rearrange");
+  if (sort !== "custom") return msg("Switch to Custom order to rearrange");
   return null;
 }

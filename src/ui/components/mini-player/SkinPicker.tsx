@@ -8,6 +8,7 @@ import { useReduceMotion } from "../../settings/renderEffects";
 import { shallowEqual, usePlayerSelector } from "../../../player/playerStore";
 import { TrackArtwork } from "../TrackArtwork";
 import { SKIN_COMPONENTS, type MiniSkinProps } from "./skins";
+import { useT } from "../../../i18n";
 
 const PREVIEW_HEIGHT = 124;
 const PREVIEW_WIDTH = 152;
@@ -20,6 +21,7 @@ const noop = () => {};
  * looks with your music, not a placeholder.
  */
 export function MiniPlayerSkinPicker({ labelledBy }: { labelledBy: string }) {
+  const t = useT();
   const selected = useMiniPlayerSkin();
   const reduceMotion = useReduceMotion();
   const now = usePlayerSelector(
@@ -88,15 +90,15 @@ export function MiniPlayerSkinPicker({ labelledBy }: { labelledBy: string }) {
               </div>
             </div>
             <span className="flex flex-col gap-0.5">
-              <strong className="text-sm font-medium text-foreground">{skin.name}</strong>
-              <span className="text-xs text-muted-foreground">{skin.description}</span>
+              <strong className="text-sm font-medium text-foreground">{t(skin.name)}</strong>
+              <span className="text-xs text-muted-foreground">{t(skin.description)}</span>
             </span>
             {/* A sibling overlay rather than a wrapping button: the preview holds buttons,
                 and a button inside a button is invalid. */}
             <button
               type="button"
               aria-pressed={isSelected}
-              aria-label={`${skin.name} skin`}
+              aria-label={t("{name} skin", { name: t(skin.name) })}
               onClick={() => setMiniPlayerSkin(skin.id)}
               className="absolute inset-0 rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />

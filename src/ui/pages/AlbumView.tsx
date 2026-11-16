@@ -11,12 +11,14 @@ import { shuffleTracks } from "../../player/shuffleTracks";
 import { useTrackContextMenu } from "../components/TrackContextMenu";
 import { SelectionBar } from "../components/SelectionBar";
 import { useTrackSelection } from "../hooks/useTrackSelection";
-import { queueDownloads, useOfflineState } from "../../player/offlineStore";
+import { pinCollection, queueDownloads, unpinCollection, useIsCollectionPinned, useOfflineState } from "../../player/offlineStore";
+import { showNotice } from "../notice";
 import { ArtistLinks } from "../components/ArtistLinks";
 import { formatCollectionMeta, MediaHeader } from "../components/MediaHeader";
 import { useKeyboardShortcuts } from "../settings/keyboardShortcuts";
 import { shouldStartPageSearch } from "./pageSearchKeyboard";
 import { loadFailedMessage } from "../../internal/connectivity";
+import { useT } from "../../i18n";
 
 /*
  * Collapsed search affordance that widens on hover/focus or while it holds a query —
@@ -41,6 +43,7 @@ function getTrackRenderKey(track: Track, index: number): string {
 }
 
 export function AlbumView({ album, playerController, libraryController }: AlbumViewProps) {
+  const t = useT();
   const { openPlaylistPicker, openTrackMenu } = useTrackContextMenu();
   const keyboardShortcuts = useKeyboardShortcuts();
   const {
@@ -56,6 +59,7 @@ export function AlbumView({ album, playerController, libraryController }: AlbumV
    * store is a count that drifts the moment a download finishes elsewhere.
    */
   const offlineState = useOfflineState();
+  const keptOffline = useIsCollectionPinned(album?.id);
   const downloadCounts = useMemo(
     () => ({
       downloaded: tracks.filter((track) => Boolean(offlineState.entries[track.id])).length,
@@ -89,7 +93,7 @@ export function AlbumView({ album, playerController, libraryController }: AlbumV
         setTracks(items);
       })
       .catch(() => {
-        if (active && !showedTracks) setError(loadFailedMessage("Unable to load this album."));
+        if (active && !showedTracks) setError(loadFailedMessage(t("Unable to load this album.")));
       })
       .finally(() => {
         if (active) setIsLoading(false);
@@ -97,7 +101,7 @@ export function AlbumView({ album, playerController, libraryController }: AlbumV
     return () => {
       active = false;
     };
-  }, [album, libraryController]);
+  }, [album, libraryController, t]);
 
   const visibleTracks = useMemo(() => {
     const query = albumSearchQuery.trim().toLocaleLowerCase();
@@ -177,7 +181,7 @@ export function AlbumView({ album, playerController, libraryController }: AlbumV
   return (
     <div className="flex flex-col gap-8">
       <MediaHeader
-        eyebrow="Album"
+        eyebrow={t("Album")}
         title={album.title}
         subtitle={<ArtistLinks artists={album.artists} fallback={album.artist} />}
         meta={formatCollectionMeta(tracks)}
@@ -199,7 +203,22 @@ export function AlbumView({ album, playerController, libraryController }: AlbumV
         }}
         onAddToQueue={() => playerController.addTracksToQueue(tracks)}
         onAddToPlaylist={() => openPlaylistPicker(tracks[0], tracks)}
-        download={{ onStart: () => queueDownloads(tracks), counts: downloadCounts }}
+        download={{
+          onStart: () => queueDownloads(tracks),
+          counts: downloadCounts,
+          keepOffline: {
+            pinned: keptOffline,
+            onToggle: () => {
+              if (keptOffline) {
+                unpinCollection(album.id);
+                showNotice(t("No longer kept offline. Its songs stay downloaded."));
+              } else {
+                pinCollection({ id: album.id, kind: "album", title: album.title, ref: album }, tracks);
+                showNotice(t("\"{title}\" will stay offline", { title: album.title }));
+              }
+            },
+          },
+        }}
       />
       {error && <p className="px-2 py-10 text-center text-sm text-muted-foreground">{error}</p>}
       {/*
@@ -212,7 +231,7 @@ export function AlbumView({ album, playerController, libraryController }: AlbumV
           <div
             className="flex flex-wrap items-center gap-1.5 self-start [&>button]:flex [&>button]:min-h-8 [&>button]:min-w-0 [&>button]:items-center [&>button]:justify-center [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:bg-muted/40 [&>button]:px-3 [&>button]:text-sm [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors hover:[&>button]:bg-muted/70 hover:[&>button]:text-foreground focus-visible:[&>button]:outline-none focus-visible:[&>button]:ring-2 focus-visible:[&>button]:ring-ring"
             role="group"
-            aria-label="Album song tools"
+            aria-label={t("Album song tools")}
           >
             <div
               className={cn(SEARCH_FIELD, albumSearchQuery ? "w-56" : SEARCH_FIELD_COLLAPSED)}
@@ -226,8 +245,8 @@ export function AlbumView({ album, playerController, libraryController }: AlbumV
                 ref={albumSearchInputRef}
                 type="text"
                 value={albumSearchQuery}
-                aria-label="Search songs in album"
-                placeholder="Search album"
+                aria-label={t("Search songs in album")}
+                placeholder={t("Search album")}
                 onChange={(event) => setAlbumSearchQuery(event.target.value)}
                 onKeyDown={handleAlbumSearchKeyDown}
               />
@@ -235,7 +254,7 @@ export function AlbumView({ album, playerController, libraryController }: AlbumV
                 <button
                   className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   type="button"
-                  aria-label="Clear album search"
+                  aria-label={t("Clear album search")}
                   onClick={() => setAlbumSearchQuery("")}
                 >
                   <CloseIcon size={14} aria-hidden="true" />
@@ -244,9 +263,9 @@ export function AlbumView({ album, playerController, libraryController }: AlbumV
             </div>
           </div>
           {isLoading ? (
-            <TrackListSkeleton label="Loading songs" />
+            <TrackListSkeleton label={t("Loading songs")} />
           ) : visibleTracks.length === 0 && albumSearchQuery.trim() ? (
-            <p className="px-2 py-10 text-center text-sm text-muted-foreground">No songs match this search.</p>
+            <p className="px-2 py-10 text-center text-sm text-muted-foreground">{t("No songs match this search.")}</p>
           ) : (
             <div className="flex flex-col gap-0.5">
               {visibleTracks.map((track, index) => {

@@ -3,6 +3,7 @@ import { RangeSlider } from "@/components/motion/range-slider";
 import { VolumeLoudIcon, VolumeMutedIcon, VolumeSmallIcon } from "@/ui/icons";
 import { playerController, shallowEqual, usePlayerSelector } from "../../../player/playerStore";
 import { FloatingPanel } from "../FloatingPanel";
+import { useT } from "../../../i18n";
 
 /** Scroll step over the icon, matching the old inline slider's wheel behaviour. */
 const WHEEL_STEP_PERCENT = 5;
@@ -24,6 +25,7 @@ export function VolumeControl() {
     (state) => ({ volume: state.volume, muted: state.muted }),
     shallowEqual,
   );
+  const t = useT();
   const [isOpen, setIsOpen] = useState(false);
   const [volume, setVolume] = useState(() => playerController.getVolume());
   const [isMuted, setIsMuted] = useState(() => playerController.isMuted());
@@ -73,7 +75,7 @@ export function VolumeControl() {
             if (delta === 0) return;
             applyVolume(percent + (delta < 0 ? 1 : -1) * WHEEL_STEP_PERCENT);
           }}
-          aria-label={isMuted ? `Unmute (volume ${percent}%)` : `Mute (volume ${percent}%)`}
+          aria-label={isMuted ? t("Unmute (volume {percent}%)", { percent }) : t("Mute (volume {percent}%)", { percent })}
           className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <VolumeGlyph size={18} aria-hidden="true" />
@@ -83,7 +85,7 @@ export function VolumeControl() {
       <div className="flex flex-col gap-2">
         <div className="flex items-baseline justify-between gap-3">
           <span className="text-xs font-medium text-foreground">
-            {isMuted ? "Muted" : "Volume"}
+            {isMuted ? t("Muted") : t("Volume")}
           </span>
           <span className="text-xs tabular-nums text-muted-foreground">{percent}%</span>
         </div>
@@ -94,7 +96,7 @@ export function VolumeControl() {
           max={100}
           step={1}
           showTicks={false}
-          aria-label="Volume"
+          aria-label={t("Volume")}
         />
       </div>
     </FloatingPanel>

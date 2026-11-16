@@ -8,6 +8,7 @@ import type { Track } from "../../datasource/types";
 import { logInternalError } from "../../internal/logging";
 import { forgetArtworkSource } from "../../internal/artworkCache";
 import { LOCAL_ARTWORK_PREFIX } from "../../player/localPlaylists";
+import { msg, useT } from "../../i18n";
 
 export interface LocalAudioTags {
   title?: string;
@@ -37,13 +38,13 @@ const FIELDS: Array<{
   min?: number;
   max?: number;
 }> = [
-  { key: "title", label: "Title" },
-  { key: "artist", label: "Artist" },
-  { key: "album", label: "Album" },
-  { key: "albumArtist", label: "Album artist" },
-  { key: "genre", label: "Genre" },
-  { key: "trackNumber", label: "Track number", numeric: true, min: 1, max: 9999 },
-  { key: "year", label: "Year", numeric: true, min: 1, max: 9999 },
+  { key: "title", label: msg("Title") },
+  { key: "artist", label: msg("Artist") },
+  { key: "album", label: msg("Album") },
+  { key: "albumArtist", label: msg("Album artist") },
+  { key: "genre", label: msg("Genre") },
+  { key: "trackNumber", label: msg("Track number"), numeric: true, min: 1, max: 9999 },
+  { key: "year", label: msg("Year"), numeric: true, min: 1, max: 9999 },
 ];
 
 const FIELD =
@@ -72,6 +73,7 @@ export function TagEditor({
   /** Fired after a successful write so the caller can rescan. */
   onSaved?: () => void;
 }) {
+  const t = useT();
   const [tags, setTags] = useState<LocalAudioTags | null>(null);
   const [loadedTags, setLoadedTags] = useState<LocalAudioTags | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export function TagEditor({
   useEffect(() => {
     let cancelled = false;
     if (!track.localPath) {
-      setError("This song has no file on disk.");
+      setError(t("This song has no file on disk."));
       return;
     }
     const path = track.localPath;
@@ -97,7 +99,7 @@ export function TagEditor({
       })
       .catch((cause: unknown) => {
         logInternalError("TagEditor.read failed", cause, { path });
-        if (!cancelled) setError("Could not read the tags on this file.");
+        if (!cancelled) setError(t("Could not read the tags on this file."));
       });
 
     // Separate from the tags read so a file with unreadable art still opens for text editing.
@@ -110,7 +112,7 @@ export function TagEditor({
     return () => {
       cancelled = true;
     };
-  }, [track.localPath]);
+  }, [track.localPath, t]);
 
   // Focus the first field once the values are in, so the dialog opens ready to type.
   useEffect(() => {
@@ -133,8 +135,8 @@ export function TagEditor({
     try {
       const selected = await openDialog({
         multiple: false,
-        title: "Choose cover art",
-        filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "bmp", "webp"] }],
+        title: t("Choose cover art"),
+        filters: [{ name: t("Images"), extensions: ["jpg", "jpeg", "png", "gif", "bmp", "webp"] }],
       });
       if (typeof selected !== "string") return;
       const image = await invoke<LocalArtwork>("read_image_file", { path: selected });
@@ -146,7 +148,7 @@ export function TagEditor({
     } finally {
       setPickingImage(false);
     }
-  }, [track.localPath]);
+  }, [track.localPath, t]);
 
   const save = useCallback(async () => {
     if (!tags || !track.localPath || saving || !isDirty) return;
@@ -182,7 +184,7 @@ export function TagEditor({
       className="fixed inset-0 z-[70] grid place-items-center bg-background/70 p-6 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
-      aria-label={`Edit tags for ${track.title}`}
+      aria-label={t("Edit tags for {title}", { title: track.title })}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) requestClose();
       }}
@@ -200,7 +202,7 @@ export function TagEditor({
       <div className="flex w-full max-w-lg flex-col gap-4 rounded-2xl bg-popover p-5 shadow-2xl ring-1 ring-border">
         <header className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col">
-            <h2 className="text-base font-semibold text-foreground">Edit tags</h2>
+            <h2 className="text-base font-semibold text-foreground">{t("Edit tags")}</h2>
             <p className="truncate text-xs text-muted-foreground" title={track.localPath}>
               {track.localPath}
             </p>
@@ -208,7 +210,7 @@ export function TagEditor({
           <button
             type="button"
             onClick={requestClose}
-            aria-label="Close"
+            aria-label={t("Close")}
             className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <CloseIcon size={18} />
@@ -218,7 +220,7 @@ export function TagEditor({
         {tags === null && !error ? (
           <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader variant="spinner" size={16} />
-            Reading tags...
+            {t("Reading tags...")}
           </div>
         ) : tags === null ? null : (
           <div className="flex gap-4">
@@ -237,7 +239,7 @@ export function TagEditor({
                   disabled={pickingImage || saving}
                   onClick={() => void chooseImage()}
                 >
-                  {pickingImage ? "Reading..." : coverUrl ? "Replace" : "Add cover"}
+                  {pickingImage ? t("Reading...") : coverUrl ? t("Replace") : t("Add cover")}
                 </button>
                 {coverUrl && (
                   <button
@@ -249,7 +251,7 @@ export function TagEditor({
                       setCoverUrl(null);
                     }}
                   >
-                    Remove
+                    {t("Remove")}
                   </button>
                 )}
               </div>
@@ -264,7 +266,7 @@ export function TagEditor({
                     !field.numeric && "col-span-2",
                   )}
                 >
-                  {field.label}
+                  {t(field.label)}
                   <input
                     ref={index === 0 ? firstFieldRef : undefined}
                     className={FIELD}
@@ -306,7 +308,7 @@ export function TagEditor({
             disabled={saving}
             className="rounded-full px-4 py-2 text-sm text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            Cancel
+            {t("Cancel")}
           </button>
           <button
             type="button"
@@ -314,7 +316,7 @@ export function TagEditor({
             onClick={() => void save()}
             className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-95 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {saving ? "Saving..." : "Save to file"}
+            {saving ? t("Saving...") : t("Save to file")}
           </button>
         </footer>
       </div>

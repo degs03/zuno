@@ -4,6 +4,7 @@ import type { Album, Artist, BrowseShelf, Playlist, Track } from "../../datasour
 import { libraryController, type PlayerControllerActions } from "../../player/playerStore";
 import { BrowseShelves } from "../components/BrowseShelves";
 import { TrackArtwork } from "../components/TrackArtwork";
+import { useT } from "../../i18n";
 
 /**
  * "Related" for a track: similar artists, playlists it appears on, more from the same album.
@@ -25,6 +26,7 @@ export function RelatedPage({
   onOpenArtist: (artist: Artist) => void;
   onOpenPlaylist: (playlist: Playlist) => void;
 }) {
+  const t = useT();
   const [shelves, setShelves] = useState<BrowseShelf[] | null>(null);
 
   useEffect(() => {
@@ -54,7 +56,7 @@ export function RelatedPage({
         />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Related to
+            {t("Related to")}
           </span>
           <h1 className="truncate text-2xl font-semibold text-foreground">{track.title}</h1>
           <span className="truncate text-sm text-muted-foreground">{track.artist}</span>
@@ -62,12 +64,12 @@ export function RelatedPage({
       </header>
 
       {!shelves ? (
-        <div className="grid place-items-center py-16" role="status" aria-label="Loading">
+        <div className="grid place-items-center py-16" role="status" aria-label={t("Loading")}>
           <SpinnerSteps size={30} color="currentColor" />
         </div>
       ) : shelves.length === 0 ? (
         <p className="px-2 py-10 text-center text-sm text-muted-foreground">
-          YouTube Music has nothing related for this track.
+          {t("YouTube Music has nothing related for this track.")}
         </p>
       ) : (
         <BrowseShelves

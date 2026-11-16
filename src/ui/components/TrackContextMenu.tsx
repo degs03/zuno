@@ -32,6 +32,7 @@ import {
 import { TrackArtwork } from "./TrackArtwork";
 import { cn } from "@/lib/utils";
 import { Loader } from "@/components/motion/loader";
+import { tn, useT } from "../../i18n";
 
 /** Stable identity so useSyncExternalStore's server snapshot never loops. */
 const NO_PLAYLISTS: Playlist[] = [];
@@ -81,6 +82,7 @@ export function TrackContextMenuProvider({
   onOpenRelated,
   onOpenAlbum,
 }: TrackContextMenuProviderProps) {
+  const t = useT();
   const libraryState = useLibraryState();
   const playerState = usePlayerSelector((player) => ({ currentTrack: player.currentTrack }), shallowEqual);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -100,6 +102,8 @@ export function TrackContextMenuProvider({
   const [isRemovingTrack, setIsRemovingTrack] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  /** Which icon the toast shows, decided where it is raised: the text is translated, so it can't be matched. */
+  const [toastIcon, setToastIcon] = useState<"check" | "close" | null>(null);
   const [editingTagsFor, setEditingTagsFor] = useState<Track | null>(null);
   /** Non-null when the picker is acting on a multi-selection rather than one song. */
   const [batchTracks, setBatchTracks] = useState<Track[] | null>(null);
@@ -292,14 +296,16 @@ export function TrackContextMenuProvider({
     });
   };
 
-  const showToast = (message: string, duration = 3000) => {
+  const showToast = (message: string, duration = 3000, icon: "check" | "close" | null = null) => {
     setToast(message);
+    setToastIcon(icon);
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), duration);
   };
 
   const showPersistentToast = (message: string) => {
     setToast(message);
+    setToastIcon(null);
     if (toastTimerRef.current !== null) {
       window.clearTimeout(toastTimerRef.current);
       toastTimerRef.current = null;
@@ -310,14 +316,14 @@ export function TrackContextMenuProvider({
     if (!track) return;
     playerController.addToQueue(track);
     setMenuPosition(null);
-    showToast(`Added "${track.title}" to queue`);
+    showToast(t("Added \"{title}\" to queue", { title: track.title }), undefined, "check");
   };
 
   const playNext = () => {
     if (!track) return;
     playerController.playNext(track);
     setMenuPosition(null);
-    showToast(`"${track.title}" will play next`);
+    showToast(t("\"{title}\" will play next", { title: track.title }), undefined, "check");
   };
 
   /** Plays the track solo and lets autoplay fill the rest, seeded from it — a YT Music mix. */
@@ -335,9 +341,9 @@ export function TrackContextMenuProvider({
       await navigator.clipboard.writeText(
         `https://music.youtube.com/watch?v=${encodeURIComponent(selectedTrack.id)}`,
       );
-      showToast("Link copied");
+      showToast(t("Link copied"), undefined, "check");
     } catch {
-      showToast("Unable to copy the link.", 4000);
+      showToast(t("Unable to copy the link."), 4000);
     }
   };
 
@@ -367,7 +373,7 @@ export function TrackContextMenuProvider({
     setIsRemovingTrack(true);
     setError(null);
     setMenuPosition(null);
-    showPersistentToast("Removing...");
+    showPersistentToast(t("Removing..."));
 
     try {
       if (playlist.kind === "liked-songs" || playlist.id === "LM") {
@@ -378,8 +384,10 @@ export function TrackContextMenuProvider({
       menuContext.onRemove?.(selectedTrack);
       showToast(
         playlist.kind === "liked-songs" || playlist.id === "LM"
-          ? "Removed from Liked Songs"
-          : `Removed from ${playlist.title}`,
+          ? t("Removed from Liked Songs")
+          : t("Removed from {playlist}", { playlist: playlist.title }),
+        undefined,
+        "check",
       );
     } catch (removeError) {
       logInternalError("TrackContextMenu.removeFromPlaylist failed", removeError, {
@@ -388,7 +396,7 @@ export function TrackContextMenuProvider({
         playlistTitle: playlist.title,
       });
       showToast(
-        removeError instanceof Error ? removeError.message : "Unable to remove this song.",
+        removeError instanceof Error ? removeError.message : t("Unable to remove this song."),
         4000,
       );
     } finally {
@@ -426,33 +434,32 @@ export function TrackContextMenuProvider({
 
     try {
       if (batch) {
-        showPersistentToast(`Adding 0 of ${batch.length}...`);
+        showPersistentToast(t("Adding {done} of {total}...", { done: 0, total: batch.length }));
         const result = await libraryController.addTracksToPlaylist(
           batch,
           playlist,
           (done, total) => {
-            showPersistentToast(`Adding ${done} of ${total}...`);
+            showPersistentToast(t("Adding {done} of {total}...", { done, total }));
           },
         );
         // Reports what actually happened rather than a flat "done": with a batch, some
         // already being present or failing is normal and worth knowing about.
-        const parts = [`Added ${result.added} to ${playlist.title}`];
-        if (result.alreadyPresent > 0) parts.push(`${result.alreadyPresent} already there`);
-        if (result.failed > 0) parts.push(`${result.failed} failed`);
-        showToast(parts.join(" · "), 5000);
+        const parts = [t("Added {count} to {playlist}", { count: result.added, playlist: playlist.title })];
+        if (result.alreadyPresent > 0) parts.push(tn("{n} already there", "{n} already there", result.alreadyPresent));
+        if (result.failed > 0) parts.push(tn("{n} failed", "{n} failed", result.failed));
+        showToast(parts.join(" · "), 5000, "check");
       } else {
-        showPersistentToast("Adding...");
+        showPersistentToast(t("Adding..."));
         const result = await libraryController.addTrackToPlaylist(selectedTrack, playlist);
         // Ticked straight away, so reopening the picker does not have to wait on another round
         // trip to show what just happened.
         setRemoteMembership((current) => new Set(current).add(barePlaylistId(playlist.id)));
-        showToast(
-          result === "already-present" ? "Already in playlist" : `Added to ${playlist.title}`,
-        );
+        if (result === "already-present") showToast(t("Already in playlist"), undefined, "close");
+        else showToast(t("Added to {playlist}", { playlist: playlist.title }), undefined, "check");
       }
     } catch (addError) {
       showToast(
-        addError instanceof Error ? addError.message : "Unable to add this song.",
+        addError instanceof Error ? addError.message : t("Unable to add this song."),
         4000,
       );
     } finally {
@@ -472,27 +479,28 @@ export function TrackContextMenuProvider({
   const rateTrack = async (selectedTrack: Track, rating: TrackRating) => {
     if (selectedTrack.source === "local") return;
     if (libraryState.status === "signed-out" || !libraryState.library) {
-      showToast("Sign in to like");
+      showToast(t("Sign in to like"));
       return;
     }
     if (libraryState.pendingLikeTrackIds.has(selectedTrack.id)) return;
 
     const pendingLabel =
-      rating === "like" ? "Liking..." : rating === "dislike" ? "Disliking..." : "Clearing...";
+      rating === "like" ? t("Liking...") : rating === "dislike" ? t("Disliking...") : t("Clearing...");
     const doneLabel =
       rating === "like"
-        ? "Added to Liked Songs"
+        ? t("Added to Liked Songs")
         : rating === "dislike"
-          ? "Disliked"
-          : "Rating cleared";
+          ? t("Disliked")
+          : t("Rating cleared");
 
     showPersistentToast(pendingLabel);
     try {
       await libraryController.setTrackRating(selectedTrack, rating);
-      showToast(doneLabel);
+      // Only a like got the check before (its text started with "Added "); dislike and clear had none.
+      showToast(doneLabel, undefined, rating === "like" ? "check" : null);
     } catch (ratingError) {
       showToast(
-        ratingError instanceof Error ? ratingError.message : "Unable to update this rating.",
+        ratingError instanceof Error ? ratingError.message : t("Unable to update this rating."),
         4000,
       );
     }
@@ -567,34 +575,34 @@ export function TrackContextMenuProvider({
 
       {/* Mobile: a scrim under the bottom sheet. Tapping it reaches the window mousedown
           listener that closes the menu, the same as clicking away on desktop. */}
-      {isMobile && menuPosition && track && <div className="fixed inset-0 z-40 bg-[var(--color-scrim)]" aria-hidden="true" />}
+      {isMobile && menuPosition && track && <div className="fixed inset-0 z-[80] bg-[var(--color-scrim)]" aria-hidden="true" />}
       {menuPosition && track && (
         <div
           ref={menuRef}
           data-menu-sheet
-          className="fixed z-50 flex min-w-56 flex-col gap-0.5 rounded-xl bg-popover/95 p-1.5 shadow-2xl backdrop-blur"
+          className="fixed z-[85] flex min-w-56 flex-col gap-0.5 rounded-xl bg-popover/95 p-1.5 shadow-2xl backdrop-blur"
           style={{ left: menuPosition.x, top: menuPosition.y }}
           role="menu"
           onMouseDown={(event) => event.stopPropagation()}
         >
           <button type="button" role="menuitem" className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-card disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={playNext}>
             <SkipNextIcon size={18} aria-hidden="true" />
-            <span className="flex-1">Play next</span>
+            <span className="flex-1">{t("Play next")}</span>
           </button>
           <button type="button" role="menuitem" className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-card disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={addToQueue}>
             <ListIcon size={18} aria-hidden="true" />
-            <span className="flex-1">Add to queue</span>
+            <span className="flex-1">{t("Add to queue")}</span>
           </button>
           {/* Needs a YouTube video id to seed the mix — a local file has nothing to seed from. */}
           {track.source !== "local" && (
             <button type="button" role="menuitem" className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-card disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={startRadio}>
               <RadioIcon size={18} aria-hidden="true" />
-              <span className="flex-1">Start radio</span>
+              <span className="flex-1">{t("Start radio")}</span>
             </button>
           )}
           <button type="button" role="menuitem" className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-card disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={openPicker}>
             <PlaylistAddIcon size={18} aria-hidden="true" />
-            <span className="flex-1">Add to playlist</span>
+            <span className="flex-1">{t("Add to playlist")}</span>
             <kbd>Ctrl S</kbd>
           </button>
           {canLikeSelectedTrack && (
@@ -613,7 +621,7 @@ export function TrackContextMenuProvider({
                 <HeartIcon size={18} aria-hidden="true" />
               )}
               <span className="flex-1">
-                {selectedTrackIsLiked ? "Remove like" : "Like song"}
+                {selectedTrackIsLiked ? t("Remove like") : t("Like song")}
               </span>
             </button>
           )}
@@ -643,12 +651,12 @@ export function TrackContextMenuProvider({
               )}
               <span className="flex-1">
                 {selectedTrackOfflineStatus === "ready"
-                  ? "Remove download"
+                  ? t("Remove download")
                   : selectedTrackOfflineStatus === "downloading"
-                    ? "Cancel download"
+                    ? t("Cancel download")
                     : selectedTrackOfflineStatus === "queued"
-                      ? "Remove from download queue"
-                      : "Download"}
+                      ? t("Remove from download queue")
+                      : t("Download")}
               </span>
             </button>
           )}
@@ -666,7 +674,7 @@ export function TrackContextMenuProvider({
               }}
             >
               <PencilIcon size={18} aria-hidden="true" />
-              <span className="flex-1">Edit tags</span>
+              <span className="flex-1">{t("Edit tags")}</span>
             </button>
           )}
           {/* Streamed tracks only: a local file has no YouTube page to be related to. */}
@@ -682,7 +690,7 @@ export function TrackContextMenuProvider({
               }}
             >
               <AlbumIcon size={18} aria-hidden="true" />
-              <span className="flex-1 truncate">Go to album</span>
+              <span className="flex-1 truncate">{t("Go to album")}</span>
             </button>
           )}
           {onOpenRelated && track && track.source !== "local" && (
@@ -697,13 +705,13 @@ export function TrackContextMenuProvider({
               }}
             >
               <CompassIcon size={18} aria-hidden="true" />
-              <span className="flex-1">Show related</span>
+              <span className="flex-1">{t("Show related")}</span>
             </button>
           )}
           {canCopySelectedTrackLink && (
             <button type="button" role="menuitem" className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-foreground transition-colors hover:bg-card disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={() => void copyLink()}>
               <LinkIcon size={18} aria-hidden="true" />
-              <span className="flex-1">Copy link</span>
+              <span className="flex-1">{t("Copy link")}</span>
             </button>
           )}
           {canRemoveSelectedTrackFromPlaylist && (
@@ -714,7 +722,7 @@ export function TrackContextMenuProvider({
               disabled={Boolean(addingPlaylistId || isRemovingTrack)}
             >
               <TrashIcon size={18} aria-hidden="true" />
-              <span className="flex-1">Remove from playlist</span>
+              <span className="flex-1">{t("Remove from playlist")}</span>
             </button>
           )}
         </div>
@@ -731,7 +739,7 @@ export function TrackContextMenuProvider({
             className="flex max-h-[70vh] w-[min(28rem,90vw)] flex-col gap-3 rounded-2xl bg-popover p-4 shadow-2xl"
             role="dialog"
             aria-modal="true"
-            aria-label={`Add ${track.title} to playlist`}
+            aria-label={t("Add {title} to playlist", { title: track.title })}
             onMouseDown={(event) => event.stopPropagation()}
           >
             <header className="flex items-center gap-3">
@@ -753,7 +761,7 @@ export function TrackContextMenuProvider({
                 className="flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 disabled={Boolean(addingPlaylistId)}
                 onClick={() => setIsPickerOpen(false)}
-                aria-label="Close playlist picker"
+                aria-label={t("Close playlist picker")}
               >
                 <CloseIcon size={19} />
               </button>
@@ -769,8 +777,8 @@ export function TrackContextMenuProvider({
                   setSelectedPlaylistIndex(null);
                 }}
                 onKeyDown={handlePickerKeyDown}
-                placeholder="Find a playlist"
-                aria-label="Find a playlist"
+                placeholder={t("Find a playlist")}
+                aria-label={t("Find a playlist")}
               />
             </label>
 
@@ -780,10 +788,10 @@ export function TrackContextMenuProvider({
               {playlists.length === 0 ? (
                 <p className="px-2 py-6 text-center text-sm text-muted-foreground">
                   {query
-                    ? "No matching playlists."
+                    ? t("No matching playlists.")
                     : libraryState.status === "signed-out"
-                      ? "Sign in to YouTube Music to add songs, or create a local playlist."
-                      : "No editable playlists were found."}
+                      ? t("Sign in to YouTube Music to add songs, or create a local playlist.")
+                      : t("No editable playlists were found.")}
                 </p>
               ) : (
                 playlists.map(({ playlist, isMember }, index) => (
@@ -807,19 +815,19 @@ export function TrackContextMenuProvider({
                     </span>
                     <span className="flex min-w-0 flex-1 flex-col text-left [&_span]:truncate [&_span]:text-xs [&_span]:text-muted-foreground [&_strong]:truncate [&_strong]:text-sm [&_strong]:font-medium">
                       <strong>{playlist.title}</strong>
-                      <span>{isMember ? "Already added" : playlist.owner}</span>
+                      <span>{isMember ? t("Already added") : playlist.owner}</span>
                     </span>
                     {addingPlaylistId === playlist.id ? (
-                      <span className="shrink-0 text-xs text-muted-foreground">Adding...</span>
+                      <span className="shrink-0 text-xs text-muted-foreground">{t("Adding...")}</span>
                     ) : isMember ? (
                       /* Still clickable: this only means we *know* it is in there. Adding again
                          is harmless and answers "Already in playlist". */
                       <span
                         className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground"
-                        title="Already in this playlist"
+                        title={t("Already in this playlist")}
                       >
                         <CheckIcon size={13} aria-hidden="true" />
-                        <span className="sr-only">Already in this playlist</span>
+                        <span className="sr-only">{t("Already in this playlist")}</span>
                       </span>
                     ) : null}
                   </button>
@@ -834,7 +842,7 @@ export function TrackContextMenuProvider({
         <TagEditor
           track={editingTagsFor}
           onClose={() => setEditingTagsFor(null)}
-          onSaved={() => showToast("Tags saved")}
+          onSaved={() => showToast(t("Tags saved"))}
         />
       )}
 
@@ -842,9 +850,9 @@ export function TrackContextMenuProvider({
         <div className="fixed bottom-[var(--bottom-chrome)] left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-popover/95 px-4 py-2 text-sm text-foreground shadow-2xl backdrop-blur" role="status">
           {addingPlaylistId || isRemovingTrack || isLikeMutationPending ? (
             <Loader variant="spinner" size={18} />
-          ) : toast === "Already in playlist" ? (
+          ) : toastIcon === "close" ? (
             <CloseIcon size={16} aria-hidden="true" />
-          ) : (toast.startsWith("Added ") || toast.includes("will play next") || toast === "Link copied" || toast.startsWith("Removed from ")) && (
+          ) : toastIcon === "check" && (
             <CheckIcon size={18} aria-hidden="true" />
           )}
           <span>{toast}</span>

@@ -1,3 +1,4 @@
+import { relativeTimeFormat, t, tn, useT } from "../../i18n";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { cn } from "@/lib/utils";
@@ -5,7 +6,8 @@ import { Button } from "@/components/motion/button";
 import { Tooltip } from "@/components/motion/tooltip";
 import { ArrowRightIcon, CheckIcon, CloseIcon, DownloadIcon, RefreshIcon } from "@/ui/icons";
 import type { Track } from "../../datasource/types";
-import { useOnline } from "../../internal/connectivity";
+import { setOfflineMode, useOfflineMode, useOnline } from "../../internal/connectivity";
+import { Switch } from "@/components/motion/switch";
 import {
   cancelDownload,
   getOfflineMaxBytes,
@@ -34,7 +36,6 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(bytes < 10 * 1024 ** 3 ? 2 : 1)} GB`;
 }
 
-const RELATIVE_TIME = new Intl.RelativeTimeFormat(undefined, { numeric: "auto", style: "narrow" });
 const TIME_UNITS = [
   ["day", 86_400],
   ["hour", 3_600],
@@ -44,22 +45,18 @@ const TIME_UNITS = [
 function formatAgo(timestamp: number): string {
   const seconds = Math.round((timestamp - Date.now()) / 1000);
   for (const [unit, size] of TIME_UNITS) {
-    if (Math.abs(seconds) >= size) return RELATIVE_TIME.format(Math.round(seconds / size), unit);
+    if (Math.abs(seconds) >= size) return relativeTimeFormat({ numeric: "auto", style: "narrow" }).format(Math.round(seconds / size), unit);
   }
-  return "just now";
-}
-
-function plural(count: number, word: string): string {
-  return `${count} ${word}${count === 1 ? "" : "s"}`;
+  return t("just now");
 }
 
 function describe(list: DownloadList, online: boolean, savedCount: number): string {
   const active = (list.active ? 1 : 0) + list.queued.length;
-  if (active > 0 && !online) return `Paused · ${plural(active, "song")} waiting for a connection`;
-  if (active > 0) return `Saving ${plural(active, "song")}`;
-  if (list.failed.length > 0) return `${plural(list.failed.length, "song")} couldn't download`;
-  if (savedCount > 0) return `All caught up · ${plural(savedCount, "song")} offline`;
-  return "Nothing saved yet";
+  if (active > 0 && !online) return tn("Paused · {n} song waiting for a connection", "Paused · {n} songs waiting for a connection", active);
+  if (active > 0) return tn("Saving {n} song", "Saving {n} songs", active);
+  if (list.failed.length > 0) return tn("{n} song couldn't download", "{n} songs couldn't download", list.failed.length);
+  if (savedCount > 0) return tn("All caught up · {n} song offline", "All caught up · {n} songs offline", savedCount);
+  return t("Nothing saved yet");
 }
 
 /** True for a moment after the queue empties cleanly: the only sign a closed panel gives that the work is done. */
@@ -219,8 +216,9 @@ function ActiveDownload({
   progress: number | null;
   still: boolean;
 }) {
+  const t = useT();
   return (
-    <section aria-label="Downloading" className="rounded-2xl bg-card/50 p-3">
+    <section aria-label={t("Downloading")} className="rounded-2xl bg-card/50 p-3">
       <div className="flex items-center gap-3">
         <TrackArtwork className="size-11 shrink-0 rounded-xl" size={44} artworkUrl={track.artworkUrl} iconSize={18} />
         <span className="flex min-w-0 flex-1 flex-col">
@@ -230,7 +228,7 @@ function ActiveDownload({
         <span className="w-9 shrink-0 text-right text-xs font-medium tabular-nums text-foreground">
           {progress === null ? "" : `${progress}%`}
         </span>
-        <IconAction label={`Cancel download of ${track.title}`} onClick={() => cancelDownload(track.id)}>
+        <IconAction label={t("Cancel download of {title}", { title: track.title })} onClick={() => cancelDownload(track.id)}>
           <CloseIcon size={15} aria-hidden="true" />
         </IconAction>
       </div>
@@ -260,6 +258,7 @@ function DownloadsContent({
   reduceMotion: boolean;
   onOpenDownloads?: () => void;
 }) {
+  const t = useT();
   const list = selectDownloadList(offline, RECENT_LIMIT);
   const { progress, usedBytes } = offline;
   const savedCount = Object.keys(offline.entries).length;
@@ -273,14 +272,14 @@ function DownloadsContent({
     <div className="flex flex-col gap-2">
       <header className="flex flex-col gap-2 px-2 pt-1">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-sm font-semibold text-foreground">Downloads</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("Downloads")}</h2>
           <span className="text-xs tabular-nums text-muted-foreground">
-            {formatBytes(usedBytes)} of {formatBytes(maxBytes)}
+            {t("{used} of {max}", { used: formatBytes(usedBytes), max: formatBytes(maxBytes) })}
           </span>
         </div>
         <div
           role="meter"
-          aria-label="Offline storage used"
+          aria-label={t("Offline storage used")}
           aria-valuemin={0}
           aria-valuemax={maxBytes}
           aria-valuenow={usedBytes}
@@ -306,9 +305,9 @@ function DownloadsContent({
             <DownloadIcon size={20} aria-hidden="true" />
           </span>
           <span className="flex flex-col gap-1">
-            <span className="text-sm font-medium text-foreground">No downloads yet</span>
+            <span className="text-sm font-medium text-foreground">{t("No downloads yet")}</span>
             <span className="text-xs text-muted-foreground">
-              Download a song, album or playlist to play it without a connection.
+              {t("Download a song, album or playlist to play it without a connection.")}
             </span>
           </span>
         </div>
@@ -318,24 +317,24 @@ function DownloadsContent({
 
           {list.queued.length > 0 && (
             <Section
-              title={online ? "Up next" : "Waiting for connection"}
+              title={online ? t("Up next") : t("Waiting for connection")}
               count={list.queued.length}
               action={
                 list.queued.length > 1
-                  ? { label: "Cancel all", onClick: () => list.queued.forEach((track) => cancelDownload(track.id)) }
+                  ? { label: t("Cancel all"), onClick: () => list.queued.forEach((track) => cancelDownload(track.id)) }
                   : undefined
               }
             >
               {list.queued.slice(0, QUEUE_LIMIT).map((track) => (
                 <Row key={track.id} track={track} subtitle={track.artist} animate={animate}>
-                  <IconAction label={`Remove ${track.title} from downloads`} onClick={() => cancelDownload(track.id)}>
+                  <IconAction label={t("Remove {title} from downloads", { title: track.title })} onClick={() => cancelDownload(track.id)}>
                     <CloseIcon size={15} aria-hidden="true" />
                   </IconAction>
                 </Row>
               ))}
               {hiddenQueued > 0 && (
                 <li key="more" className="px-2 py-1 text-xs tabular-nums text-muted-foreground">
-                  +{hiddenQueued} more
+                  {t("+{count} more", { count: hiddenQueued })}
                 </li>
               )}
             </Section>
@@ -343,20 +342,20 @@ function DownloadsContent({
 
           {list.failed.length > 0 && (
             <Section
-              title="Couldn't download"
+              title={t("Couldn't download")}
               count={list.failed.length}
               action={
                 list.failed.length > 1
-                  ? { label: "Retry all", onClick: () => list.failed.forEach(({ track }) => retryDownload(track.id)) }
+                  ? { label: t("Retry all"), onClick: () => list.failed.forEach(({ track }) => retryDownload(track.id)) }
                   : undefined
               }
             >
               {list.failed.map(({ track, message }) => (
                 <Row key={track.id} track={track} subtitle={message} subtitleTitle={message} animate={animate}>
-                  <IconAction label={`Retry ${track.title}`} onClick={() => retryDownload(track.id)}>
+                  <IconAction label={t("Retry {title}", { title: track.title })} onClick={() => retryDownload(track.id)}>
                     <RefreshIcon size={15} aria-hidden="true" />
                   </IconAction>
-                  <IconAction label={`Dismiss ${track.title}`} onClick={() => cancelDownload(track.id)}>
+                  <IconAction label={t("Dismiss {title}", { title: track.title })} onClick={() => cancelDownload(track.id)}>
                     <CloseIcon size={15} aria-hidden="true" />
                   </IconAction>
                 </Row>
@@ -365,7 +364,7 @@ function DownloadsContent({
           )}
 
           {list.recent.length > 0 && (
-            <Section title="Recently saved">
+            <Section title={t("Recently saved")}>
               {list.recent.map((entry) => (
                 <Row
                   key={entry.track.id}
@@ -385,7 +384,7 @@ function DownloadsContent({
           onClick={onOpenDownloads}
           className="flex items-center justify-between rounded-xl px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
-          {savedCount > 0 ? `Open downloads · ${savedCount}` : "Open downloads"}
+          {savedCount > 0 ? t("Open downloads · {count}", { count: savedCount }) : t("Open downloads")}
           <ArrowRightIcon size={15} aria-hidden="true" className="text-muted-foreground" />
         </button>
       )}
@@ -402,6 +401,7 @@ function DownloadsContent({
  * a number nobody reads.
  */
 export function DownloadsPanel({ onOpenDownloads }: { onOpenDownloads?: () => void }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const offline = useOfflineState();
   const online = useOnline();
@@ -415,13 +415,13 @@ export function DownloadsPanel({ onOpenDownloads }: { onOpenDownloads?: () => vo
   const justFinished = useDrainFlash(activeCount, failedCount);
 
   const status = paused
-    ? "Waiting for connection"
+    ? t("Waiting for connection")
     : activeCount > 0
-      ? `Downloading · ${activeCount} left`
+      ? t("Downloading · {count} left", { count: activeCount })
       : failedCount > 0
-        ? `${failedCount} couldn't download`
+        ? tn("{n} couldn't download", "{n} couldn't download", failedCount)
         : justFinished
-          ? "All downloads saved"
+          ? t("All downloads saved")
           : null;
 
   return (
@@ -431,12 +431,12 @@ export function DownloadsPanel({ onOpenDownloads }: { onOpenDownloads?: () => vo
       side="bottom"
       className="w-[22rem] max-w-[calc(100vw-2rem)] p-2"
       trigger={
-        <Tooltip side="bottom" content={status ?? "Downloads"}>
+        <Tooltip side="bottom" content={status ?? t("Downloads")}>
           <Button
             variant="ghost"
             size="icon"
             className="relative"
-            aria-label={status ? `Downloads: ${status}` : "Downloads"}
+            aria-label={status ? t("Downloads: {status}", { status }) : t("Downloads")}
             aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
           >
@@ -474,6 +474,7 @@ export function DownloadsPanel({ onOpenDownloads }: { onOpenDownloads?: () => vo
         </Tooltip>
       }
     >
+      <OfflineModeRow />
       <DownloadsContent
         offline={offline}
         online={online}
@@ -487,5 +488,22 @@ export function DownloadsPanel({ onOpenDownloads }: { onOpenDownloads?: () => vo
         }
       />
     </FloatingPanel>
+  );
+}
+
+/** The quick way into Offline mode: downloads only, no network at all. */
+function OfflineModeRow() {
+  const t = useT();
+  const on = useOfflineMode();
+  return (
+    <div className="mb-1 flex items-center justify-between gap-3 rounded-lg px-2 py-2">
+      <span className="flex min-w-0 flex-col">
+        <span id="offline-mode-row" className="text-sm font-medium text-foreground">{t("Offline mode")}</span>
+        <span className="text-xs text-muted-foreground">
+          {on ? t("Playing downloads only. Nothing uses the network.") : t("Use only what's downloaded and save data.")}
+        </span>
+      </span>
+      <Switch checked={on} onCheckedChange={setOfflineMode} aria-labelledby="offline-mode-row" />
+    </div>
   );
 }

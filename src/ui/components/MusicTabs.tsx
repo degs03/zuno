@@ -6,13 +6,14 @@ import { Tab } from "../types/tab";
 import { isLinux } from "../platform";
 import { AddSquareIcon } from "@solar-icons/react/linear";
 import { Button } from "@/components/motion/button";
+import { t, useT } from "../../i18n";
 
 const MAX_TAB_TITLE_LENGTH = 32;
 
 function getTabTitle(tab: Tab): string {
-  if (tab.view === "settings") return "Settings";
+  if (tab.view === "settings") return t("Settings");
   if (tab.view === "search" && tab.searchQuery) return tab.searchQuery;
-  if (!tab.title) return "New Tab";
+  if (!tab.title) return t("New Tab");
   if (tab.title.length <= MAX_TAB_TITLE_LENGTH) return tab.title;
   return `${tab.title.slice(0, MAX_TAB_TITLE_LENGTH - 3)}...`;
 }
@@ -41,6 +42,7 @@ export function MusicTabs({
   onReorderTab,
   onboardingFirstTabId,
 }: MusicTabsProps) {
+  const t = useT();
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     tabId: string;
@@ -210,7 +212,7 @@ export function MusicTabs({
                       exit={{ opacity: 0, scale: 0.6, width: 0 }}
                       className="flex shrink-0 items-center text-primary"
                     >
-                      <VolumeLoudActiveIcon size={15} aria-label="Currently playing" />
+                      <VolumeLoudActiveIcon size={15} aria-label={t("Currently playing")} />
                     </motion.span>
                   )}
                 </AnimatePresence>
@@ -227,7 +229,7 @@ export function MusicTabs({
                     e.stopPropagation();
                     onCloseTab(tab.id);
                   }}
-                  aria-label={`Close ${title}`}
+                  aria-label={t("Close {title}", { title })}
                 >
                   <CloseIcon size={16} />
                 </button>
@@ -241,7 +243,7 @@ export function MusicTabs({
           size='icon'
           className="flex size-7 shrink-0 items-center justify-center rounded-none  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onCreateTab}
-          aria-label="Add new tab"
+          aria-label={t("Add new tab")}
           data-onboarding="new-tab"
         >
           <AddSquareIcon size={18} />

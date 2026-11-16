@@ -1,6 +1,9 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { Playlist, Track } from "../datasource/types";
+import { openTextFile, pickedFileName, sanitizeFileName as sanitizeName, saveTextFile } from "../internal/fileTransfer";
 import { logInternalInfo } from "../internal/logging";
+import { t } from "../i18n";
+
+const sanitizeFileName = (name: string) => sanitizeName(name, "playlist");
 
 /** Bumped only on a breaking shape change; import accepts anything it still understands. */
 const FORMAT_VERSION = 1;
@@ -22,26 +25,6 @@ interface ExportedPlaylist {
   owner?: string;
   exportedAt: string;
   tracks: ExportedTrack[];
-}
-
-function sanitizeFileName(name: string): string {
-  /*
-   * Replaces only what a filesystem actually rejects.
-   *
-   * The class is written out member by member on purpose. The obvious `[<>:"/\\|?* -]` reads
-   * as "...asterisk, space, dash", but a regex parses `* -` as the *range* 0x2A-0x2D: it
-   * quietly matched `+` and `,` and never matched a space at all. Accidental ranges inside a
-   * character class are easy to write and invisible once written.
-   *
-   * Spaces are legal in filenames and kept, since mangling them only makes the suggested name
-   * harder to recognise. Trailing dots and spaces go because Windows drops them silently,
-   * which would mean the file saved under a different name than the one shown.
-   */
-  return name
-    .replace(/[<>:"?*|\\/\\\\]/g, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/^[\s.-]+|[\s.-]+$/g, "")
-    || "playlist";
 }
 
 /**
@@ -79,14 +62,10 @@ export async function exportPlaylist(
   };
 
   // Rust shows the dialog and writes the file, so no path ever travels from the webview.
-  const saved = await invoke<{ path: string; format: number } | null>("export_text_file", {
-    title: `Export ${playlist.title}`,
-    fileName: `${sanitizeFileName(playlist.title)}.zuno.json`,
-    formats: [
-      { name: "Zuno playlist", extensions: ["json"], contents: JSON.stringify(payload, null, 2) },
-      { name: "M3U playlist", extensions: ["m3u", "m3u8"], contents: `${m3u}\n` },
-    ],
-  });
+  const saved = await saveTextFile(t("Export {title}", { title: playlist.title }), `${sanitizeFileName(playlist.title)}.zuno.json`, [
+    { name: t("Zuno playlist"), extensions: ["json"], contents: JSON.stringify(payload, null, 2) },
+    { name: t("M3U playlist"), extensions: ["m3u", "m3u8"], contents: `${m3u}\n` },
+  ]);
   if (!saved) return null;
   const result = saved.format === 1
     ? { path: saved.path, format: "m3u" as const, written: m3uTracks.length }
@@ -119,7 +98,7 @@ function parseZunoJson(contents: string): ImportedPlaylist | null {
       localPath: entry.localPath,
     }) as Track);
 
-  return { title: candidate.title?.trim() || "Imported playlist", tracks };
+  return { title: candidate.title?.trim() || t("Imported playlist"), tracks };
 }
 
 function parseM3u(contents: string, fallbackTitle: string): ImportedPlaylist {
@@ -169,17 +148,14 @@ function parseM3u(contents: string, fallbackTitle: string): ImportedPlaylist {
 
 /** Reads a playlist file chosen by the user. Returns null when the dialog is dismissed. */
 export async function importPlaylistFile(): Promise<ImportedPlaylist | null> {
-  const opened = await invoke<{ path: string; contents: string } | null>("import_text_file", {
-    title: "Import playlist",
-    filterName: "Playlists",
-    extensions: ["json", "m3u", "m3u8"],
-  });
+  const opened = await openTextFile(t("Import playlist"), t("Playlists"), ["json", "m3u", "m3u8"]);
   if (!opened) return null;
   const { path, contents } = opened;
-  const fileName = path.split(/[\\/]/).pop() ?? "Imported playlist";
+  const fileName = pickedFileName(path) || t("Imported playlist");
   const baseTitle = fileName.replace(/\.(zuno\.)?(json|m3u8?)$/i, "");
 
-  if (/\.m3u8?$/i.test(path)) {
+  // Android content:// URIs may hide the extension, so the #EXTM3U header also counts.
+  if (/\.m3u8?$/i.test(fileName) || contents.trimStart().startsWith("#EXTM3U")) {
     return parseM3u(contents, baseTitle);
   }
 
@@ -188,7 +164,7 @@ export async function importPlaylistFile(): Promise<ImportedPlaylist | null> {
     if (!parsed) throw new Error("unrecognised");
     return parsed;
   } catch {
-    throw new Error("That file is not a Zuno playlist export.");
+    throw new Error(t("That file is not a Zuno playlist export."));
   }
 }
 

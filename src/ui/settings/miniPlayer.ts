@@ -15,6 +15,7 @@ import {
   writeLocalJsonSetting,
 } from "../../internal/durableLocalSetting";
 import { setAppSetting } from "../../internal/appSettings";
+import { msg } from "../../i18n";
 
 const MINI_PLAYER_LABEL = "mini-player";
 const STORAGE_KEY = "mini-player-enabled";
@@ -38,29 +39,29 @@ export type MiniPlayerHoverAction = "seek" | "volume";
 export const MINI_PLAYER_SKINS = [
   {
     id: "classic",
-    name: "Classic",
-    description: "The glass capsule that opens on hover.",
+    name: msg("Classic"),
+    description: msg("The glass capsule that opens on hover."),
     width: 146,
     height: 116,
   },
   {
     id: "cassette",
-    name: "Cassette",
-    description: "A tape deck whose reels wind through the song.",
+    name: msg("Cassette"),
+    description: msg("A tape deck whose reels wind through the song."),
     width: 272,
     height: 180,
   },
   {
     id: "vinyl",
-    name: "Vinyl",
-    description: "A spinning record with a tonearm that tracks the song.",
+    name: msg("Vinyl"),
+    description: msg("A spinning record with a tonearm that tracks the song."),
     width: 216,
     height: 216,
   },
   {
     id: "y2k",
     name: "Y2K",
-    description: "Candy-gel gloss, a chrome play orb and a backlit LCD.",
+    description: msg("Candy-gel gloss, a chrome play orb and a backlit LCD."),
     width: 316,
     height: 156,
   },

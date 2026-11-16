@@ -54,6 +54,7 @@
         android:layout_width="40dp"
         android:layout_height="40dp"
         android:layout_marginStart="6dp"
+        android:background="@drawable/widget_btn_bg"
         android:contentDescription="@string/widget_play">
 
         <ImageView
@@ -76,7 +77,15 @@
         android:id="@+id/widget_next"
         android:layout_width="40dp"
         android:layout_height="40dp"
+        android:background="@drawable/widget_btn_bg"
         android:contentDescription="@string/widget_next"
         android:padding="8dp"
         android:src="@drawable/widget_ic_next" />
+
+    <ProgressBar
+        android:id="@+id/widget_progress"
+        style="@android:style/Widget.ProgressBar.Horizontal"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 </LinearLayout>

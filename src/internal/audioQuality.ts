@@ -1,3 +1,4 @@
+import { msg } from "../i18n";
 import { useSyncExternalStore } from "react";
 import {
   hydrateLocalJsonSetting,
@@ -27,9 +28,9 @@ const QUALITY_TARGET_KBPS: Record<Exclude<AudioQuality, "high">, number> = {
 };
 
 export const AUDIO_QUALITY_LABELS: Record<AudioQuality, string> = {
-  low: "Low (~64 kbps)",
-  normal: "Normal (~128 kbps)",
-  high: "High (best available)",
+  low: msg("Low (~64 kbps)"),
+  normal: msg("Normal (~128 kbps)"),
+  high: msg("High (best available)"),
 };
 
 function isAudioQuality(value: unknown): value is AudioQuality {

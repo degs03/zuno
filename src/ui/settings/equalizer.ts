@@ -9,6 +9,7 @@ import {
   writeLocalJsonSetting,
 } from "../../internal/durableLocalSetting";
 import { logInternalWarn } from "../../internal/logging";
+import { msg, t } from "../../i18n";
 import {
   EQUALIZER_BANDS_HZ,
   EQUALIZER_FLAT,
@@ -18,6 +19,7 @@ import {
   type EqualizerPreset,
   type EqualizerSettings,
 } from "./equalizerCurve";
+import { hydrateAudioEffects, setAudioEffectsBypassed } from "./audioEffects";
 
 /**
  * Ten-band graphic equaliser: the live curve, the bypass switch, and the user's own presets.
@@ -51,10 +53,10 @@ const PRESETS_STORAGE_KEY = "equalizer-presets-v1";
 const CUSTOM_STORAGE_KEY = "equalizer-custom-v1";
 
 /** The Custom slot's chip label, reserved so no saved preset can be mistaken for it. */
-export const EQUALIZER_CUSTOM_NAME = "Custom";
+export const EQUALIZER_CUSTOM_NAME = msg("Custom");
 export const EQUALIZER_PRESET_NAME_MAX = 24;
 
-function isEqualizerSettings(value: unknown): value is EqualizerSettings {
+export function isEqualizerSettings(value: unknown): value is EqualizerSettings {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as EqualizerSettings;
   return typeof candidate.preampDb === "number"
@@ -63,7 +65,7 @@ function isEqualizerSettings(value: unknown): value is EqualizerSettings {
     && candidate.bandsDb.every((gain) => typeof gain === "number");
 }
 
-function isPreset(value: unknown): value is EqualizerPreset {
+export function isPreset(value: unknown): value is EqualizerPreset {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as EqualizerPreset;
   return typeof candidate.name === "string"
@@ -130,6 +132,7 @@ export function isEqualizerEnabled(): boolean {
 export function setEqualizerEnabled(enabled: boolean): void {
   enabledCached = enabled;
   writeLocalBooleanSetting(ENABLED_STORAGE_KEY, enabled, ENABLED_CHANGE_EVENT);
+  setAudioEffectsBypassed(!enabled);
   // Re-push under the new switch state — flat if this just turned it off, the stored curve if
   // it just turned back on.
   push(readSettings());
@@ -165,6 +168,11 @@ function persistNow(): void {
   writeLocalJsonSetting(STORAGE_KEY, readSettings());
   const custom = readCustom();
   if (custom) writeLocalJsonSetting(CUSTOM_STORAGE_KEY, custom);
+}
+
+/** The user's saved presets, for export. */
+export function getEqualizerUserPresets(): EqualizerPreset[] {
+  return readUserPresets();
 }
 
 /** For event handlers: a drag reads the live curve, not the one its last render closed over. */
@@ -210,15 +218,15 @@ export function isExistingEqualizerPreset(name: string): boolean {
 /** Why `name` can't be used, or null. Saving over a user preset is allowed: that's how one is updated. */
 export function equalizerPresetNameError(name: string, renaming?: string): string | null {
   const key = name.trim().toLowerCase();
-  if (key === "") return "Give it a name";
+  if (key === "") return t("Give it a name");
   if (
     key === EQUALIZER_CUSTOM_NAME.toLowerCase()
     || EQUALIZER_PRESETS.some((preset) => preset.name.toLowerCase() === key)
   ) {
-    return "That name belongs to a built-in";
+    return t("That name belongs to a built-in");
   }
   if (renaming !== undefined && key !== renaming.toLowerCase() && findUserPreset(key)) {
-    return "Another preset already has that name";
+    return t("Another preset already has that name");
   }
   return null;
 }
@@ -250,6 +258,34 @@ export function renameEqualizerPreset(from: string, to: string): void {
   writeUserPresets(
     readUserPresets().map((preset) => (preset.name === from ? { ...preset, name } : preset)),
   );
+}
+
+/**
+ * Adds presets from an imported sound-profile file. A name that clashes with a built-in or an
+ * existing preset gets " (2)", " (3)"… rather than silently replacing the user's own curve.
+ * Returns how many were added.
+ */
+export function importEqualizerPresets(incoming: readonly EqualizerPreset[]): number {
+  const presets = [...readUserPresets()];
+  const taken = (name: string) =>
+    equalizerPresetNameError(name) !== null
+    || presets.some((preset) => preset.name.toLowerCase() === name.toLowerCase());
+  let added = 0;
+  for (const preset of incoming) {
+    if (!isPreset(preset)) continue;
+    const settings: EqualizerSettings = {
+      preampDb: snapGain(preset.settings.preampDb),
+      bandsDb: preset.settings.bandsDb.map(snapGain),
+    };
+    if (presets.some((existing) => sameEqualizerCurve(existing.settings, settings))) continue;
+    const base = preset.name.trim().slice(0, EQUALIZER_PRESET_NAME_MAX - 4);
+    let name = base;
+    for (let n = 2; taken(name); n += 1) name = `${base} (${n})`;
+    presets.push({ name, settings });
+    added += 1;
+  }
+  if (added > 0) writeUserPresets(presets);
+  return added;
 }
 
 export function deleteEqualizerPreset(name: string): void {
@@ -321,6 +357,8 @@ export async function hydrateEqualizer(): Promise<void> {
    * touches a slider.
    */
   push(current);
+  // Tone/stereo effects share the EQ's bypass switch, so they hydrate once it is known.
+  await hydrateAudioEffects(!isEqualizerEnabled());
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 

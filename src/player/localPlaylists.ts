@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Playlist, Track, TrackPage } from "../datasource/types";
 import { getAppSetting, setAppSetting } from "../internal/appSettings";
+import { t } from "../i18n";
 import playlistPlaceholder from "../../assets/img/playlistplaceholder.svg";
 
 const STORAGE_KEY = "ytc-local-playlists-v1";
@@ -132,7 +133,7 @@ function normalizeStoredTrack(value: unknown): Track | null {
     title: candidate.title,
     artist: typeof candidate.artist === "string" && candidate.artist.trim()
       ? candidate.artist
-      : "Local files",
+      : t("Local files"),
     artists: Array.isArray(candidate.artists) ? candidate.artists : undefined,
     album: typeof candidate.album === "string" ? candidate.album : undefined,
     durationSec: typeof candidate.durationSec === "number" ? candidate.durationSec : undefined,
@@ -325,7 +326,7 @@ export function getLocalPlaylist(id: string): LocalPlaylist | null {
 export function createLocalPlaylist(name: string): LocalPlaylist {
   const trimmedName = name.trim();
   if (!trimmedName) {
-    throw new Error("Playlist name is required.");
+    throw new Error(t("Playlist name is required."));
   }
   const playlist: LocalPlaylist = {
     id: createId(),
@@ -406,7 +407,7 @@ export function localPlaylistToPlaylist(playlist: LocalPlaylist): Playlist {
   return {
     id: playlist.id,
     title: playlist.name,
-    owner: "Local files",
+    owner: t("Local files"),
     kind: "local",
     isEditable: true,
     localPaths: playlist.paths,
@@ -481,7 +482,7 @@ export function addLocalTrackToPlaylist(
   playlist: Playlist,
 ): "added" | "already-present" {
   if (track.source !== "local" || !track.localPath) {
-    throw new Error("Only local songs can be stored locally in playlists.");
+    throw new Error(t("Only local songs can be stored locally in playlists."));
   }
   const playlistTracks = readLocalPlaylistTracks();
   const tracks = playlistTracks[playlist.id] ?? [];

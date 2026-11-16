@@ -1,3 +1,4 @@
+import { getLocale, tn, useT } from "../../i18n";
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { SpinnerSteps } from "@/components/motion/loader";
@@ -35,7 +36,7 @@ type ReleaseFilter = "all" | "album" | "single" | "ep";
 
 function compactViews(track: Track): string {
   if (track.viewCount) {
-    return new Intl.NumberFormat("en", {
+    return new Intl.NumberFormat(getLocale(), {
       notation: "compact",
       maximumFractionDigits: 1,
     }).format(track.viewCount);
@@ -87,6 +88,7 @@ export function ArtistView({
   onOpenAlbum: (album: Album) => void;
   onOpenPlaylist: (playlist: Playlist) => void;
 }) {
+  const t = useT();
   const { openPlaylistPicker, openTrackMenu } = useTrackContextMenu();
   const { openPlaylistMenu, openAlbumMenu } = usePlaylistContextMenu();
   const { currentTrackId, isPlaying, isLoading: isPlayerLoading } = useNowPlaying();
@@ -119,7 +121,8 @@ export function ArtistView({
    */
   const [notificationLevel, setNotificationLevel] =
     useState<ArtistNotificationLevel>("personalized");
-  const [toast, setToast] = useState<string | null>(null);
+  // `success` marks the toast that shows a check mark — a flag, not a comparison of the text.
+  const [toast, setToast] = useState<{ message: string; success: boolean } | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -145,7 +148,7 @@ export function ArtistView({
       })
       .catch(() => {
         // A remembered page is still good to show; only a cold load has nothing to fall back to.
-        if (active && !remembered) setError(loadFailedMessage("Unable to load this artist."));
+        if (active && !remembered) setError(loadFailedMessage(t("Unable to load this artist.")));
       })
       .finally(() => {
         if (active) setIsLoading(false);
@@ -153,7 +156,7 @@ export function ArtistView({
     return () => {
       active = false;
     };
-  }, [artist, libraryController]);
+  }, [artist, libraryController, t]);
 
   const releaseTypes = useMemo(
     () => new Set(page?.releases.map((release) => release.releaseType) ?? []),
@@ -197,8 +200,8 @@ export function ArtistView({
   );
   if (!artist || !displayedArtist) return null;
 
-  const showToast = (message: string) => {
-    setToast(message);
+  const showToast = (message: string, success = false) => {
+    setToast({ message, success });
     if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), 3000);
   };
@@ -245,15 +248,15 @@ export function ArtistView({
       await libraryController.setArtistNotificationLevel(displayedArtist, level);
       showToast(
         level === "all"
-          ? "Notifying you about every release"
-          : level === "none" ? "Notifications off" : "Notifications set to personalized",
+          ? t("Notifying you about every release")
+          : level === "none" ? t("Notifications off") : t("Notifications set to personalized"),
       );
     } catch (notificationError) {
       setNotificationLevel(previous);
       showToast(
         notificationError instanceof Error
           ? notificationError.message
-          : "Unable to change notifications.",
+          : t("Unable to change notifications."),
       );
     }
   };
@@ -272,7 +275,7 @@ export function ArtistView({
       showToast(
         subscribeError instanceof Error
           ? subscribeError.message
-          : "Unable to update this subscription.",
+          : t("Unable to update this subscription."),
       );
     } finally {
       setIsSubscribing(false);
@@ -282,22 +285,22 @@ export function ArtistView({
   const copyArtistUrl = async () => {
     try {
       await navigator.clipboard.writeText(getArtistUrl(displayedArtist));
-      showToast("Url copied to clipboard");
+      showToast(t("Url copied to clipboard"), true);
     } catch {
-      showToast("Unable to copy the link.");
+      showToast(t("Unable to copy the link."));
     }
   };
 
   return (
     <div className="flex flex-col gap-8">
       <MediaHeader
-        eyebrow="Artist"
+        eyebrow={t("Artist")}
         title={
           <button
             type="button"
             className="group/title flex items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => void copyArtistUrl()}
-            aria-label={`Copy ${displayedArtist.name} URL`}
+            aria-label={t("Copy {name} URL", { name: displayedArtist.name })}
           >
             <span>{displayedArtist.name}</span>
             <CopyIcon
@@ -364,8 +367,8 @@ export function ArtistView({
               )}
               <span>
                 {isSubscribing
-                  ? isSubscribed ? "Unsubscribing..." : "Subscribing..."
-                  : isSubscribed ? "Subscribed" : "Subscribe"}
+                  ? isSubscribed ? t("Unsubscribing...") : t("Subscribing...")
+                  : isSubscribed ? t("Subscribed") : t("Subscribe")}
               </span>
             </button>
 
@@ -381,13 +384,13 @@ export function ArtistView({
                 onValueChange={(value) =>
                   void changeNotificationLevel(value as ArtistNotificationLevel)}
               >
-                <SelectTrigger aria-label={`Notifications for ${displayedArtist.name}`}>
+                <SelectTrigger aria-label={t("Notifications for {name}", { name: displayedArtist.name })}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All new releases</SelectItem>
-                  <SelectItem value="personalized">Personalized</SelectItem>
-                  <SelectItem value="none">No notifications</SelectItem>
+                  <SelectItem value="all">{t("All new releases")}</SelectItem>
+                  <SelectItem value="personalized">{t("Personalized")}</SelectItem>
+                  <SelectItem value="none">{t("No notifications")}</SelectItem>
                 </SelectContent>
               </Select>
             )}
@@ -404,8 +407,8 @@ export function ArtistView({
       {isLoading && (
         <div className="flex flex-col gap-8">
           <section className="flex flex-col gap-3">
-            <h2>Popular</h2>
-            <TrackListSkeleton count={POPULAR_PREVIEW_COUNT} label="Loading top songs" />
+            <h2>{t("Popular")}</h2>
+            <TrackListSkeleton count={POPULAR_PREVIEW_COUNT} label={t("Loading top songs")} />
           </section>
           {/*
             Releases has no fixed preview count — unlike Popular, every release the artist has
@@ -414,8 +417,8 @@ export function ArtistView({
             number to match.
           */}
           <section className="flex flex-col gap-3">
-            <h2>Releases</h2>
-            <AlbumGridSkeleton label="Loading releases" />
+            <h2>{t("Releases")}</h2>
+            <AlbumGridSkeleton label={t("Loading releases")} />
           </section>
         </div>
       )}
@@ -425,7 +428,7 @@ export function ArtistView({
         <>
           {popularSongs.length > 0 && (
             <section className="flex flex-col gap-3">
-              <h2>Popular</h2>
+              <h2>{t("Popular")}</h2>
               <div className="flex flex-col gap-0.5">
                 {popularSongs.map((track, index) => (
                   <TrackRow
@@ -458,7 +461,7 @@ export function ArtistView({
                   aria-expanded={showAllSongs}
                   className="self-start rounded-full bg-muted/40 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  {showAllSongs ? "Show less" : `Show all ${allSongs.length} songs`}
+                  {showAllSongs ? t("Show less") : tn("Show all {n} song", "Show all {n} songs", allSongs.length)}
                 </button>
               )}
             </section>
@@ -467,11 +470,11 @@ export function ArtistView({
           {page.releases.length > 0 && (
             <section className="flex flex-col gap-3">
               <div className="flex items-center justify-between gap-3">
-                <h2>Releases</h2>
+                <h2>{t("Releases")}</h2>
                 <div
                   className="flex flex-wrap items-center gap-1.5 self-start [&>button]:flex [&>button]:min-h-8 [&>button]:min-w-0 [&>button]:items-center [&>button]:justify-center [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:bg-muted/40 [&>button]:px-3 [&>button]:text-sm [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors hover:[&>button]:bg-muted/70 hover:[&>button]:text-foreground focus-visible:[&>button]:outline-none focus-visible:[&>button]:ring-2 focus-visible:[&>button]:ring-ring"
                   role="group"
-                  aria-label="Release type"
+                  aria-label={t("Release type")}
                   style={{
                     "--active-filter-offset": `${activeFilterIndex * 100}%`,
                     "--filter-count": releaseFilters.length,
@@ -487,10 +490,10 @@ export function ArtistView({
                         onClick={() => setFilter(type)}
                       >
                         {type === "all"
-                          ? "All"
+                          ? t("All")
                           : type === "ep"
-                            ? "EPs"
-                            : `${type[0].toUpperCase()}${type.slice(1)}s`}
+                            ? t("EPs")
+                            : type === "album" ? t("Albums") : t("Singles")}
                       </button>
                     ))}
                 </div>
@@ -525,7 +528,7 @@ export function ArtistView({
 
           {page.playlists.length > 0 && (
             <section className="flex flex-col gap-3">
-              <h2>Playlists</h2>
+              <h2>{t("Playlists")}</h2>
               <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
                 {page.playlists.map((playlist) => (
                   <AlbumCard
@@ -544,10 +547,10 @@ export function ArtistView({
       )}
       {toast && createPortal(
         <div className="fixed bottom-[var(--bottom-chrome)] left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full bg-popover/95 px-4 py-2 text-sm text-foreground shadow-2xl backdrop-blur" role="status">
-          {toast === "Url copied to clipboard" && (
+          {toast.success && (
             <CheckIcon size={18} aria-hidden="true" />
           )}
-          <span>{toast}</span>
+          <span>{toast.message}</span>
         </div>,
         document.body,
       )}

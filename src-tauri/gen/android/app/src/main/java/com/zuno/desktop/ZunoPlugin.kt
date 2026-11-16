@@ -32,11 +32,96 @@ class ZunoPlugin(private val activity: Activity) : Plugin(activity) {
   override fun load(webView: WebView) {
     this.webView = webView
     instance = this
+    // The renderer keeps working with the screen off: queue advance, preloading and the media
+    // session all run in JS, and a "waived" renderer is the first thing Android starves.
+    webView.setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+  }
+
+  /**
+   * The frontend has its listeners up: report the audio route and replay anything that arrived
+   * while there was no page to hear it (a widget "open player", a headset press at cold start).
+   */
+  @Command
+  fun frontendReady(invoke: Invoke) {
+    ready = true
+    AudioRoutes.start(activity.applicationContext)
+    val queued = synchronized(pending) { pending.toList().also { pending.clear() } }
+    val now = android.os.SystemClock.elapsedRealtime()
+    queued.filter { now - it.first < PENDING_TTL_MS }.forEach { dispatch(it.second) }
+    invoke.resolve()
+  }
+
+  /**
+   * Opens the system installer for an update APK that Rust downloaded and checksum-verified.
+   * Android itself then refuses it unless it is signed with the same key as this install.
+   * Rejects with "permission" (after opening the setting) while installs from Zuno are not allowed.
+   */
+  @Command
+  fun installApk(invoke: Invoke) {
+    val path = invoke.getArgs().getString("path", "").orEmpty()
+    val file = java.io.File(path)
+    // Only files Rust put in this app's own cache (the FileProvider shares cache-path only).
+    val cache = activity.cacheDir.canonicalFile
+    if (!file.isFile || !file.canonicalPath.startsWith(cache.path + java.io.File.separator)) {
+      invoke.reject("update file not found")
+      return
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !activity.packageManager.canRequestPackageInstalls()) {
+      activity.startActivity(
+        Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
+          .setData(android.net.Uri.parse("package:${activity.packageName}"))
+      )
+      invoke.reject("permission")
+      return
+    }
+    val uri = androidx.core.content.FileProvider.getUriForFile(activity, "${activity.packageName}.fileprovider", file)
+    activity.startActivity(
+      Intent(Intent.ACTION_VIEW)
+        .setDataAndType(uri, "application/vnd.android.package-archive")
+        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    )
+    invoke.resolve()
+  }
+
+  /** Keeps the display on while car mode or karaoke is open. */
+  @Command
+  fun setKeepScreenOn(invoke: Invoke) {
+    val on = invoke.getArgs().optBoolean("on", false)
+    main.post {
+      val flag = android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+      if (on) activity.window.addFlags(flag) else activity.window.clearFlags(flag)
+    }
+    invoke.resolve()
+  }
+
+  /** Bit-perfect USB DAC output at the playing track's sample rate (Android 14+). */
+  @Command
+  fun setBitPerfect(invoke: Invoke) {
+    val args = invoke.getArgs()
+    val status = AudioRoutes.applyBitPerfect(
+      activity.applicationContext,
+      args.optBoolean("enabled", false),
+      args.optInt("sampleRate", 48000),
+    )
+    invoke.resolve(JSObject().put("status", status))
+  }
+
+  /** Headset gestures and resume-on-connect, read by PlaybackService and AudioRoutes. */
+  @Command
+  fun setHeadsetPrefs(invoke: Invoke) {
+    AudioRoutes.savePrefs(activity.applicationContext, invoke.getArgs())
+    invoke.resolve()
   }
 
   override fun onDestroy() {
-    if (instance === this) instance = null
+    if (instance === this) {
+      instance = null
+      ready = false
+    }
   }
+
+  /** The WebView itself, so MainActivity can keep it resumed while music plays. */
+  fun webView(): WebView? = webView
 
   /** Sends `detail` to the frontend as `window` event `zuno-android`. */
   fun dispatch(detail: JSONObject) {
@@ -138,6 +223,10 @@ class ZunoPlugin(private val activity: Activity) : Plugin(activity) {
       status = args.getString("status", "idle") ?: "idle",
       durationSec = args.optDouble("durationSec", 0.0).takeIf { !it.isNaN() } ?: 0.0,
       positionSec = args.optDouble("positionSec", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+      liked = args.optBoolean("liked", false),
+      shuffle = args.optBoolean("shuffle", false),
+      repeat = args.optString("repeat", "off").takeIf { it == "all" || it == "one" } ?: "off",
+      nextTitle = args.optString("nextTitle").takeIf { it.isNotEmpty() && it != "null" },
     )
     if (state.status == "playing") requestNotificationPermissionOnce()
     PlaybackService.update(activity.applicationContext, state)
@@ -159,10 +248,28 @@ class ZunoPlugin(private val activity: Activity) : Plugin(activity) {
     @Volatile
     var instance: ZunoPlugin? = null
 
+    /** True once the page called `frontendReady`; until then events are queued. */
+    @Volatile
+    private var ready = false
+
+    /** Events with nobody listening yet, with when they happened. Short-lived on purpose. */
+    private val pending = ArrayList<Pair<Long, JSONObject>>()
+    private const val PENDING_TTL_MS = 15_000L
+    private const val PENDING_MAX = 8
+
     fun dispatchAction(action: String, extra: (JSONObject.() -> Unit)? = null) {
       val detail = JSONObject().put("type", "media").put("action", action)
       extra?.invoke(detail)
-      instance?.dispatch(detail)
+      val plugin = instance
+      if (plugin != null && ready) {
+        plugin.dispatch(detail)
+        return
+      }
+      // No page yet (cold start from the widget or a headset): hold it for `frontendReady`.
+      synchronized(pending) {
+        pending.add(android.os.SystemClock.elapsedRealtime() to detail)
+        while (pending.size > PENDING_MAX) pending.removeAt(0)
+      }
     }
   }
 }

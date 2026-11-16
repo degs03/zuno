@@ -4,7 +4,7 @@ import { SpinnerSteps } from "@/components/motion/loader";
 import { cn } from "@/lib/utils";
 import { PlayActiveIcon, QueuePanelIcon } from "@/ui/icons";
 import { tauriFetch } from "../../../datasource/youtube/tauriFetch";
-import { setOnline, useOnline } from "../../../internal/connectivity";
+import { isOfflineModeOn, setOfflineMode, setOnline, useOfflineMode, useOnline } from "../../../internal/connectivity";
 import { TrackInfo } from "./TrackInfo";
 import { PlaybackControls } from "./PlaybackControls";
 import { SeekBar } from "./SeekBar";
@@ -14,6 +14,7 @@ import { VolumeControl } from "./VolumeControl";
 import { LyricsButton } from "./LyricsButton";
 import { isMobile } from "../../platform";
 import { MobilePlayerPill } from "./MobilePlayer";
+import { useT } from "../../../i18n";
 import {
   useCompactPlayerBar,
   useExtraPlayerControlsAlwaysVisible,
@@ -40,6 +41,7 @@ const CONNECTION_CHECK_URLS = [
 ];
 
 export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnectionRestored, onExpandPlayer }: PlayerBarProps) {
+  const t = useT();
   const isOnline = useOnline();
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
  
@@ -54,6 +56,8 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
 
     if (!connected) {
       wasOfflineRef.current = true;
+      // Each outage gets its own recovery; this used to fire only for the first one.
+      recoveryStartedRef.current = false;
       return;
     }
 
@@ -67,6 +71,8 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
     if (connectionCheckRef.current) return connectionCheckRef.current;
 
     const check = (async () => {
+      // Offline mode: no probing at all (the probe itself is a network request).
+      if (isOfflineModeOn()) return false;
       if (!navigator.onLine) {
         failedChecksRef.current += 1;
         if (failedChecksRef.current >= 2) {
@@ -126,6 +132,17 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
     };
   }, [checkConnection, updateConnectionState]);
 
+  // Leaving Offline mode is a reconnect: probe now, and resync the library once it answers.
+  const offlineMode = useOfflineMode();
+  useEffect(() => {
+    if (offlineMode) {
+      wasOfflineRef.current = true;
+      recoveryStartedRef.current = false;
+      return;
+    }
+    void checkConnection();
+  }, [offlineMode, checkConnection]);
+
   useEffect(() => {
     if (isOnline) return;
 
@@ -163,20 +180,20 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
             role="status"
             aria-live="polite"
           >
-            <span>You don't have an internet connection</span>
+            <span>{offlineMode ? t("Offline mode · playing downloads only") : t("You don't have an internet connection")}</span>
             <button
               type="button"
               className="flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors hover:bg-card disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => void reconnect()}
+              onClick={() => (offlineMode ? setOfflineMode(false) : void reconnect())}
               disabled={isCheckingConnection}
-              aria-label="Reconnect to the internet"
+              aria-label={offlineMode ? t("Turn off offline mode") : t("Reconnect to the internet")}
             >
               {isCheckingConnection ? (
                 <SpinnerSteps   size={24}  />
               ) : (
                 <PlayActiveIcon size={14} aria-hidden="true" />
               )}
-              <span>{isCheckingConnection ? "Checking" : "Reconnect"}</span>
+              <span>{isCheckingConnection ? t("Checking") : offlineMode ? t("Go online") : t("Reconnect")}</span>
             </button>
           </motion.div>
         )}
@@ -227,8 +244,8 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
                     : "text-muted-foreground hover:text-foreground",
                 )}
                 onClick={onToggleQueue}
-                aria-label={isQueueOpen ? "Close queue" : "Open queue"}
-                title={isQueueOpen ? "Close queue" : "Open queue"}
+                aria-label={isQueueOpen ? t("Close queue") : t("Open queue")}
+                title={isQueueOpen ? t("Close queue") : t("Open queue")}
               >
                 <QueuePanelIcon size={18} />
               </button>

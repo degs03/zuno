@@ -1,4 +1,5 @@
 import type { Lyrics, LyricsSourceAttempt } from "../types";
+import { msg, t } from "../../i18n";
 
 export interface LyricsSource {
   id: string;
@@ -34,47 +35,47 @@ export interface LyricsSource {
 export const LYRICS_SOURCES: LyricsSource[] = [
   {
     id: "lrclib-exact",
-    label: "LRCLIB",
+    label: msg("LRCLIB"),
     timeoutMs: 2_500,
     wave: 1,
     requiresDuration: true,
-    note: "Line-synced, matched on title, artist and exact duration — the same recording.",
+    note: msg("Line-synced, matched on title, artist and exact duration — the same recording."),
   },
   {
     id: "betterlyrics",
-    label: "BetterLyrics",
+    label: msg("BetterLyrics"),
     timeoutMs: 3_500,
     wave: 1,
-    note: "Line-synced TTML with explicit end times, community curated.",
+    note: msg("Line-synced TTML with explicit end times, community curated."),
   },
   {
     id: "lrclib-search",
-    label: "LRCLIB search",
+    label: msg("LRCLIB search"),
     timeoutMs: 4_500,
     wave: 1,
     requiresDuration: true,
-    note: "Same corpus, matched by text within two seconds of duration — can land on a different master.",
+    note: msg("Same corpus, matched by text within two seconds of duration — can land on a different master."),
   },
   {
     id: "simpmusic",
-    label: "SimpMusic",
+    label: msg("SimpMusic"),
     timeoutMs: 3_500,
     wave: 1,
-    note: "Line-synced and keyed to this exact video, but community entries are sometimes translations.",
+    note: msg("Line-synced and keyed to this exact video, but community entries are sometimes translations."),
   },
   {
     id: "youtube-transcript",
-    label: "YouTube transcript",
+    label: msg("YouTube transcript"),
     timeoutMs: 6_000,
     wave: 2,
-    note: "Timed, but machine transcribed: right often enough to try, wrong in ways worth ranking below real lyrics.",
+    note: msg("Timed, but machine transcribed: right often enough to try, wrong in ways worth ranking below real lyrics."),
   },
   {
     id: "youtube-music",
-    label: "YouTube Music",
+    label: msg("YouTube Music"),
     timeoutMs: 6_000,
     wave: 2,
-    note: "The official words for this exact video, so never the wrong song — but carries no timings at all.",
+    note: msg("The official words for this exact video, so never the wrong song — but carries no timings at all."),
   },
 ];
 
@@ -126,10 +127,10 @@ export function planLyricsWaves(preferredId?: string): LyricsSource[][] {
 }
 
 /** A source that was never reached, so the UI can show the order instead of implying a failure. */
-export function skippedAttempt(source: LyricsSource, reason = "Not needed"): LyricsSourceAttempt {
+export function skippedAttempt(source: LyricsSource, reason = t("Not needed")): LyricsSourceAttempt {
   return {
     id: source.id,
-    label: source.label,
+    label: t(source.label),
     status: "skipped",
     durationMs: 0,
     detail: reason,
@@ -147,7 +148,7 @@ export function unmetPrecondition(
   track: { durationSec?: number },
 ): string | null {
   if (source.requiresDuration && !(track.durationSec && track.durationSec > 0)) {
-    return "Needs a track duration to match on";
+    return t("Needs a track duration to match on");
   }
   return null;
 }

@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { LyricsActiveIcon, LyricsIcon } from "@/ui/icons";
 import { usePlayerSelector } from "../../../player/playerStore";
 import { usePlayerUIState } from "../../stores/playerUIStore";
+import { useT } from "../../../i18n";
 
 interface LyricsButtonProps {
   onToggle: () => void;
@@ -12,6 +13,7 @@ export function LyricsButton({ onToggle }: LyricsButtonProps) {
   // re-render when that flips and not on every change of song.
   const hasTrack = usePlayerSelector((state) => state.currentTrack !== null);
   const uiState = usePlayerUIState();
+  const t = useT();
   const Glyph = uiState.isLyricsOpen ? LyricsActiveIcon : LyricsIcon;
 
   return (
@@ -26,7 +28,7 @@ export function LyricsButton({ onToggle }: LyricsButtonProps) {
       )}
       onClick={onToggle}
       disabled={!hasTrack}
-      aria-label={uiState.isLyricsOpen ? "Close lyrics" : "Open lyrics"}
+      aria-label={uiState.isLyricsOpen ? t("Close lyrics") : t("Open lyrics")}
       aria-pressed={uiState.isLyricsOpen}
     >
       <Glyph size={19} />

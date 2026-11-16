@@ -4,6 +4,7 @@ import {
   readLocalJsonSetting,
   writeLocalJsonSetting,
 } from "../../internal/durableLocalSetting";
+import { msg } from "../../i18n";
 
 /**
  * Which pipeline actually makes sound.
@@ -44,18 +45,18 @@ export const AUDIO_ENGINE_MODES: ReadonlyArray<{
 }> = [
   {
     value: "rust",
-    label: "Rust audio",
-    hint: "Decoded in the app. Lowest memory, gapless and crossfade, falls back if a track is refused.",
+    label: msg("Rust audio"),
+    hint: msg("Decoded in the app. Lowest memory, gapless and crossfade, falls back if a track is refused."),
   },
   {
     value: "iframe",
-    label: "YouTube player",
-    hint: "Google's own player for everything. Runs a hidden youtube.com frame, ~90 MB.",
+    label: msg("YouTube player"),
+    hint: msg("Google's own player for everything. Runs a hidden youtube.com frame, ~90 MB."),
   },
   {
     value: "native",
-    label: "Native audio",
-    hint: "Plays through the webview. Keeps a second copy of each track in memory, no gapless.",
+    label: msg("Native audio"),
+    hint: msg("Plays through the webview. Keeps a second copy of each track in memory, no gapless."),
   },
 ];
 

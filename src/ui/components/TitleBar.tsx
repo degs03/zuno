@@ -28,6 +28,7 @@ import { libraryController, useLibraryState } from "../../player/playerStore";
 import { AccountAvatar, AccountSwitcher, GoogleAccountSwitcher } from "./AccountSwitcher";
 import { GoogleSignInButton } from "./GoogleSignInButton";
 import { DownloadsPanel } from "./DownloadsPanel";
+import { useT } from "../../i18n";
 import { FloatingPanel } from "./FloatingPanel";
 import { NotificationsPanel } from "./NotificationsPanel";
 import { useToolbarItemVisible } from "../settings/toolbarItems";
@@ -75,6 +76,7 @@ export function TitleBar({
   onOpenDownloads,
   onboardingFirstTabId,
 }: TitleBarProps) {
+  const t = useT();
   const appWindow = getCurrentWindow();
   const libraryState = useLibraryState();
   const account = libraryState.library?.account;
@@ -209,7 +211,7 @@ export function TitleBar({
         onPointerCancel={() => {
           homePointerRef.current = null;
         }}
-        aria-label="Home"
+        aria-label={t("Home")}
         aria-current={isHomeActive ? "page" : undefined}
       >
          <motion.img
@@ -237,7 +239,7 @@ export function TitleBar({
 
       <div
         className="min-w-6 flex-1"
-        aria-label="Drag window"
+        aria-label={t("Drag window")}
         onPointerDown={(event) => {
           if (event.button !== 0) return;
           void startWindowDrag();
@@ -251,7 +253,7 @@ export function TitleBar({
         groups. They render regardless of the native-controls setting, since on Linux/native
         chrome the window buttons disappear but these still belong here.
       */}
-      <div className="flex shrink-0 items-center gap-1 pl-2 pr-1" aria-label="App actions">
+      <div className="flex shrink-0 items-center gap-1 pl-2 pr-1" aria-label={t("App actions")}>
         {/*
           Integration toggles.
 
@@ -267,7 +269,7 @@ export function TitleBar({
         {discordVisible && (
         <Tooltip
           side="bottom"
-          content={discordEnabled ? "Discord presence on" : "Discord presence off"}
+          content={discordEnabled ? t("Discord presence on") : t("Discord presence off")}
         >
           <Button
             variant="ghost"
@@ -275,7 +277,7 @@ export function TitleBar({
             onClick={() => void DiscordRpcService.setEnabled(!discordEnabled)}
             aria-pressed={discordEnabled}
             aria-label={
-              discordEnabled ? "Turn off Discord presence" : "Turn on Discord presence"
+              discordEnabled ? t("Turn off Discord presence") : t("Turn on Discord presence")
             }
           >
             <DiscordIcon
@@ -292,7 +294,7 @@ export function TitleBar({
         {lastFmVisible && (
         <Tooltip
           side="bottom"
-          content={lastFmEnabled ? "Last.fm scrobbling on" : "Last.fm scrobbling off"}
+          content={lastFmEnabled ? t("Last.fm scrobbling on") : t("Last.fm scrobbling off")}
         >
           <Button
             variant="ghost"
@@ -300,7 +302,7 @@ export function TitleBar({
             onClick={() => setLastFmScrobblingEnabled(!lastFmEnabled)}
             aria-pressed={lastFmEnabled}
             aria-label={
-              lastFmEnabled ? "Turn off Last.fm scrobbling" : "Turn on Last.fm scrobbling"
+              lastFmEnabled ? t("Turn off Last.fm scrobbling") : t("Turn on Last.fm scrobbling")
             }
           >
             <LastFmIcon
@@ -319,8 +321,8 @@ export function TitleBar({
           side="bottom"
           content={
             ytScrobblingEnabled
-              ? "Adding plays to YouTube Music history"
-              : "Not adding plays to YouTube Music history"
+              ? t("Adding plays to YouTube Music history")
+              : t("Not adding plays to YouTube Music history")
           }
         >
           <Button
@@ -330,8 +332,8 @@ export function TitleBar({
             aria-pressed={ytScrobblingEnabled}
             aria-label={
               ytScrobblingEnabled
-                ? "Stop adding plays to YouTube Music history"
-                : "Add plays to YouTube Music history"
+                ? t("Stop adding plays to YouTube Music history")
+                : t("Add plays to YouTube Music history")
             }
           >
             <YouTubeMusicIcon
@@ -347,24 +349,24 @@ export function TitleBar({
         )}
 
         {githubVisible && (
-        <Tooltip side="bottom" content="Source on GitHub">
+        <Tooltip side="bottom" content={t("Source on GitHub")}>
           <Button
             variant='ghost'
           size='icon'
             onClick={() => void openUrl(GITHUB_REPOSITORY_URL)}
-            aria-label="Open the project on GitHub"
+            aria-label={t("Open the project on GitHub")}
           >
             <GitHubIcon size={16} aria-hidden="true"  />
           </Button>
         </Tooltip>
         )}
-        <Tooltip side="bottom" content="Settings">
+        <Tooltip side="bottom" content={t("Settings")}>
         <Button
             variant='ghost'
           size='icon'
             
             onClick={onOpenSettings}
-            aria-label="Open settings"
+            aria-label={t("Open settings")}
           >
             <SettingsIcon size={17} aria-hidden="true" />
           </Button>
@@ -380,13 +382,13 @@ export function TitleBar({
           side="bottom"
           className="w-64"
           trigger={
-            <Tooltip side="bottom" content={isSignedIn ? account?.name || "Account" : "Sign in"}>
+            <Tooltip side="bottom" content={isSignedIn ? account?.name || t("Account") : t("Sign in")}>
               <button
                 type="button"
                 onClick={() => setIsAccountPanelOpen((open) => !open)}
                 aria-haspopup="menu"
                 aria-expanded={isAccountPanelOpen}
-                aria-label={isSignedIn ? `Account: ${account?.name || "YouTube Music"}` : "Sign in"}
+                aria-label={isSignedIn ? t("Account: {name}", { name: account?.name || "YouTube Music" }) : t("Sign in")}
                 className={cn(
                   "ml-0.5 grid size-7 place-items-center rounded-full transition-shadow",
                   "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
@@ -412,7 +414,7 @@ export function TitleBar({
                   <span className="truncate text-sm font-medium text-foreground">
                     {account?.name || "YouTube Music"}
                   </span>
-                  <span className="truncate text-xs text-muted-foreground">Signed in</span>
+                  <span className="truncate text-xs text-muted-foreground">{t("Signed in")}</span>
                 </span>
               </div>
 
@@ -425,13 +427,13 @@ export function TitleBar({
               <GoogleAccountSwitcher
                 libraryController={libraryController}
                 onSwitched={() => setIsAccountPanelOpen(false)}
-                label="Account"
+                label={t("Account")}
               />
 
               <AccountSwitcher
                 libraryController={libraryController}
                 onSwitched={() => setIsAccountPanelOpen(false)}
-                label="Channel"
+                label={t("Channel")}
               />
 
               <button
@@ -443,7 +445,7 @@ export function TitleBar({
                 }}
               >
                 <SettingsIcon size={16} aria-hidden="true" />
-                Account settings
+                {t("Account settings")}
               </button>
             </div>
           ) : (
@@ -458,12 +460,12 @@ export function TitleBar({
                 <LoginIcon size={20} aria-hidden="true" />
               </span>
               <p className="mt-1 text-sm font-semibold text-foreground">
-                {isConnecting ? "Connecting…" : "Not signed in"}
+                {isConnecting ? t("Connecting…") : t("Not signed in")}
               </p>
               <p className="text-xs leading-relaxed text-muted-foreground">
                 {isConnecting
-                  ? "Restoring your YouTube Music session."
-                  : "Connect YouTube Music for your library, playlists and likes."}
+                  ? t("Restoring your YouTube Music session.")
+                  : t("Connect YouTube Music for your library, playlists and likes.")}
               </p>
               <GoogleSignInButton
                 className="mt-2"
@@ -489,11 +491,11 @@ export function TitleBar({
             "flex shrink-0 items-center",
             windowsStyleWindowControls ? "gap-0" : "gap-1.5 px-3",
           )}
-          aria-label="Window controls"
+          aria-label={t("Window controls")}
         >
           <button
             type="button"
-            aria-label="Minimize"
+            aria-label={t("Minimize")}
             className={cn(
               WINDOW_BUTTON_BASE,
               windowsStyleWindowControls
@@ -506,7 +508,7 @@ export function TitleBar({
           </button>
           <button
             type="button"
-            aria-label="Maximize"
+            aria-label={t("Maximize")}
             className={cn(
               WINDOW_BUTTON_BASE,
               windowsStyleWindowControls
@@ -519,7 +521,7 @@ export function TitleBar({
           </button>
           <button
             type="button"
-            aria-label="Close"
+            aria-label={t("Close")}
             className={cn(
               WINDOW_BUTTON_BASE,
               windowsStyleWindowControls

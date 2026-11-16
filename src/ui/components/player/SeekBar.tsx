@@ -3,6 +3,7 @@ import { shallowEqual, usePlayerSelector } from "../../../player/playerStore";
 import { playerController } from "../../../player/playerStore";
 import { playerUIStore, usePlayerUIState } from "../../stores/playerUIStore";
 import { formatMinutesSeconds } from "@/lib/utils";
+import { useT } from "../../../i18n";
 
 /*
  * Deliberately NOT beUI's RangeSlider: that component snaps to discrete steps, while
@@ -39,6 +40,7 @@ const IDLE_POLL_MS = 250;
 const formatTime = formatMinutesSeconds;
 
 export function SeekBar() {
+  const t = useT();
   const state = usePlayerSelector(
     (player) => ({ currentTrack: player.currentTrack, status: player.status }),
     shallowEqual,
@@ -235,7 +237,7 @@ export function SeekBar() {
         style={{
           "--slider-progress": `${duration > 0 ? (currentTime / duration) * 100 : 0}%`,
         } as React.CSSProperties}
-        aria-label="Seek"
+        aria-label={t("Seek")}
       />
       <span className="min-w-10 shrink-0 text-xs tabular-nums text-muted-foreground">
         {formatTime(duration)}

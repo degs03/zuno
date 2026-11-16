@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useT } from "../../i18n";
 import { SearchIcon } from "../icons";
 import { searchSettings, type SettingsTab } from "./settingsSearchIndex";
 
@@ -11,6 +12,7 @@ export function SettingsSearch({
   query: string;
   onQueryChange: (query: string) => void;
 }) {
+  const t = useT();
   const resultCount = useMemo(() => searchSettings(query).length, [query]);
   const active = query.trim().length > 0;
 
@@ -24,9 +26,9 @@ export function SettingsSearch({
         onKeyDown={(event) => {
           if (event.key === "Escape") onQueryChange("");
         }}
-        placeholder="Search settings"
+        placeholder={t("Search settings")}
         className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-        aria-label="Search settings"
+        aria-label={t("Search settings")}
       />
       {active ? <span className="text-xs tabular-nums">{resultCount}</span> : null}
     </label>
@@ -40,10 +42,11 @@ export function SettingsSearchResults({
   query: string;
   onSelect: (tab: SettingsTab) => void;
 }) {
+  const t = useT();
   const results = useMemo(() => searchSettings(query), [query]);
 
   return (
-    <section className="flex flex-col gap-1 rounded-xl border border-border bg-card/50 p-1.5" aria-label="Setting search results">
+    <section className="flex flex-col gap-1 rounded-xl border border-border bg-card/50 p-1.5" aria-label={t("Setting search results")}>
       {results.length > 0 ? results.map((result) => (
         <button
           key={`${result.tab}-${result.title}`}
@@ -52,13 +55,13 @@ export function SettingsSearchResults({
           className="flex flex-col gap-0.5 rounded-lg px-3 py-2 text-left transition-colors hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           <span className="flex items-baseline justify-between gap-3">
-            <strong className="text-sm font-medium text-foreground">{result.title}</strong>
-            <span className="shrink-0 text-xs text-muted-foreground">{result.category}</span>
+            <strong className="text-sm font-medium text-foreground">{t(result.title)}</strong>
+            <span className="shrink-0 text-xs text-muted-foreground">{t(result.category)}</span>
           </span>
-          <span className="text-sm text-muted-foreground">{result.description}</span>
+          <span className="text-sm text-muted-foreground">{t(result.description)}</span>
         </button>
       )) : (
-        <p className="px-3 py-2 text-sm text-muted-foreground">No settings match “{query.trim()}”.</p>
+        <p className="px-3 py-2 text-sm text-muted-foreground">{t("No settings match “{query}”.", { query: query.trim() })}</p>
       )}
     </section>
   );

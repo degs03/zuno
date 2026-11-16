@@ -10,6 +10,7 @@ import {
   SkipPreviousIcon,
 } from "@/ui/icons";
 import { TrackArtwork } from "../../TrackArtwork";
+import { useT } from "../../../../i18n";
 import {
   clampProgress,
   formatSkinTime,
@@ -57,6 +58,7 @@ export function VinylSkin({
   onRestore,
   onClose,
 }: MiniSkinProps) {
+  const t = useT();
   // useId can contain characters that are not safe in an SVG `href` fragment.
   const arcId = `vinyl-${useId().replace(/[^\w-]/g, "")}`;
   const seek = useSeekPreview(currentTime, onSeek);
@@ -72,7 +74,7 @@ export function VinylSkin({
   // The arm rises off the record whenever it is not playing, as a real one does.
   const lifted = !isPlaying || dragging;
   const hud = volumeVisible
-    ? `Vol ${Math.round(volume * 100)}%`
+    ? t("Vol {percent}%", { percent: Math.round(volume * 100) })
     : dragging
       ? `${formatSkinTime(shownTime)} / ${formatSkinTime(duration)}`
       : duration > 0
@@ -145,8 +147,8 @@ export function VinylSkin({
         disabled={duration <= 0}
         onChange={(event) => seek.setPreview(Number(event.currentTarget.value))}
         onKeyUp={(event) => seek.commit(Number(event.currentTarget.value))}
-        aria-label="Song position"
-        aria-valuetext={`${formatSkinTime(shownTime)} of ${formatSkinTime(duration)}`}
+        aria-label={t("Song position")}
+        aria-valuetext={t("{time} of {duration}", { time: formatSkinTime(shownTime), duration: formatSkinTime(duration) })}
         className="peer sr-only"
       />
 
@@ -208,7 +210,7 @@ export function VinylSkin({
         </defs>
         <text className={cn("text-[11px] font-semibold", isError ? "fill-(--skin-danger)" : "fill-(--skin-ink)")}>
           <textPath href={`#${arcId}-top`} startOffset="50%" textAnchor="middle">
-            {isError ? "Couldn't play this song" : fitArc(title ?? "Nothing playing", 20)}
+            {isError ? t("Couldn't play this song") : fitArc(title ?? t("Nothing playing"), 20)}
           </textPath>
         </text>
         {artist && (
@@ -254,10 +256,10 @@ export function VinylSkin({
 
       {/* Transport over the label: out of the way until you reach for it. */}
       <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover/vinyl:opacity-100">
-        <VinylButton label="Previous" onClick={onPrevious}>
+        <VinylButton label={t("Previous")} onClick={onPrevious}>
           <SkipPreviousIcon size={12} aria-hidden="true" />
         </VinylButton>
-        <VinylButton label={isLoading ? "Loading song" : isPlaying ? "Pause" : "Play"} onClick={onTogglePlay} large>
+        <VinylButton label={isLoading ? t("Loading song") : isPlaying ? t("Pause") : t("Play")} onClick={onTogglePlay} large>
           {isLoading ? (
             <SpinnerSteps size={14} color="currentColor" />
           ) : isPlaying ? (
@@ -266,18 +268,18 @@ export function VinylSkin({
             <PlayActiveIcon size={16} aria-hidden="true" />
           )}
         </VinylButton>
-        <VinylButton label="Next" onClick={onNext}>
+        <VinylButton label={t("Next")} onClick={onNext}>
           <SkipNextIcon size={12} aria-hidden="true" />
         </VinylButton>
       </div>
 
       <div className="absolute left-0 top-0 opacity-0 transition-opacity focus-within:opacity-100 group-hover/vinyl:opacity-100">
-        <CornerButton label="Restore main window" onClick={onRestore}>
+        <CornerButton label={t("Restore main window")} onClick={onRestore}>
           <ArrowUpIcon size={11} aria-hidden="true" />
         </CornerButton>
       </div>
       <div className="absolute bottom-0 right-0 opacity-0 transition-opacity focus-within:opacity-100 group-hover/vinyl:opacity-100">
-        <CornerButton label="Close mini player" onClick={onClose}>
+        <CornerButton label={t("Close mini player")} onClick={onClose}>
           <CloseIcon size={11} aria-hidden="true" />
         </CornerButton>
       </div>

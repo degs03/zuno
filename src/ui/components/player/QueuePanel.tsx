@@ -30,6 +30,7 @@ import {
 import { ArtistLinks } from "../ArtistLinks";
 import { TrackArtwork } from "../TrackArtwork";
 import { SquareAltArrowLeftIcon, SquareAltArrowRightIcon } from "@solar-icons/react/linear";
+import { t, tn, useT } from "../../../i18n";
 
 interface QueuePanelProps {
   onClose: () => void;
@@ -65,7 +66,7 @@ interface QueueEntry {
 }
 
 /** Sums across the sections in place; spreading them into one array copied every upcoming track. */
-function formatRemaining(...sections: QueueEntry[][]): string | null {
+function remainingSeconds(...sections: QueueEntry[][]): number | null {
   let seconds = 0;
   for (const section of sections) {
     for (const { track } of section) {
@@ -74,11 +75,16 @@ function formatRemaining(...sections: QueueEntry[][]): string | null {
       seconds += track.durationSec;
     }
   }
-  if (seconds === 0) return null;
+  return seconds === 0 ? null : seconds;
+}
 
+/** Formatted at render rather than inside the memo, so a language switch repaints it. */
+function formatRemaining(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.round((seconds % 3600) / 60);
-  return hours > 0 ? `${hours} hr ${minutes} min` : `${minutes} min`;
+  return hours > 0
+    ? t("{hours} hr {minutes} min", { hours, minutes })
+    : t("{minutes} min", { minutes });
 }
 
 /**
@@ -118,6 +124,7 @@ const QueueRow = memo(function QueueRow({
     section: QueueSection,
   ) => void;
 }) {
+  const t = useT();
   const { track, absoluteIndex, position, section } = entry;
 
   const row = (
@@ -147,7 +154,7 @@ const QueueRow = memo(function QueueRow({
         )}
         onPointerDown={(event) => onPointerDown(event, absoluteIndex, section)}
         onClick={() => onPlay(absoluteIndex)}
-        aria-label={collapsed ? `Play ${track.title}` : undefined}
+        aria-label={collapsed ? t("Play {title}", { title: track.title }) : undefined}
       >
         {/* The cover carries the position and the play affordance so the row needs no
             separate number column — that is what buys back the width when collapsed. */}
@@ -199,7 +206,7 @@ const QueueRow = memo(function QueueRow({
               : "opacity-0 focus-within:opacity-100 group-hover/queue-item:opacity-100",
           )}
         >
-          <Tooltip content={isStopAfter ? "Don't end queue here" : "End queue after this"}>
+          <Tooltip content={isStopAfter ? t("Don't end queue here") : t("End queue after this")}>
             <button
               type="button"
               className={cn(ICON_BUTTON, isStopAfter && "text-primary")}
@@ -208,11 +215,11 @@ const QueueRow = memo(function QueueRow({
             >
               <PauseIcon size={15} aria-hidden="true" />
               <span className="sr-only">
-                {isStopAfter ? "Don't end queue here" : "End queue after this"}
+                {isStopAfter ? t("Don't end queue here") : t("End queue after this")}
               </span>
             </button>
           </Tooltip>
-          <Tooltip content="Generate a new queue from here">
+          <Tooltip content={t("Generate a new queue from here")}>
             <button
               type="button"
               className={cn(ICON_BUTTON, isGenerating && "text-primary")}
@@ -224,17 +231,17 @@ const QueueRow = memo(function QueueRow({
                 aria-hidden="true"
                 className={isGenerating ? "motion-safe:animate-spin" : undefined}
               />
-              <span className="sr-only">Generate a new queue from here</span>
+              <span className="sr-only">{t("Generate a new queue from here")}</span>
             </button>
           </Tooltip>
-          <Tooltip content="Remove from queue">
+          <Tooltip content={t("Remove from queue")}>
             <button
               type="button"
               className={cn(ICON_BUTTON, "hover:text-primary")}
               onClick={() => onRemove(absoluteIndex)}
             >
               <TrashIcon size={15} aria-hidden="true" />
-              <span className="sr-only">{`Remove ${track.title} from queue`}</span>
+              <span className="sr-only">{t("Remove {title} from queue", { title: track.title })}</span>
             </button>
           </Tooltip>
         </span>
@@ -306,7 +313,8 @@ function ShowMoreQueueButton({
   remaining: number;
   onClick: () => void;
 }) {
-  const label = `Show ${Math.min(AUTOMATIC_PAGE_SIZE, remaining)} more`;
+  const t = useT();
+  const label = t("Show {count} more", { count: Math.min(AUTOMATIC_PAGE_SIZE, remaining) });
   const button = (
     <button
       type="button"
@@ -332,6 +340,7 @@ function ShowMoreQueueButton({
 }
 
 export function QueuePanel({ onClose }: QueuePanelProps) {
+  const t = useT();
   const panelRef = useRef<HTMLElement>(null);
   const draggedElementRef = useRef<HTMLElement | null>(null);
   const captureElementRef = useRef<HTMLElement | null>(null);
@@ -429,10 +438,11 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
    * on every session export, not only when the queue actually changes — so this ran a full
    * copy plus a pass over every upcoming track far more often than the contents moved.
    */
-  const remaining = useMemo(
-    () => formatRemaining(manual, automatic),
+  const remainingTotal = useMemo(
+    () => remainingSeconds(manual, automatic),
     [automatic, manual],
   );
+  const remaining = remainingTotal === null ? null : formatRemaining(remainingTotal);
 
   const handleRemove = (absoluteIndex: number) => {
     playerController.removeFromQueueAt(absoluteIndex);
@@ -668,7 +678,7 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
         // Dragging over rows must not select their text.
         draggedIndex !== null && "select-none",
       )}
-      aria-label="Queue"
+      aria-label={t("Queue")}
     >
       <header
         className={cn(
@@ -678,7 +688,7 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
       >
         <Tooltip
           side={collapsed ? "left" : "bottom"}
-          content={collapsed ? "Expand queue" : "Collapse queue"}
+          content={collapsed ? t("Expand queue") : t("Collapse queue")}
         >
           <button type="button" className={ICON_BUTTON} onClick={toggleQueuePanelCollapsed}>
             {collapsed ? (
@@ -686,15 +696,15 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
             ) : (
               <SquareAltArrowRightIcon size={22} aria-hidden="true" />
             )}
-            <span className="sr-only">{collapsed ? "Expand queue" : "Collapse queue"}</span>
+            <span className="sr-only">{collapsed ? t("Expand queue") : t("Collapse queue")}</span>
           </button>
         </Tooltip>
 
         {!collapsed && (
           <div className="flex min-w-0 flex-1 flex-col">
-            <h2 className="text-sm font-semibold text-foreground">Up next</h2>
+            <h2 className="text-sm font-semibold text-foreground">{t("Up next")}</h2>
             <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-              <span>{upcomingCount === 0 ? "Nothing queued" : `${upcomingCount} songs`}</span>
+              <span>{upcomingCount === 0 ? t("Nothing queued") : tn("{n} song", "{n} songs", upcomingCount)}</span>
               {remaining && (
                 <>
                   <ClockIcon size={11} aria-hidden="true" />
@@ -707,31 +717,31 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
 
         {!collapsed && upcomingCount > 0 && (
           <>
-            <Tooltip content="Shuffle what's next">
+            <Tooltip content={t("Shuffle what's next")}>
               <button
                 type="button"
                 className={ICON_BUTTON}
                 onClick={() => playerController.shuffleUpcomingQueue()}
               >
                 <ShuffleIcon size={16} aria-hidden="true" />
-                <span className="sr-only">Shuffle what's next</span>
+                <span className="sr-only">{t("Shuffle what's next")}</span>
               </button>
             </Tooltip>
-            <Tooltip content="Shuffle the whole playlist">
+            <Tooltip content={t("Shuffle the whole playlist")}>
               <button
                 type="button"
                 className={ICON_BUTTON}
                 onClick={() => playerController.shuffleEntirePlaylist()}
               >
                 <ShuffleActiveIcon size={16} aria-hidden="true" />
-                <span className="sr-only">Shuffle the whole playlist</span>
+                <span className="sr-only">{t("Shuffle the whole playlist")}</span>
               </button>
             </Tooltip>
-            <Tooltip content="Save the queue as a playlist">
+            <Tooltip content={t("Save the queue as a playlist")}>
               <button
                 type="button"
                 className={cn(ICON_BUTTON, saveState === "saved" && "text-primary")}
-                onClick={() => setSaveDraft((draft) => (draft === null ? "My queue" : null))}
+                onClick={() => setSaveDraft((draft) => (draft === null ? t("My queue") : null))}
                 aria-expanded={saveDraft !== null}
               >
                 {saveState === "saving" ? (
@@ -741,17 +751,17 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
                 ) : (
                   <PlaylistAddIcon size={16} aria-hidden="true" />
                 )}
-                <span className="sr-only">Save the queue as a playlist</span>
+                <span className="sr-only">{t("Save the queue as a playlist")}</span>
               </button>
             </Tooltip>
-            <Tooltip content="Clear the queue">
+            <Tooltip content={t("Clear the queue")}>
               <button
                 type="button"
                 className={cn(ICON_BUTTON, "hover:text-primary")}
                 onClick={() => playerController.clearUpcomingQueue()}
               >
                 <TrashIcon size={16} aria-hidden="true" />
-                <span className="sr-only">Clear the queue</span>
+                <span className="sr-only">{t("Clear the queue")}</span>
               </button>
             </Tooltip>
           </>
@@ -769,12 +779,12 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
               if (event.key === "Enter") void handleSaveQueue();
               if (event.key === "Escape") setSaveDraft(null);
             }}
-            aria-label="New playlist name"
+            aria-label={t("New playlist name")}
             className="w-full min-w-0 rounded-lg bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:ring-1 focus:ring-inset focus:ring-border"
           />
           <div className="flex items-center justify-between gap-2">
             <span className="text-[11px] text-muted-foreground">
-              {upcomingCount + (currentTrack ? 1 : 0)} songs
+              {tn("{n} song", "{n} songs", upcomingCount + (currentTrack ? 1 : 0))}
             </span>
             <div className="flex gap-1.5">
               <button
@@ -782,7 +792,7 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
                 className="rounded-full px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => setSaveDraft(null)}
               >
-                Cancel
+                {t("Cancel")}
               </button>
               <button
                 type="button"
@@ -790,7 +800,7 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
                 className="rounded-full bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-transform hover:scale-[1.02] active:scale-95 disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={() => void handleSaveQueue()}
               >
-                {saveState === "saving" ? "Saving..." : "Save"}
+                {saveState === "saving" ? t("Saving...") : t("Save")}
               </button>
             </div>
           </div>
@@ -840,7 +850,7 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
           {!collapsed && (
             <span className="flex min-w-0 flex-col">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                {isPlaying ? "Now playing" : "Paused"}
+                {isPlaying ? t("Now playing") : t("Paused")}
               </span>
               <span className="truncate text-sm font-medium text-foreground">
                 {currentTrack.title}
@@ -858,20 +868,20 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
       {upcomingCount === 0 ? (
         collapsed ? null : (
           <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-            Nothing queued. Songs you add with "Play next" land here.
+            {t("Nothing queued. Songs you add with \"Play next\" land here.")}
           </p>
         )
       ) : (
         <div className={cn("flex flex-col gap-0.5 pb-2", collapsed ? "px-1.5" : "px-2")}>
           {manual.length > 0 && (
             <>
-              {sectionLabel("Added by you", manual.length)}
+              {sectionLabel(t("Added by you"), manual.length)}
               {renderRows(manual)}
             </>
           )}
           {automatic.length > 0 && (
             <>
-              {manual.length > 0 && sectionLabel("Up next", automatic.length)}
+              {manual.length > 0 && sectionLabel(t("Up next"), automatic.length)}
               {renderRows(automatic.slice(0, visibleAutomaticCount))}
               {automatic.length > visibleAutomaticCount && (
                 <ShowMoreQueueButton
@@ -894,7 +904,7 @@ export function QueuePanel({ onClose }: QueuePanelProps) {
           className="mx-2 mb-2 mt-auto shrink-0 rounded py-1.5 text-xs text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onClose}
         >
-          Hide queue
+          {t("Hide queue")}
         </button>
       )}
     </aside>

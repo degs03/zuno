@@ -1,6 +1,8 @@
+import { getLocale, t, tn, useLocale, useT, type LanguageCode } from "../../i18n";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-import { ClockIcon, TrashIcon } from "@/ui/icons";
+import { ClockIcon, StatsIcon, TrashIcon } from "@/ui/icons";
+import { StatsView } from "../components/StatsView";
 import type { Track } from "../../datasource/types";
 import type { PlayerControllerActions } from "../../player/playerStore";
 import {
@@ -16,17 +18,17 @@ import { useNowPlaying } from "../hooks/useNowPlaying";
 const DAY_MS = 86_400_000;
 
 /** "Today" / "Yesterday" / a written date, so the list reads as a diary rather than a dump. */
-function formatDayLabel(timestamp: number): string {
+function formatDayLabel(timestamp: number, locale: LanguageCode): string {
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const startOfDay = startOfToday.getTime();
 
-  if (timestamp >= startOfDay) return "Today";
-  if (timestamp >= startOfDay - DAY_MS) return "Yesterday";
+  if (timestamp >= startOfDay) return t("Today");
+  if (timestamp >= startOfDay - DAY_MS) return t("Yesterday");
 
   const date = new Date(timestamp);
   const sameYear = date.getFullYear() === startOfToday.getFullYear();
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString(locale, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -35,7 +37,7 @@ function formatDayLabel(timestamp: number): string {
 }
 
 function formatTime(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString(undefined, {
+  return new Date(timestamp).toLocaleTimeString(getLocale(), {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -58,6 +60,48 @@ export function HistoryPage({
 }: {
   playerController: PlayerControllerActions;
 }) {
+  const t = useT();
+  const [view, setView] = useState<"history" | "stats">("history");
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex gap-1.5" role="tablist" aria-label={t("History or stats")}>
+        {(["history", "stats"] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="tab"
+            aria-selected={view === option}
+            onClick={() => setView(option)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              view === option ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {option === "history" ? <ClockIcon size={15} aria-hidden="true" /> : <StatsIcon size={15} aria-hidden="true" />}
+            {option === "history" ? t("History") : t("Stats")}
+          </button>
+        ))}
+      </div>
+      {view === "history" ? (
+        <HistoryList playerController={playerController} />
+      ) : (
+        <>
+          <h1 className="text-3xl font-bold tracking-[-0.02em] text-foreground">{t("Your stats")}</h1>
+          <StatsView />
+        </>
+      )}
+    </div>
+  );
+}
+
+function HistoryList({
+  playerController,
+}: {
+  playerController: PlayerControllerActions;
+}) {
+  const t = useT();
+  // Day labels are memoised below, so the language is a dependency of the grouping.
+  const locale = useLocale();
   const entries = usePlayHistory();
   const { currentTrackId, isPlaying } = useNowPlaying();
   const { openTrackMenu, openPlaylistPicker } = useTrackContextMenu();
@@ -66,13 +110,13 @@ export function HistoryPage({
   const days = useMemo<HistoryDay[]>(() => {
     const grouped: HistoryDay[] = [];
     for (const entry of entries) {
-      const label = formatDayLabel(entry.playedAt);
+      const label = formatDayLabel(entry.playedAt, locale);
       const last = grouped[grouped.length - 1];
       if (last?.label === label) last.entries.push(entry);
       else grouped.push({ label, entries: [entry] });
     }
     return grouped;
-  }, [entries]);
+  }, [entries, locale]);
 
   // Playing from history queues the rest of that day, so it keeps going the way it did then.
   const playFrom = (day: HistoryDay, track: Track) => {
@@ -86,9 +130,9 @@ export function HistoryPage({
         <span className="grid size-12 place-items-center rounded-full bg-card text-muted-foreground">
           <ClockIcon size={24} aria-hidden="true" />
         </span>
-        <p className="text-sm font-medium text-foreground">No listening history yet</p>
+        <p className="text-sm font-medium text-foreground">{t("No listening history yet")}</p>
         <p className="max-w-xs text-sm text-muted-foreground">
-          Songs you play appear here with the time you played them.
+          {t("Songs you play appear here with the time you played them.")}
         </p>
       </div>
     );
@@ -98,10 +142,12 @@ export function HistoryPage({
     <div className="flex flex-col gap-6">
       <header className="flex items-end justify-between gap-4">
         <div className="flex flex-col gap-0.5">
-          <h1 className="text-3xl font-bold tracking-[-0.02em] text-foreground">History</h1>
+          <h1 className="text-3xl font-bold tracking-[-0.02em] text-foreground">{t("History")}</h1>
           <p className="text-sm text-muted-foreground">
-            {entries.length} {entries.length === 1 ? "play" : "plays"} across {days.length}{" "}
-            {days.length === 1 ? "day" : "days"}
+            {t("{plays} across {days}", {
+              plays: tn("{n} play", "{n} plays", entries.length),
+              days: tn("{n} day", "{n} days", days.length),
+            })}
           </p>
         </div>
 
@@ -126,7 +172,7 @@ export function HistoryPage({
           )}
         >
           <TrashIcon size={16} aria-hidden="true" />
-          {confirmClear ? "Click again to clear" : "Clear history"}
+          {confirmClear ? t("Click again to clear") : t("Clear history")}
         </button>
       </header>
 
@@ -168,7 +214,7 @@ export function HistoryPage({
                     <span
                       role="button"
                       tabIndex={0}
-                      aria-label={`Remove ${entry.track.title} from history`}
+                      aria-label={t("Remove {title} from history", { title: entry.track.title })}
                       className="grid size-7 place-items-center rounded-full text-muted-foreground opacity-0 transition hover:bg-background hover:text-foreground group-hover/row:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       onClick={(event) => {
                         event.stopPropagation();

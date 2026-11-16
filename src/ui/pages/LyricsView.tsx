@@ -1,3 +1,5 @@
+import { KaraokeView } from "../components/KaraokeView";
+import { useOnline } from "../../internal/connectivity";
 import {
   type FormEvent,
   type KeyboardEvent,
@@ -11,7 +13,7 @@ import {
 } from "react";
 import { useReduceMotion } from "../settings/renderEffects";
 import { cn } from "@/lib/utils";
-import { CloseIcon, FullScreenIcon, LyricsIcon, QuitFullScreenIcon, RefreshIcon } from "@/ui/icons";
+import { CloseIcon, FullScreenIcon, LyricsIcon, MusicNoteIcon, QuitFullScreenIcon, RefreshIcon } from "@/ui/icons";
 import type {
   Lyrics,
   LyricsQuery,
@@ -35,6 +37,7 @@ import { TRANSLATION_OFF, useLyricsTranslationLang } from "../settings/lyricsTra
 import { translateLines } from "../../datasource/translate";
 import { findActiveLineIndex, getLineProgress, isSyncedLyrics } from "./lyricsTiming";
 import { isMobile } from "../platform";
+import { useT } from "../../i18n";
 
 /** How long a manual scroll keeps the auto-follow parked. */
 const AUTO_SCROLL_RESUME_MS = 4500;
@@ -81,6 +84,7 @@ interface LyricsViewProps {
 }
 
 export function LyricsView({ onClose }: LyricsViewProps) {
+  const t = useT();
   const playerState = usePlayerSelector(
     (player) => ({ currentTrack: player.currentTrack, status: player.status }),
     shallowEqual,
@@ -93,6 +97,7 @@ export function LyricsView({ onClose }: LyricsViewProps) {
   const fontScale = useLyricsFontScale();
   const translationLang = useLyricsTranslationLang();
   const [translations, setTranslations] = useState<string[] | null>(null);
+  const [karaoke, setKaraoke] = useState(false);
 
   const [lyrics, setLyrics] = useState<Lyrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -103,7 +108,8 @@ export function LyricsView({ onClose }: LyricsViewProps) {
   const [activeIndex, setActiveIndex] = useState(-1);
   const [isFollowPaused, setIsFollowPaused] = useState(false);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
-  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  // The app's own verdict (probe + Offline mode), not navigator.onLine, which lies both ways.
+  const isOnline = useOnline();
 
   const scrollerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<Array<HTMLElement | null>>([]);
@@ -135,16 +141,6 @@ export function LyricsView({ onClose }: LyricsViewProps) {
     setAmbientArtwork(track?.artworkUrl ?? null);
     return () => setAmbientArtwork(null);
   }, [track?.artworkUrl]);
-
-  useEffect(() => {
-    const update = () => setIsOnline(navigator.onLine);
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -423,17 +419,17 @@ export function LyricsView({ onClose }: LyricsViewProps) {
   };
 
   const sourceLabel = lyrics?.sourceLabel;
-  const timingLabel = hasLines ? (isSynced ? "Synced" : "Unsynced") : null;
+  const timingLabel = hasLines ? (isSynced ? t("Synced") : t("Unsynced")) : null;
   const emptyMessage = !isOnline
-    ? "You're offline. Lyrics need a connection."
+    ? t("You're offline. Lyrics need a connection.")
     : failed
-      ? "Lyrics could not be loaded."
-      : "No lyrics found for this song.";
+      ? t("Lyrics could not be loaded.")
+      : t("No lyrics found for this song.");
 
   return (
     <section
       className="@container/lyrics relative flex h-full min-h-0 w-full flex-col overflow-hidden"
-      aria-label="Lyrics"
+      aria-label={t("Lyrics")}
     >
       {/* The cover, oversized and blurred once into a canvas (see BlurredArtwork), is the only
           colour on the screen; the drift then moves a plain texture, which the compositor does cheaply. */}
@@ -454,11 +450,32 @@ export function LyricsView({ onClose }: LyricsViewProps) {
         The buttons below are navigable but never announced as they light up, so a listener
         using a screen reader would get a static sheet and no sense of where the song is.
       */}
+      {karaoke && track && isSynced ? (
+        <KaraokeView
+          track={track}
+          lines={lines}
+          translations={translations}
+          offset={offset}
+          onClose={() => setKaraoke(false)}
+        />
+      ) : null}
       <p className="sr-only" role="status" aria-live="polite">
         {isSynced && activeIndex >= 0 ? lines[activeIndex]?.text ?? "" : ""}
       </p>
 
       <div className="absolute right-4 top-4 z-20 flex items-center gap-2">
+        {isSynced && track ? (
+          <button
+            type="button"
+            className="flex h-9 items-center gap-1.5 rounded-full bg-card/60 px-3 text-sm font-medium text-muted-foreground backdrop-blur transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => setKaraoke(true)}
+            aria-label={t("Karaoke mode")}
+            title={t("Karaoke mode")}
+          >
+            <MusicNoteIcon size={16} aria-hidden="true" />
+            <span className="max-sm:hidden">{t("Karaoke")}</span>
+          </button>
+        ) : null}
         {/* Not on a phone: full screen hides the player bar until hovered, and touch cannot
             hover, so it would leave the music with no controls at all. */}
         {!isMobile && (
@@ -467,8 +484,8 @@ export function LyricsView({ onClose }: LyricsViewProps) {
           className="flex size-9 items-center justify-center rounded-full bg-card/60 text-muted-foreground backdrop-blur transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => playerUIStore.setLyricsFullscreen(!isFullscreen)}
           aria-pressed={isFullscreen}
-          aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
-          title={isFullscreen ? "Exit full screen (Esc)" : "Full screen"}
+          aria-label={isFullscreen ? t("Exit full screen") : t("Full screen")}
+          title={isFullscreen ? t("Exit full screen (Esc)") : t("Full screen")}
         >
           {isFullscreen ? <QuitFullScreenIcon size={18} /> : <FullScreenIcon size={18} />}
         </button>
@@ -477,8 +494,8 @@ export function LyricsView({ onClose }: LyricsViewProps) {
           type="button"
           className="flex size-10 items-center justify-center rounded-full bg-card/60 text-muted-foreground backdrop-blur transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onClose}
-          aria-label="Close lyrics"
-          title={isFullscreen ? "Close lyrics" : "Close lyrics (Esc)"}
+          aria-label={t("Close lyrics")}
+          title={isFullscreen ? t("Close lyrics") : t("Close lyrics (Esc)")}
         >
           <CloseIcon size={19} />
         </button>
@@ -487,7 +504,7 @@ export function LyricsView({ onClose }: LyricsViewProps) {
       <div className="relative flex min-h-0 flex-1 flex-col @4xl/lyrics:flex-row">
         {/* Wide enough for two columns: the song gets a poster, the lyrics get the rest. */}
         <aside className="hidden shrink-0 flex-col gap-6 px-8 py-8 @4xl/lyrics:flex @4xl/lyrics:w-[19rem] @6xl/lyrics:w-[22rem]">
-          <CoverButton artworkUrl={track?.artworkUrl} label={track?.title ?? "this track"} className="w-full">
+          <CoverButton artworkUrl={track?.artworkUrl} label={track?.title ?? t("this track")} className="w-full">
             <TrackArtwork
               artworkUrl={track?.artworkUrl}
               size={288}
@@ -498,7 +515,7 @@ export function LyricsView({ onClose }: LyricsViewProps) {
           </CoverButton>
           <div className="min-w-0">
             <h1 className="text-balance text-2xl font-bold leading-tight tracking-[-0.03em] text-foreground">
-              {track?.title ?? "Nothing playing"}
+              {track?.title ?? t("Nothing playing")}
             </h1>
             {track && (
               <p className="mt-1.5 text-sm text-muted-foreground">
@@ -519,7 +536,7 @@ export function LyricsView({ onClose }: LyricsViewProps) {
           />
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-lg font-bold tracking-[-0.02em] text-foreground">
-              {track?.title ?? "Nothing playing"}
+              {track?.title ?? t("Nothing playing")}
             </h1>
             {track && (
               <p className="truncate text-sm text-muted-foreground">
@@ -548,7 +565,7 @@ export function LyricsView({ onClose }: LyricsViewProps) {
             >
               {isLoading && <LyricsSkeleton />}
 
-              {!isLoading && !track && <LyricsMessage text="Play something to see its lyrics." />}
+              {!isLoading && !track && <LyricsMessage text={t("Play something to see its lyrics.")} />}
 
               {!isLoading && track && !hasLines && (
                 <LyricsMessage
@@ -625,10 +642,10 @@ export function LyricsView({ onClose }: LyricsViewProps) {
               type="button"
               className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full bg-card px-4 py-2 text-sm font-medium text-foreground shadow-pop transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={resumeFollow}
-              aria-label="Resync lyrics to current playback position"
+              aria-label={t("Resync lyrics to current playback position")}
             >
               <RefreshIcon size={15} aria-hidden="true" />
-              Back to current line
+              {t("Back to current line")}
             </button>
           )}
         </div>
@@ -645,7 +662,7 @@ export function LyricsView({ onClose }: LyricsViewProps) {
           {lyrics?.attempts?.length ? (
             <LyricsSourcePanel attempts={lyrics.attempts} activeId={lyrics.sourceId} />
           ) : (
-            sourceLabel && <span className="truncate">via {sourceLabel}</span>
+            sourceLabel && <span className="truncate">{t("via {source}", { source: sourceLabel })}</span>
           )}
         </span>
         {track && (
@@ -799,6 +816,7 @@ function LyricsSourcePanel({
   attempts: LyricsSourceAttempt[];
   activeId?: string;
 }) {
+  const t = useT();
   const [isOpen, setIsOpen] = useState(false);
   const winner = attempts.find((attempt) => attempt.id === activeId);
 
@@ -816,18 +834,18 @@ function LyricsSourcePanel({
           onClick={() => setIsOpen((open) => !open)}
           aria-expanded={isOpen}
           aria-haspopup="dialog"
-          aria-label="Show which lyric sources were tried"
+          aria-label={t("Show which lyric sources were tried")}
         >
           <span
             className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[winner?.status ?? "miss"])}
             aria-hidden="true"
           />
-          <span className="truncate">{winner ? `via ${winner.label}` : "No source matched"}</span>
+          <span className="truncate">{winner ? t("via {source}", { source: winner.label }) : t("No source matched")}</span>
         </button>
       }
     >
       <p className="px-2 pb-1.5 pt-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        Sources, best first
+        {t("Sources, best first")}
       </p>
       <div className="flex flex-col">
         {attempts.map((attempt) => {
@@ -838,7 +856,10 @@ function LyricsSourcePanel({
               className={cn("flex items-start gap-2 rounded-lg px-2 py-1.5", isWinner && "bg-muted/40")}
               // The ranking rationale, one hover away — it explains the order without
               // spending five permanent lines of the panel on it.
-              title={LYRICS_SOURCES.find((source) => source.id === attempt.id)?.note}
+              title={(() => {
+                const note = LYRICS_SOURCES.find((source) => source.id === attempt.id)?.note;
+                return note ? t(note) : undefined;
+              })()}
             >
               <span
                 className={cn("mt-[0.4rem] size-1.5 shrink-0 rounded-full", STATUS_DOT[attempt.status])}
@@ -886,6 +907,7 @@ function LyricsSearchPanel({
   track: Track;
   onSearch: (query: LyricsQuery) => void;
 }) {
+  const t = useT();
   const [isOpen, setIsOpen] = useState(false);
   const [title, setTitle] = useState(track.title);
   const [artist, setArtist] = useState(track.artist);
@@ -911,7 +933,7 @@ function LyricsSearchPanel({
           aria-expanded={isOpen}
           aria-haspopup="dialog"
         >
-          Search lyrics
+          {t("Search lyrics")}
         </button>
       }
     >
@@ -920,15 +942,15 @@ function LyricsSearchPanel({
           autoFocus
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder="Song title"
-          aria-label="Song title"
+          placeholder={t("Song title")}
+          aria-label={t("Song title")}
           className={SEARCH_INPUT}
         />
         <input
           value={artist}
           onChange={(event) => setArtist(event.target.value)}
-          placeholder="Artist"
-          aria-label="Artist"
+          placeholder={t("Artist")}
+          aria-label={t("Artist")}
           className={SEARCH_INPUT}
         />
         <button
@@ -936,15 +958,15 @@ function LyricsSearchPanel({
           disabled={!title.trim()}
           className="self-end rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Search
+          {t("Search")}
         </button>
       </form>
     </FloatingPanel>
   );
 }
 
-function formatOffset(offset: number): string {
-  if (offset === 0) return "In sync";
+function formatOffset(offset: number, t: (text: string) => string): string {
+  if (offset === 0) return t("In sync");
   const magnitude = Math.abs(offset).toFixed(2).replace(/\.?0+$/, "");
   return `${offset > 0 ? "+" : "−"}${magnitude}s`;
 }
@@ -957,17 +979,18 @@ function formatOffset(offset: number): string {
  * hunting for a separate control.
  */
 function LyricsOffsetControl({ trackId, offset }: { trackId: string; offset: number }) {
+  const t = useT();
   const step = (delta: number) => setLyricsOffset(trackId, offset + delta);
 
   return (
     <div
       className="flex shrink-0 items-center gap-0.5 rounded-full bg-card/70 p-0.5"
       role="group"
-      aria-label="Lyric timing"
+      aria-label={t("Lyric timing")}
     >
       <OffsetButton
         label="−"
-        ariaLabel={`Delay lyrics by ${OFFSET_STEP_SEC} seconds`}
+        ariaLabel={t("Delay lyrics by {seconds} seconds", { seconds: OFFSET_STEP_SEC })}
         onClick={() => step(-OFFSET_STEP_SEC)}
       />
       <button
@@ -975,14 +998,14 @@ function LyricsOffsetControl({ trackId, offset }: { trackId: string; offset: num
         className="min-w-[4.25rem] rounded-full px-1 py-0.5 text-center tabular-nums transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:hover:text-muted-foreground"
         onClick={() => setLyricsOffset(trackId, 0)}
         disabled={offset === 0}
-        aria-label={offset === 0 ? "Lyrics are in sync" : "Reset lyric timing"}
-        title={offset === 0 ? undefined : "Reset"}
+        aria-label={offset === 0 ? t("Lyrics are in sync") : t("Reset lyric timing")}
+        title={offset === 0 ? undefined : t("Reset")}
       >
-        {formatOffset(offset)}
+        {formatOffset(offset, t)}
       </button>
       <OffsetButton
         label="+"
-        ariaLabel={`Advance lyrics by ${OFFSET_STEP_SEC} seconds`}
+        ariaLabel={t("Advance lyrics by {seconds} seconds", { seconds: OFFSET_STEP_SEC })}
         onClick={() => step(OFFSET_STEP_SEC)}
       />
     </div>
@@ -1013,9 +1036,10 @@ function OffsetButton({
 /* Staggered bars rather than a spinner: it previews the shape of what is arriving, so the
    swap to real lines reads as content landing instead of a screen change. */
 function LyricsSkeleton() {
+  const t = useT();
   const widths = [72, 58, 84, 46, 66, 78, 52];
   return (
-    <div className="flex flex-col gap-7 pt-10" role="status" aria-label="Loading lyrics">
+    <div className="flex flex-col gap-7 pt-10" role="status" aria-label={t("Loading lyrics")}>
       {widths.map((width, index) => (
         <div
           key={width}
@@ -1028,6 +1052,7 @@ function LyricsSkeleton() {
 }
 
 function LyricsMessage({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  const t = useT();
   return (
     <div className="flex flex-col items-center gap-4 px-2 py-24 text-center" role="status">
       <LyricsIcon size={28} className="text-muted-foreground/50" aria-hidden="true" />
@@ -1039,7 +1064,7 @@ function LyricsMessage({ text, onRetry }: { text: string; onRetry?: () => void }
           onClick={onRetry}
         >
           <RefreshIcon size={15} aria-hidden="true" />
-          Try again
+          {t("Try again")}
         </button>
       )}
     </div>

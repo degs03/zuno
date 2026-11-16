@@ -31,18 +31,44 @@ import { useTrackContextMenu } from "../components/TrackContextMenu";
 import { usePlaylistContextMenu } from "../components/PlaylistContextMenu";
 import { useNowPlaying } from "../hooks/useNowPlaying";
 import { useTrackSelection } from "../hooks/useTrackSelection";
+import { useProgressiveList } from "../hooks/useProgressiveList";
 import { isLikedSongsId, likedSongsCover } from "../likedSongsArtwork";
 import { useHiddenPlaylistIds } from "../settings/hiddenPlaylists";
 import { setLibrarySort, useLibrarySort, type LibrarySort } from "../settings/sortPreferences";
+import { msg, useT } from "../../i18n";
 
 type LibraryTab = "songs" | "albums" | "artists" | "playlists";
 
 const TABS: Array<{ value: LibraryTab; label: string }> = [
-  { value: "songs", label: "Songs" },
-  { value: "albums", label: "Albums" },
-  { value: "artists", label: "Artists" },
-  { value: "playlists", label: "Playlists" },
+  { value: "songs", label: msg("Songs") },
+  { value: "albums", label: msg("Albums") },
+  { value: "artists", label: msg("Artists") },
+  { value: "playlists", label: msg("Playlists") },
 ];
+
+/** Per-tab sentences, whole so translators see each one in full rather than a spliced-in noun. */
+const TAB_TEXT: Record<LibraryTab, { filter: string; empty: string; noMatch: string }> = {
+  songs: {
+    filter: msg("Filter songs"),
+    empty: msg("No songs in your library yet."),
+    noMatch: msg("No songs match \"{query}\"."),
+  },
+  albums: {
+    filter: msg("Filter albums"),
+    empty: msg("No albums in your library yet."),
+    noMatch: msg("No albums match \"{query}\"."),
+  },
+  artists: {
+    filter: msg("Filter artists"),
+    empty: msg("No artists in your library yet."),
+    noMatch: msg("No artists match \"{query}\"."),
+  },
+  playlists: {
+    filter: msg("Filter playlists"),
+    empty: msg("No playlists in your library yet."),
+    noMatch: msg("No playlists match \"{query}\"."),
+  },
+};
 
 /* Roomier than the old 9rem: at that width a two-line title and an artist filled the card
    entirely, which is what made the grids read as dense rather than browsable. */
@@ -89,14 +115,15 @@ function EmptyState({
   query,
   onClearQuery,
 }: {
-  noun: string;
+  noun: LibraryTab;
   query: string;
   onClearQuery: () => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-col items-center gap-3 px-2 py-16 text-center">
       <p className="text-sm text-muted-foreground">
-        {query ? `No ${noun} match "${query}".` : `No ${noun} in your library yet.`}
+        {query ? t(TAB_TEXT[noun].noMatch, { query }) : t(TAB_TEXT[noun].empty)}
       </p>
       {query && (
         <button
@@ -104,7 +131,7 @@ function EmptyState({
           onClick={onClearQuery}
           className="rounded-full bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          Clear filter
+          {t("Clear filter")}
         </button>
       )}
     </div>
@@ -132,6 +159,7 @@ export function LibraryPage({
   onOpenArtist: (artist: Artist) => void;
   onOpenPlaylist: (playlist: Playlist) => void;
 }) {
+  const t = useT();
   const [tab, setTab] = useState<LibraryTab>("songs");
   const [query, setQuery] = useState("");
   const sort = useLibrarySort();
@@ -178,6 +206,7 @@ export function LibraryPage({
     ),
     [activeSort, allSongs, normalizedQuery],
   );
+  const songPages = useProgressiveList(songs.length, songs);
 
   const albums = useMemo(
     () => sortItems(
@@ -316,8 +345,8 @@ export function LibraryPage({
     return (
       <p className="px-2 py-16 text-center text-sm text-muted-foreground">
         {libraryState.status === "signed-out"
-          ? "Sign in to see your library."
-          : "Loading your library..."}
+          ? t("Sign in to see your library.")
+          : t("Loading your library...")}
       </p>
     );
   }
@@ -325,7 +354,7 @@ export function LibraryPage({
   return (
     <div className="flex flex-col gap-5">
       <header className="flex flex-col gap-5 pb-1">
-        <h1 className="text-4xl font-bold tracking-[-0.03em] text-foreground">Library</h1>
+        <h1 className="text-4xl font-bold tracking-[-0.03em] text-foreground">{t("Library")}</h1>
 
         <div className="flex flex-wrap items-center gap-3">
           {/*
@@ -337,7 +366,7 @@ export function LibraryPage({
           <div
             className="flex shrink-0 gap-1 rounded-full bg-card/70 p-1 max-sm:max-w-full max-sm:overflow-x-auto max-sm:[scrollbar-width:none]"
             role="tablist"
-            aria-label="Library section"
+            aria-label={t("Library section")}
           >
             {TABS.map((item, index) => {
               const active = tab === item.value;
@@ -368,7 +397,7 @@ export function LibraryPage({
                       transition={{ type: "spring", stiffness: 320, damping: 32 }}
                     />
                   )}
-                  {item.label}
+                  {t(item.label)}
                   <span className="ml-1.5 tabular-nums opacity-60">{counts[item.value]}</span>
                 </button>
               );
@@ -381,15 +410,15 @@ export function LibraryPage({
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder={`Filter ${tab}`}
-                aria-label="Filter library"
+                placeholder={t(TAB_TEXT[tab].filter)}
+                aria-label={t("Filter library")}
                 className="w-full min-w-0 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
               />
               {isFiltering && (
                 <button
                   type="button"
                   onClick={() => setQuery("")}
-                  aria-label="Clear filter"
+                  aria-label={t("Clear filter")}
                   className="shrink-0 rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <CloseIcon size={14} />
@@ -402,14 +431,14 @@ export function LibraryPage({
               value={activeSort}
               onValueChange={(value) => setLibrarySort(value as LibrarySort)}
             >
-              <SelectTrigger aria-label="Sort library">
+              <SelectTrigger aria-label={t("Sort library")}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="recent">Recently added</SelectItem>
-                <SelectItem value="title">{tab === "artists" ? "Name" : "Title"}</SelectItem>
+                <SelectItem value="recent">{t("Recently added")}</SelectItem>
+                <SelectItem value="title">{tab === "artists" ? t("Name") : t("Title")}</SelectItem>
                 {tab !== "artists" && (
-                  <SelectItem value="artist">{tab === "playlists" ? "Owner" : "Artist"}</SelectItem>
+                  <SelectItem value="artist">{tab === "playlists" ? t("Owner") : t("Artist")}</SelectItem>
                 )}
               </SelectContent>
             </Select>
@@ -433,11 +462,11 @@ export function LibraryPage({
             >
               <span className="w-6 text-right">#</span>
               <span className="size-10 shrink-0" />
-              <span className="min-w-0 flex-1">Title</span>
-              <span className="hidden min-w-0 flex-1 basis-0 lg:block">Album</span>
+              <span className="min-w-0 flex-1">{t("Title")}</span>
+              <span className="hidden min-w-0 flex-1 basis-0 lg:block">{t("Album")}</span>
             </div>
             <div className="flex flex-col gap-0.5">
-            {songs.map((track, index) => (
+            {songs.slice(0, songPages.count).map((track, index) => (
               <TrackRow
                 key={track.id}
                 track={track}
@@ -457,6 +486,7 @@ export function LibraryPage({
                 showRating
               />
             ))}
+            {songPages.hasMore ? <div ref={songPages.sentinelRef} className="h-px" aria-hidden="true" /> : null}
             </div>
           </div>
         )
@@ -504,7 +534,7 @@ export function LibraryPage({
                   <span className="line-clamp-2 text-sm font-medium text-foreground">
                     {artist.name}
                   </span>
-                  <span className="text-xs text-muted-foreground">Artist</span>
+                  <span className="text-xs text-muted-foreground">{t("Artist")}</span>
                 </span>
               </button>
             ))}
@@ -524,12 +554,12 @@ export function LibraryPage({
                 className="flex w-fit items-center gap-1.5 rounded-full bg-card/70 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {showHiddenPlaylists ? <EyeClosedIcon size={14} /> : <EyeIcon size={14} />}
-                {showHiddenPlaylists ? "Hide the hidden playlists" : `Show ${hiddenPlaylistCount} hidden`}
+                {showHiddenPlaylists ? t("Hide the hidden playlists") : t("Show {count} hidden", { count: hiddenPlaylistCount })}
               </button>
             )}
             {displayedPlaylists.length === 0 ? (
               <p className="px-2 py-16 text-center text-sm text-muted-foreground">
-                All your playlists are hidden.
+                {t("All your playlists are hidden.")}
               </p>
             ) : (
               <div className={GRID}>

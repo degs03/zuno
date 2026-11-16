@@ -444,6 +444,8 @@ struct Deck {
     health: Option<DeckHealth>,
     clock: Clock,
     samples_per_sec: f64,
+    /// The loaded track's own sample rate (bit-perfect indicator).
+    source_rate: u32,
 }
 
 impl Deck {
@@ -530,6 +532,21 @@ pub(crate) enum Command {
     DropActive,
     /// Start the standby by itself the instant the active deck runs dry, if it holds this track.
     QueueNext(Option<String>),
+    /// What the device is really being fed, for the bit-perfect indicator.
+    OutputFormat(Sender<OutputFormat>),
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct OutputFormat {
+    /// The rate the device stream runs at.
+    pub(crate) device_rate: u32,
+    pub(crate) device_channels: u16,
+    /// e.g. "F32", "I24", "I16".
+    pub(crate) device_format: String,
+    /// The playing track's own rate, or 0 with nothing loaded.
+    pub(crate) source_rate: u32,
+    pub(crate) bit_perfect: bool,
 }
 
 /// The handle held as Tauri state. Cheap to clone, trivially `Send + Sync`.
@@ -902,10 +919,16 @@ fn stream_failure_reporter(
 /// `StreamFailed(generation)`.
 fn open_output(
     id: Option<&str>,
+    rate: Option<u32>,
     commands: Sender<Command>,
     generation: u64,
 ) -> Result<(MixerDeviceSink, [Deck; 2]), String> {
-    let stream = open_device_sink(id, stream_failure_reporter(commands, generation))?;
+    let stream = match rate {
+        // Bit-perfect: the track's own rate, if the device takes it; otherwise its default.
+        Some(rate) => open_device_sink_at(id, rate, stream_failure_reporter(commands.clone(), generation))
+            .or_else(|_| open_device_sink(id, stream_failure_reporter(commands, generation)))?,
+        None => open_device_sink(id, stream_failure_reporter(commands, generation))?,
+    };
     let deck = || Deck {
         sink: paused_player(stream.mixer()),
         track_id: None,
@@ -913,9 +936,30 @@ fn open_output(
         health: None,
         clock: Clock::default(),
         samples_per_sec: 1.0,
+        source_rate: 0,
     };
     let decks = [deck(), deck()];
     Ok((stream, decks))
+}
+
+/// Opens the device at exactly `rate`, failing (rather than silently picking another config)
+/// when it does not support it, so the caller can fall back and report "resampled".
+fn open_device_sink_at(
+    id: Option<&str>,
+    rate: u32,
+    on_error: impl FnMut(StreamError) + Send + 'static,
+) -> Result<MixerDeviceSink, String> {
+    use rodio::cpal::traits::HostTrait;
+    let sample_rate = rodio::SampleRate::new(rate).ok_or("invalid sample rate")?;
+    let device = match id.and_then(find_output_device) {
+        Some(device) => device,
+        None => rodio::cpal::default_host().default_output_device().ok_or("no output device")?,
+    };
+    DeviceSinkBuilder::from_device(device)
+        .map(with_platform_buffer)
+        .map(|builder| builder.with_sample_rate(sample_rate))
+        .and_then(|builder| builder.with_error_callback(on_error).open_stream())
+        .map_err(|error| format!("device does not take {rate} Hz: {error}"))
 }
 
 fn find_output_device(id: &str) -> Option<rodio::Device> {
@@ -945,7 +989,7 @@ fn run(
     ready: Sender<Result<(), String>>,
     initial_device: Option<String>,
 ) {
-    let (stream, decks) = match open_output(initial_device.as_deref(), commands.clone(), 0) {
+    let (stream, decks) = match open_output(initial_device.as_deref(), None, commands.clone(), 0) {
         Ok(output) => output,
         Err(error) => {
             let _ = ready.send(Err(error));
@@ -1046,9 +1090,16 @@ impl Engine {
     fn output_volume(&self) -> f32 {
         if self.muted {
             0.0
+        } else if crate::equalizer::bit_perfect() {
+            // Any gain other than 1 rewrites every sample; the DAC's own volume is the control.
+            1.0
         } else {
             self.volume
         }
+    }
+
+    fn stream_rate(&self) -> Option<u32> {
+        self.stream.as_ref().map(|stream| stream.config().sample_rate().get())
     }
 
     /// Returns true when the thread should stop.
@@ -1088,6 +1139,26 @@ impl Engine {
                     .max(0.0);
 
                 /*
+                 * Bit-perfect: the device must run at this track's rate, or the mixer resamples.
+                 * A different rate means a new stream, which drops both decks — fine for the
+                 * track being started, but a preload at another rate is refused instead (the
+                 * caller then loads it normally when its turn comes, with a short gap).
+                 */
+                let source_rate = source.sample_rate().get();
+                let mut index = index;
+                if crate::equalizer::bit_perfect() && self.stream_rate() != Some(source_rate) {
+                    if standby {
+                        let _ = reply.send(Err("bit-perfect: preload at a different sample rate".to_string()));
+                        return false;
+                    }
+                    if let Err(error) = self.reopen_at(self.device_id.clone(), Some(source_rate)) {
+                        let _ = reply.send(Err(error));
+                        return false;
+                    }
+                    index = self.active;
+                }
+
+                /*
                  * The standby is silent until a transition ramps it up. A deck that inherited
                  * the output volume would be audible the instant it was started, and a gapless
                  * swap starts it in the same tick it becomes active.
@@ -1102,8 +1173,9 @@ impl Engine {
                 // Replacing the player drops the old one, which stops it.
                 deck.sink = paused_player(stream.mixer());
                 deck.sink.set_volume(volume);
-                deck.sink.set_speed(self.pitch);
+                deck.sink.set_speed(if crate::equalizer::bit_perfect() { 1.0 } else { self.pitch });
                 deck.clock = Clock::default();
+                deck.source_rate = source_rate;
                 deck.samples_per_sec =
                     source.sample_rate().get() as f64 * source.channels().get() as f64;
                 let clocked = Clocked::new(source, deck.clock.clone(), deck.samples_per_sec);
@@ -1148,6 +1220,23 @@ impl Engine {
                 self.decks[self.active].sink.pause();
                 self.playing = false;
             }
+            Command::OutputFormat(reply) => {
+                let (device_rate, device_channels, device_format) = self.stream.as_ref().map_or(
+                    (0, 0, String::new()),
+                    |stream| {
+                        let config = stream.config();
+                        (config.sample_rate().get(), config.channel_count().get(), format!("{:?}", config.sample_format()))
+                    },
+                );
+                let source_rate = self.decks[self.active].source_rate;
+                let _ = reply.send(OutputFormat {
+                    device_rate,
+                    device_channels,
+                    device_format,
+                    source_rate,
+                    bit_perfect: crate::equalizer::bit_perfect(),
+                });
+            }
             Command::Stop => {
                 self.cancel_fade();
                 self.queued = None;
@@ -1175,10 +1264,10 @@ impl Engine {
                 self.speed = speed.clamp(0.25, 4.0);
                 self.pitch = pitch.clamp(0.5, 2.0);
                 // Pitch resamples, which changes tempo too; the stretch makes up the rest.
-                let tempo = (self.speed / self.pitch).clamp(0.25, 8.0);
+                let tempo = if crate::equalizer::bit_perfect() { 1.0 } else { (self.speed / self.pitch).clamp(0.25, 8.0) };
                 TEMPO.store(tempo.to_bits(), Ordering::Relaxed);
                 for deck in &self.decks {
-                    deck.sink.set_speed(self.pitch);
+                    deck.sink.set_speed(if crate::equalizer::bit_perfect() { 1.0 } else { self.pitch });
                 }
                 crate::equalizer::set_pitch_ratio(self.pitch);
             }
@@ -1300,8 +1389,12 @@ impl Engine {
 
     /// Reopens the output on `id`. Both decks go with the old stream; the caller reloads.
     fn reopen(&mut self, id: Option<String>) -> Result<(), String> {
+        self.reopen_at(id, None)
+    }
+
+    fn reopen_at(&mut self, id: Option<String>, rate: Option<u32>) -> Result<(), String> {
         let generation = self.generation + 1;
-        let (stream, decks) = open_output(id.as_deref(), self.commands.clone(), generation)?;
+        let (stream, decks) = open_output(id.as_deref(), rate, self.commands.clone(), generation)?;
         // A fade on the old decks is stale — dropped rather than settled through `cancel_fade`,
         // which would write a volume to a deck this is about to discard anyway.
         self.fade = None;

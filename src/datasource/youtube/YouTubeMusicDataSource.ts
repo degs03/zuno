@@ -55,6 +55,7 @@ import {
   unmetPrecondition,
 } from "./lyricsSources";
 import { getPreferredLyricsSourceId } from "../../internal/lyricsSourcePreference";
+import { t, tn } from "../../i18n";
 import { isVideoId, looksLikeYouTubeLink, parseYouTubeLink } from "./links";
 import { isTrackDownloaded } from "../../player/offlineStore";
 import { rememberLoudness } from "../../player/loudness";
@@ -400,6 +401,23 @@ const PLAYLIST_TRACK_CACHE_VERSION = "v6";
 const PLAYLIST_EMPTY_RETRY_DELAYS_MS = [0, 600, 1_500];
 
 class YouTubeMusicAuthError extends AuthExpiredError {}
+
+/** Lyrics saved next to a downloaded track (`offline_lyrics_get`), or null. */
+async function readOfflineLyrics(trackId: string): Promise<Lyrics | null> {
+  try {
+    const text = await invoke<string | null>("offline_lyrics_get", { trackId });
+    if (!text) return null;
+    const parsed = JSON.parse(text) as Lyrics;
+    return Array.isArray(parsed?.lines) && parsed.lines.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fire-and-forget: Rust stores them only when the track is downloaded. */
+function saveOfflineLyrics(trackId: string, lyrics: Lyrics): void {
+  void invoke("offline_lyrics_save", { trackId, lyricsJson: JSON.stringify(lyrics) }).catch(() => {});
+}
 
 export class YouTubeMusicDataSource extends DataSource {
   private musicClientPromise: Promise<Innertube> | null = null;
@@ -2658,7 +2676,7 @@ export class YouTubeMusicDataSource extends DataSource {
     const candidates = this.accountCandidateCache
       ?? await this.getAccountCandidates();
     const candidate = candidates.find((item) => accountCandidateKey(item) === id);
-    if (!candidate) throw new Error("That account is no longer available.");
+    if (!candidate) throw new Error(t("That account is no longer available."));
 
     /*
      * Remember how to get back before changing anything.
@@ -2690,7 +2708,9 @@ export class YouTubeMusicDataSource extends DataSource {
       });
       this.writePreferredAccountKey(previousPreference);
       await this.useAccountCandidate(previous);
-      throw new Error(`YouTube Music rejected the switch to ${candidate.name ?? "that channel"}.`);
+      throw new Error(candidate.name
+        ? t("YouTube Music rejected the switch to {name}.", { name: candidate.name })
+        : t("YouTube Music rejected the switch to that channel."));
     }
 
     // Playlists, albums and artist pages are all scoped to the old channel, not just the
@@ -3333,7 +3353,7 @@ export class YouTubeMusicDataSource extends DataSource {
       accountIndex: this.musicAccountIndex,
     });
     if (!this.musicCookie) {
-      throw new Error("Sign in is required to load the YouTube Music library.");
+      throw new Error(t("Sign in is required to load the YouTube Music library."));
     }
 
     let client = await this.getMusicClient();
@@ -3473,7 +3493,7 @@ export class YouTubeMusicDataSource extends DataSource {
 
   async setAlbumSaved(album: Album, saved: boolean): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music to update your library.");
+      throw new Error(t("Sign in to YouTube Music to update your library."));
     }
     try {
       const client = await this.getMusicClient();
@@ -3597,8 +3617,8 @@ export class YouTubeMusicDataSource extends DataSource {
       });
       throw new Error(
         saved
-          ? "YouTube Music could not save this album."
-          : "YouTube Music could not remove this album.",
+          ? t("YouTube Music could not save this album.")
+          : t("YouTube Music could not remove this album."),
       );
     }
   }
@@ -3668,7 +3688,7 @@ export class YouTubeMusicDataSource extends DataSource {
 
   async setArtistSubscribed(artistId: string, subscribed: boolean): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music to update subscriptions.");
+      throw new Error(t("Sign in to YouTube Music to update subscriptions."));
     }
     try {
       const musicClient = await this.getMusicClient();
@@ -3730,8 +3750,8 @@ export class YouTubeMusicDataSource extends DataSource {
       });
       throw new Error(
         subscribed
-          ? "YouTube Music could not subscribe to this artist."
-          : "YouTube Music could not unsubscribe from this artist.",
+          ? t("YouTube Music could not subscribe to this artist.")
+          : t("YouTube Music could not unsubscribe from this artist."),
       );
     }
   }
@@ -4212,13 +4232,13 @@ export class YouTubeMusicDataSource extends DataSource {
 
   async createPlaylist(title: string, trackIds: string[] = []): Promise<Playlist> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music before creating playlists.");
+      throw new Error(t("Sign in to YouTube Music before creating playlists."));
     }
 
     const client = await this.getMusicClient();
     const result = await client.playlist.create(title, trackIds);
     if (!result.success || !result.playlist_id) {
-      throw new Error("YouTube Music would not create that playlist.");
+      throw new Error(t("YouTube Music would not create that playlist."));
     }
 
     logInternalInfo("YouTubeMusicDataSource.createPlaylist", {
@@ -4237,7 +4257,7 @@ export class YouTubeMusicDataSource extends DataSource {
 
   async renamePlaylist(playlist: Playlist, title: string): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music before renaming playlists.");
+      throw new Error(t("Sign in to YouTube Music before renaming playlists."));
     }
 
     const client = await this.getMusicClient();
@@ -4247,7 +4267,7 @@ export class YouTubeMusicDataSource extends DataSource {
 
   async deletePlaylist(playlist: Playlist): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music before deleting playlists.");
+      throw new Error(t("Sign in to YouTube Music before deleting playlists."));
     }
 
     const client = await this.getMusicClient();
@@ -4275,11 +4295,11 @@ export class YouTubeMusicDataSource extends DataSource {
     predecessorTrack: Track | null,
   ): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music before reordering playlists.");
+      throw new Error(t("Sign in to YouTube Music before reordering playlists."));
     }
     const movedId = movedTrack.playlistItemId;
     if (!movedId) {
-      throw new Error("This song cannot be moved in the playlist.");
+      throw new Error(t("This song cannot be moved in the playlist."));
     }
 
     const client = await this.getMusicClient();
@@ -4346,7 +4366,7 @@ export class YouTubeMusicDataSource extends DataSource {
     playlist: Playlist,
   ): Promise<"added" | "already-present"> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music before adding songs to playlists.");
+      throw new Error(t("Sign in to YouTube Music before adding songs to playlists."));
     }
 
     logInternalInfo("YouTubeMusicDataSource.addTrackToPlaylist start", {
@@ -4386,7 +4406,7 @@ export class YouTubeMusicDataSource extends DataSource {
       }
 
       if (!confirmedTracks) {
-        throw new Error("YouTube Music did not confirm the playlist update.");
+        throw new Error(t("YouTube Music did not confirm the playlist update."));
       }
 
       await setCachedJson(cacheKey, confirmedTracks);
@@ -4401,13 +4421,13 @@ export class YouTubeMusicDataSource extends DataSource {
         trackId: track.id,
         playlistId: playlist.id,
       });
-      throw new Error("YouTube Music could not add this song to the playlist.");
+      throw new Error(t("YouTube Music could not add this song to the playlist."));
     }
   }
 
   async setPlaylistSaved(playlist: Playlist, saved: boolean): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music to update your library.");
+      throw new Error(t("Sign in to YouTube Music to update your library."));
     }
     const client = await this.getMusicClient();
     const playlistId = playlist.id.startsWith("VL") ? playlist.id.slice(2) : playlist.id;
@@ -4503,18 +4523,18 @@ export class YouTubeMusicDataSource extends DataSource {
       });
       throw new Error(
         saved
-          ? "YouTube Music could not save this playlist."
-          : "YouTube Music could not remove this playlist.",
+          ? t("YouTube Music could not save this playlist.")
+          : t("YouTube Music could not remove this playlist."),
       );
     }
   }
 
   async removeTrackFromPlaylist(track: Track, playlist: Playlist): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music before removing songs from playlists.");
+      throw new Error(t("Sign in to YouTube Music before removing songs from playlists."));
     }
     if (!track.playlistItemId) {
-      throw new Error("Reload the playlist before removing this song.");
+      throw new Error(t("Reload the playlist before removing this song."));
     }
 
     logInternalInfo("YouTubeMusicDataSource.removeTrackFromPlaylist start", {
@@ -4561,7 +4581,7 @@ export class YouTubeMusicDataSource extends DataSource {
         trackId: track.id,
         playlistId: playlist.id,
       });
-      throw new Error("YouTube Music could not remove this song from the playlist.");
+      throw new Error(t("YouTube Music could not remove this song from the playlist."));
     }
   }
 
@@ -4572,7 +4592,7 @@ export class YouTubeMusicDataSource extends DataSource {
 
   async setTrackRating(track: Track, rating: TrackRating): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to rate songs.");
+      throw new Error(t("Sign in to rate songs."));
     }
 
     logInternalInfo("YouTubeMusicDataSource.setTrackRating start", {
@@ -4589,7 +4609,7 @@ export class YouTubeMusicDataSource extends DataSource {
         // it sends the user looking for a problem with the song.
         if (response.status_code === 401 || response.status_code === 403) {
           throw new YouTubeMusicAuthError(
-            "YouTube Music no longer accepts the saved sign-in. Sign in again to rate songs.",
+            t("YouTube Music no longer accepts the saved sign-in. Sign in again to rate songs."),
           );
         }
         throw new Error(`YouTube returned HTTP ${response.status_code}.`);
@@ -4634,10 +4654,10 @@ export class YouTubeMusicDataSource extends DataSource {
       if (error instanceof AuthExpiredError) throw error;
       throw new Error(
         rating === "like"
-          ? "YouTube Music could not like this song."
+          ? t("YouTube Music could not like this song.")
           : rating === "dislike"
-            ? "YouTube Music could not dislike this song."
-            : "YouTube Music could not clear this rating.",
+            ? t("YouTube Music could not dislike this song.")
+            : t("YouTube Music could not clear this rating."),
       );
     }
   }
@@ -4698,6 +4718,9 @@ export class YouTubeMusicDataSource extends DataSource {
     if (!query) {
       const cached = await getCachedJson<Lyrics>(cacheKey);
       if (cached?.timing === "synced" && cached.lines.length > 0) return cached;
+      // A downloaded song keeps its lyrics on disk with the audio, so they show offline too.
+      const saved = await readOfflineLyrics(track.id);
+      if (saved) return saved;
     }
     const searchTrack = query
       ? { ...track, title: query.title, artist: query.artist, artists: undefined, album: undefined }
@@ -4720,6 +4743,8 @@ export class YouTubeMusicDataSource extends DataSource {
     if (lyrics.timing === "synced" && lyrics.lines.length > 0) {
       await setCachedJson(cacheKey, lyrics);
     }
+    // Any words at all beat none offline; Rust only keeps them if the song is downloaded.
+    if (lyrics.lines.length > 0) saveOfflineLyrics(track.id, lyrics);
     return lyrics;
   }
 
@@ -4791,7 +4816,7 @@ export class YouTubeMusicDataSource extends DataSource {
     return {
       ...winner.lyrics,
       sourceId: winner.source.id,
-      sourceLabel: winner.lyrics.sourceLabel || winner.source.label,
+      sourceLabel: winner.lyrics.sourceLabel || t(winner.source.label),
       attempts: orderedAttempts,
     };
   }
@@ -4802,9 +4827,9 @@ export class YouTubeMusicDataSource extends DataSource {
     trackId: string,
     run: (() => Promise<Lyrics | null>) | undefined,
   ): Promise<{ source: LyricsSource; lyrics: Lyrics | null; attempt: LyricsSourceAttempt }> {
-    const base = { id: source.id, label: source.label, durationMs: 0 };
+    const base = { id: source.id, label: t(source.label), durationMs: 0 };
     if (!run) {
-      return { source, lyrics: null, attempt: { ...base, status: "skipped", detail: "Unavailable" } };
+      return { source, lyrics: null, attempt: { ...base, status: "skipped", detail: t("Unavailable") } };
     }
 
     const startedAt = Date.now();
@@ -4830,7 +4855,7 @@ export class YouTubeMusicDataSource extends DataSource {
             ...base,
             status: "timeout",
             durationMs,
-            detail: `No answer in ${(source.timeoutMs / 1000).toFixed(1)}s`,
+            detail: t("No answer in {seconds}s", { seconds: (source.timeoutMs / 1000).toFixed(1) }),
           },
         };
       }
@@ -4843,7 +4868,7 @@ export class YouTubeMusicDataSource extends DataSource {
           ...base,
           status: lineCount > 0 ? "hit" : "miss",
           durationMs,
-          detail: lineCount > 0 ? `${lineCount} lines` : "No match",
+          detail: lineCount > 0 ? tn("{n} line", "{n} lines", lineCount) : t("No match"),
         },
       };
     } catch (error) {
@@ -5463,7 +5488,7 @@ export class YouTubeMusicDataSource extends DataSource {
       logInternalError("YouTubeMusicDataSource.searchTracks failed", error, {
         query: normalizedQuery,
       });
-      throw new Error("Unable to search for songs.");
+      throw new Error(t("Unable to search for songs."));
     }
   }
 
@@ -5539,7 +5564,7 @@ export class YouTubeMusicDataSource extends DataSource {
         query: normalizedQuery,
         error: error instanceof Error ? error.message : String(error),
       });
-      throw new Error("Unable to load search suggestions.");
+      throw new Error(t("Unable to load search suggestions."));
     }
   }
 
@@ -5637,7 +5662,7 @@ export class YouTubeMusicDataSource extends DataSource {
       logInternalError("YouTubeMusicDataSource.getRecommendations failed", error, {
         seedTrackId: seed.id,
       });
-      throw new Error("Unable to load recommendations.");
+      throw new Error(t("Unable to load recommendations."));
     }
   }
 
@@ -6662,7 +6687,7 @@ export class YouTubeMusicDataSource extends DataSource {
     level: ArtistNotificationLevel,
   ): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music to change notifications.");
+      throw new Error(t("Sign in to YouTube Music to change notifications."));
     }
 
     const client = await this.getWebClient();
@@ -6750,7 +6775,7 @@ export class YouTubeMusicDataSource extends DataSource {
 
   async setPlaylistDescription(playlist: Playlist, description: string): Promise<void> {
     if (!this.musicCookie) {
-      throw new Error("Sign in to YouTube Music before editing playlists.");
+      throw new Error(t("Sign in to YouTube Music before editing playlists."));
     }
 
     const client = await this.getMusicClient();

@@ -14,7 +14,8 @@ import { Tooltip } from "@/components/motion/tooltip";
 import { logInternalError } from "../../internal/logging";
 import { SelectionBar } from "../components/SelectionBar";
 import { useTrackSelection } from "../hooks/useTrackSelection";
-import { queueDownloads, useOfflineState } from "../../player/offlineStore";
+import { pinCollection, queueDownloads, unpinCollection, useIsCollectionPinned, useOfflineState } from "../../player/offlineStore";
+import { showNotice } from "../notice";
 import { usePlaylistContextMenu } from "../components/PlaylistContextMenu";
 import { formatCollectionMeta, MediaHeader } from "../components/MediaHeader";
 import { isLikedSongsId, likedSongsCover } from "../likedSongsArtwork";
@@ -33,6 +34,7 @@ import {
   type PlaylistSort,
   type SortDirection,
 } from "../settings/sortPreferences";
+import { msg, useT } from "../../i18n";
 
 /*
  * Collapsed search affordance that widens on hover/focus or while it holds a query —
@@ -59,9 +61,9 @@ interface PlaylistViewProps {
 }
 
 const playlistSorts: Array<{ value: PlaylistSort; label: string }> = [
-  { value: "name", label: "Name" },
-  { value: "album", label: "Album" },
-  { value: "dateAdded", label: "Date Added" },
+  { value: "name", label: msg("Name") },
+  { value: "album", label: msg("Album") },
+  { value: "dateAdded", label: msg("Date Added") },
 ];
 
 function compareText(left: string | undefined, right: string | undefined): number {
@@ -71,9 +73,10 @@ function compareText(left: string | undefined, right: string | undefined): numbe
   });
 }
 
+/** Returns a `msg()`-marked label; translate it with `t()` where shown. */
 function getDirectionLabel(sort: PlaylistSort, direction: SortDirection): string {
-  if (sort === "dateAdded") return direction === "desc" ? "Newest" : "Oldest";
-  return direction === "asc" ? "Asc" : "Desc";
+  if (sort === "dateAdded") return direction === "desc" ? msg("Newest") : msg("Oldest");
+  return direction === "asc" ? msg("Asc") : msg("Desc");
 }
 
 function SortDirectionIcon({ direction }: { direction: SortDirection }) {
@@ -117,6 +120,7 @@ function PlaylistDescription({
   playlist: Playlist;
   libraryController: LibraryController;
 }) {
+  const t = useT();
   const canEdit = Boolean(playlist.isEditable) && !isLocalPlaylist(playlist);
   /*
    * Fetched rather than read off the prop. The library shelves that produce Playlist objects
@@ -162,9 +166,9 @@ function PlaylistDescription({
           value={draft}
           autoFocus
           maxLength={5000}
-          placeholder="Describe this playlist"
+          placeholder={t("Describe this playlist")}
           onChange={(event) => setDraft(event.target.value)}
-          aria-label="Playlist description"
+          aria-label={t("Playlist description")}
         />
         <div className="flex items-center gap-2">
           <button
@@ -184,7 +188,7 @@ function PlaylistDescription({
                 .finally(() => setIsSaving(false));
             }}
           >
-            {isSaving ? "Saving..." : "Save"}
+            {isSaving ? t("Saving...") : t("Save")}
           </button>
           <button
             type="button"
@@ -195,7 +199,7 @@ function PlaylistDescription({
               setIsEditing(false);
             }}
           >
-            Cancel
+            {t("Cancel")}
           </button>
         </div>
       </div>
@@ -215,7 +219,7 @@ function PlaylistDescription({
           {description}
         </p>
       ) : (
-        <p className="min-w-0 flex-1 text-sm italic text-muted-foreground">No description yet.</p>
+        <p className="min-w-0 flex-1 text-sm italic text-muted-foreground">{t("No description yet.")}</p>
       )}
       {canEdit && (
         <button
@@ -223,7 +227,7 @@ function PlaylistDescription({
           className="shrink-0 rounded-full px-3 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setIsEditing(true)}
         >
-          {description ? "Edit" : "Add description"}
+          {description ? t("Edit") : t("Add description")}
         </button>
       )}
     </div>
@@ -231,6 +235,7 @@ function PlaylistDescription({
 }
 
 export function PlaylistView({ playlist, playerController, libraryController }: PlaylistViewProps) {
+  const t = useT();
   const { openPlaylistPicker, openTrackMenu } = useTrackContextMenu();
   const { openPlaylistMenu } = usePlaylistContextMenu();
   const keyboardShortcuts = useKeyboardShortcuts();
@@ -285,6 +290,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
    * store is a count that drifts the moment a download finishes elsewhere.
    */
   const offlineState = useOfflineState();
+  const keptOffline = useIsCollectionPinned(playlist?.id);
   const downloadCounts = useMemo(
     () => ({
       downloaded: tracks.filter((track) => Boolean(offlineState.entries[track.id])).length,
@@ -335,7 +341,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
         showPage(page);
       })
       .catch(() => {
-        if (active && !showedPage) setError(loadFailedMessage("Unable to load this playlist."));
+        if (active && !showedPage) setError(loadFailedMessage(t("Unable to load this playlist.")));
       })
       .finally(() => {
         if (active) setIsLoading(false);
@@ -343,7 +349,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
     return () => {
       active = false;
     };
-  }, [playlist, libraryController, localFolderToken]);
+  }, [playlist, libraryController, localFolderToken, t]);
 
   /*
    * Assigning folders lives on the page as well as in Settings.
@@ -360,7 +366,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
       const selected = await openDialog({
         directory: true,
         multiple: false,
-        title: "Choose music folder",
+        title: t("Choose music folder"),
       });
       if (typeof selected !== "string") return;
       addLocalPlaylistPath(playlist.id, selected);
@@ -371,7 +377,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
     } finally {
       setIsChoosingFolder(false);
     }
-  }, [playlist]);
+  }, [playlist, t]);
 
   const loadMoreTracks = useCallback(async () => {
     if (!playlist || !hasMoreTracks || !nextPageKey || isLoading) return;
@@ -392,7 +398,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
       setNextPageKey(page.nextPageKey);
     } catch {
       if (playlistIdRef.current === loadingPlaylistId) {
-        setLoadMoreError(loadFailedMessage("Could not load more songs."));
+        setLoadMoreError(loadFailedMessage(t("Could not load more songs.")));
       }
     } finally {
       if (playlistIdRef.current === loadingPlaylistId) {
@@ -400,7 +406,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
         setIsLoadingMore(false);
       }
     }
-  }, [hasMoreTracks, isLoading, libraryController, nextPageKey, playlist]);
+  }, [hasMoreTracks, isLoading, libraryController, nextPageKey, playlist, t]);
 
   /**
    * Pulls every remaining page, and returns the complete list.
@@ -441,7 +447,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
       });
     } catch {
       if (playlistIdRef.current === loadingPlaylistId) {
-        setLoadMoreError(loadFailedMessage("Could not load the rest of this playlist."));
+        setLoadMoreError(loadFailedMessage(t("Could not load the rest of this playlist.")));
       }
       return tracksRef.current;
     } finally {
@@ -450,7 +456,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
         setIsCollectingAll(false);
       }
     }
-  }, [hasMoreTracks, libraryController, nextPageKey, playlist]);
+  }, [hasMoreTracks, libraryController, nextPageKey, playlist, t]);
 
   useEffect(() => {
     if (!hasMoreTracks) return;
@@ -569,7 +575,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
         }
 
         const sorted = sortedTracksRef.current;
-        const rowKey = (t: Track) => t.localPath ?? t.playlistItemId ?? t.id;
+        const rowKey = (row: Track) => row.localPath ?? row.playlistItemId ?? row.id;
         const fromIndex = sorted.findIndex((item) => rowKey(item) === fromPath);
         const toIndex = sorted.findIndex((item) => rowKey(item) === toPath);
         if (fromIndex < 0 || toIndex < 0) return;
@@ -730,7 +736,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
     <div className="flex flex-col gap-8">
       <div onContextMenu={(event) => openPlaylistMenu(event, playlist)}>
         <MediaHeader
-          eyebrow="Playlist"
+          eyebrow={t("Playlist")}
           title={playlist.title}
           subtitle={playlist.owner}
           meta={formatCollectionMeta(tracks, hasMoreTracks)}
@@ -746,12 +752,12 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
           {...(isLocalPlaylistView
             ? {
               actions: (
-                <Tooltip content="Add a folder of music to this playlist">
+                <Tooltip content={t("Add a folder of music to this playlist")}>
                   <button
                     type="button"
                     onClick={() => void handleAddLocalFolder()}
                     disabled={isChoosingFolder}
-                    aria-label="Add a music folder"
+                    aria-label={t("Add a music folder")}
                     className="flex size-11 items-center justify-center rounded-full bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {isChoosingFolder ? (
@@ -796,6 +802,22 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
             },
             counts: downloadCounts,
             isBusy: isCollectingAll,
+            keepOffline: isLocalPlaylistView
+              ? undefined
+              : {
+                pinned: keptOffline,
+                onToggle: () => {
+                  if (keptOffline) {
+                    unpinCollection(playlist.id);
+                    showNotice(t("No longer kept offline. Its songs stay downloaded."));
+                    return;
+                  }
+                  void collectAllTracks().then((all) => {
+                    pinCollection({ id: playlist.id, kind: "playlist", title: playlist.title, ref: playlist }, all);
+                    showNotice(t("\"{title}\" will stay offline", { title: playlist.title }));
+                  });
+                },
+              },
           }}
         />
         <PlaylistDescription playlist={playlist} libraryController={libraryController} />
@@ -805,8 +827,8 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
         <p className="px-2 py-10 text-center text-sm text-muted-foreground">
           {/* The empty state is exactly when the folder button needs pointing at. */}
           {isLocalPlaylistView
-            ? "No music yet — use the folder button above to add one."
-            : "This playlist is empty."}
+            ? t("No music yet — use the folder button above to add one.")
+            : t("This playlist is empty.")}
         </p>
       )}
       {/*
@@ -819,7 +841,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
           <div
             className="flex flex-wrap items-center gap-1.5 self-start [&>button]:flex [&>button]:min-h-8 [&>button]:min-w-0 [&>button]:items-center [&>button]:justify-center [&>button]:gap-1.5 [&>button]:rounded-full [&>button]:bg-muted/40 [&>button]:px-3 [&>button]:text-sm [&>button]:font-medium [&>button]:text-muted-foreground [&>button]:transition-colors hover:[&>button]:bg-muted/70 hover:[&>button]:text-foreground focus-visible:[&>button]:outline-none focus-visible:[&>button]:ring-2 focus-visible:[&>button]:ring-ring"
             role="group"
-            aria-label="Playlist song tools"
+            aria-label={t("Playlist song tools")}
           >
             {playlistSorts.map((item) => (
               <button
@@ -827,12 +849,15 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
                 type="button"
                 className={sort === item.value ? "bg-primary/15 text-foreground" : ""}
                 aria-pressed={sort === item.value}
-                aria-label={`Sort by ${item.label} ${
-                  sort === item.value ? getDirectionLabel(item.value, sortDirection) : ""
-                }`.trim()}
+                aria-label={sort === item.value
+                  ? t("Sort by {sort} {direction}", {
+                    sort: t(item.label),
+                    direction: t(getDirectionLabel(item.value, sortDirection)),
+                  })
+                  : t("Sort by {sort}", { sort: t(item.label) })}
                 onClick={() => selectSort(item.value)}
               >
-                <span>{item.label}</span>
+                <span>{t(item.label)}</span>
                 {sort === item.value && (
                   <span
                     className={`${"flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"} ${
@@ -845,7 +870,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
                     </span>
                     {item.value === "dateAdded" && (
                       <span className="sr-only">
-                        {getDirectionLabel(item.value, sortDirection)}
+                        {t(getDirectionLabel(item.value, sortDirection))}
                       </span>
                     )}
                   </span>
@@ -864,8 +889,8 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
                 ref={playlistSearchInputRef}
                 type="text"
                 value={playlistSearchQuery}
-                aria-label="Search songs in playlist"
-                placeholder="Search playlist"
+                aria-label={t("Search songs in playlist")}
+                placeholder={t("Search playlist")}
                 onChange={(event) => setPlaylistSearchQuery(event.target.value)}
                 onKeyDown={handlePlaylistSearchKeyDown}
               />
@@ -873,7 +898,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
                 <button
                   className="flex size-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   type="button"
-                  aria-label="Clear playlist search"
+                  aria-label={t("Clear playlist search")}
                   onClick={() => setPlaylistSearchQuery("")}
                 >
                   <CloseIcon size={14} aria-hidden="true" />
@@ -882,9 +907,9 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
             </div>
           </div>
           {isLoading ? (
-            <TrackListSkeleton label="Loading songs" />
+            <TrackListSkeleton label={t("Loading songs")} />
           ) : visibleTracks.length === 0 && playlistSearchQuery.trim() ? (
-            <p className="px-2 py-10 text-center text-sm text-muted-foreground">No songs match this search.</p>
+            <p className="px-2 py-10 text-center text-sm text-muted-foreground">{t("No songs match this search.")}</p>
           ) : (
           <div className="flex flex-col gap-0.5">
             {visibleTracks.map((track, index) => {
@@ -951,7 +976,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
           {!isLoading && (
             <div ref={loadMoreRef} className="px-2 py-4 text-center text-sm text-muted-foreground" aria-live="polite">
               {isLoadingMore ? (
-                <PlaylistLoadingSpinner label="Loading more songs" />
+                <PlaylistLoadingSpinner label={t("Loading more songs")} />
               ) : loadMoreError ? (
                 loadMoreError
               ) : hasMoreTracks ? (
@@ -965,7 +990,7 @@ export function PlaylistView({ playlist, playerController, libraryController }: 
       )}
       <SelectionBar
         selection={selection}
-        removeLabel="Remove"
+        removeLabel={t("Remove")}
         onAddToQueue={(selected) => {
           playerController.addTracksToQueue(selected);
           selection.clear();

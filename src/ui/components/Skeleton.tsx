@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
+import { useT } from "../../i18n";
 
 /**
  * Shimmer placeholders shaped like the rows and cards they stand in for.
@@ -70,14 +71,16 @@ export function TrackRowSkeleton({
 export function TrackListSkeleton({
   count = 8,
   showArtwork = true,
-  label = "Loading songs",
+  label,
 }: {
   count?: number;
   showArtwork?: boolean;
+  /** Defaults to "Loading songs", translated. */
   label?: string;
 }) {
+  const t = useT();
   return (
-    <div className="flex flex-col gap-0.5" role="status" aria-label={label}>
+    <div className="flex flex-col gap-0.5" role="status" aria-label={label ?? t("Loading songs")}>
       {Array.from({ length: count }, (_, index) => (
         <TrackRowSkeleton key={index} delayMs={index * 60} showArtwork={showArtwork} />
       ))}
@@ -105,16 +108,18 @@ export function AlbumCardSkeleton({ delayMs = 0 }: { delayMs?: number }) {
 /** A grid of `AlbumCardSkeleton`s, matching the `auto-fill,minmax(9.5rem,1fr)` grids they precede. */
 export function AlbumGridSkeleton({
   count = 6,
-  label = "Loading",
+  label,
 }: {
   count?: number;
+  /** Defaults to "Loading", translated. */
   label?: string;
 }) {
+  const t = useT();
   return (
     <div
       className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]"
       role="status"
-      aria-label={label}
+      aria-label={label ?? t("Loading")}
     >
       {Array.from({ length: count }, (_, index) => (
         <AlbumCardSkeleton key={index} delayMs={index * 60} />

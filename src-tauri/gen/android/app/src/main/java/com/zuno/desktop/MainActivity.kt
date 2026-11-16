@@ -1,5 +1,6 @@
 package com.zuno.desktop
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import androidx.activity.OnBackPressedCallback
@@ -37,5 +38,38 @@ class MainActivity : TauriActivity() {
         plugin.handleBack { handled -> if (!handled) moveTaskToBack(true) }
       }
     })
+
+    handleOpenExtra(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handleOpenExtra(intent)
+  }
+
+  /** The widget's cover opens the full player. */
+  private fun handleOpenExtra(intent: Intent?) {
+    when (intent?.getStringExtra(EXTRA_OPEN)) {
+      "player" -> {
+        intent.removeExtra(EXTRA_OPEN)
+        ZunoPlugin.dispatchAction("openPlayer")
+      }
+    }
+  }
+
+  /**
+   * WryActivity pauses the WebView with the activity, which tells Chromium the page is hidden and
+   * throttles its timers hard after a few minutes — the queue would stop advancing with the
+   * screen off. While music plays the page is resumed again straight away; paused, it is left
+   * paused so an idle app costs nothing.
+   */
+  override fun onPause() {
+    super.onPause()
+    if (PlaybackService.isPlaying()) ZunoPlugin.instance?.webView()?.onResume()
+  }
+
+  companion object {
+    const val EXTRA_OPEN = "zuno.open"
   }
 }

@@ -54,6 +54,8 @@ mod audio;
 mod process_memory;
 mod discord_rpc;
 mod equalizer;
+mod analysis;
+mod ota;
 mod opus_source;
 mod prefetch;
 mod lastfm;
@@ -943,17 +945,62 @@ async fn export_text_file(
     dialog.save_file(move |path| {
         let _ = sender.send(path);
     });
-    let Some(path) = receiver.await.ok().flatten().and_then(|path| path.into_path().ok()) else {
+    let Some(path) = receiver.await.ok().flatten() else {
         return Ok(None);
     };
-    let extension = path.extension().and_then(|extension| extension.to_str()).unwrap_or_default();
+    // Android hands back a content:// URI with no usable extension; the first format wins there.
+    let label = path.to_string();
+    let extension = label.rsplit_once('.').map(|(_, extension)| extension).unwrap_or_default();
     let format = formats
         .iter()
         .position(|format| format.extensions.iter().any(|candidate| candidate.eq_ignore_ascii_case(extension)))
         .unwrap_or(0);
     let contents = formats.get(format).map_or("", |format| format.contents.as_str());
-    fs::write(&path, contents).map_err(|error| cache_error(format!("file write failed: {error}")))?;
-    Ok(Some(SavedTextFile { path: path.display().to_string(), format }))
+    write_picked_file(&app, path, contents.as_bytes())?;
+    Ok(Some(SavedTextFile { path: label, format }))
+}
+
+/// Writes to a dialog result: a plain path on desktop, a content:// URI on Android.
+fn write_picked_file(
+    app: &tauri::AppHandle,
+    path: tauri_plugin_dialog::FilePath,
+    contents: &[u8],
+) -> Result<(), CommandError> {
+    use std::io::Write;
+    use tauri_plugin_fs::FsExt;
+    let mut options = tauri_plugin_fs::OpenOptions::new();
+    options.read(false).write(true).create(true).truncate(true);
+    let mut file = app
+        .fs()
+        .open(path, options)
+        .map_err(|error| cache_error(format!("file write failed: {error}")))?;
+    file.write_all(contents)
+        .and_then(|()| file.flush())
+        .map_err(|error| cache_error(format!("file write failed: {error}")))
+}
+
+/// Reads a dialog result (path or content:// URI), refusing anything over `max_bytes`.
+fn read_picked_file(
+    app: &tauri::AppHandle,
+    path: tauri_plugin_dialog::FilePath,
+    max_bytes: u64,
+) -> Result<String, CommandError> {
+    use std::io::Read;
+    use tauri_plugin_fs::FsExt;
+    let mut options = tauri_plugin_fs::OpenOptions::new();
+    options.read(true);
+    let file = app
+        .fs()
+        .open(path, options)
+        .map_err(|error| cache_error(format!("file read failed: {error}")))?;
+    let mut bytes = Vec::new();
+    file.take(max_bytes + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| cache_error(format!("file read failed: {error}")))?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(cache_error("that file is too large to import"));
+    }
+    String::from_utf8(bytes).map_err(|_| cache_error("that file is not a text file"))
 }
 
 #[derive(Serialize)]
@@ -981,14 +1028,12 @@ async fn import_text_file(
         .pick_file(move |path| {
             let _ = sender.send(path);
         });
-    let Some(path) = receiver.await.ok().flatten().and_then(|path| path.into_path().ok()) else {
+    let Some(path) = receiver.await.ok().flatten() else {
         return Ok(None);
     };
-    if fs::metadata(&path).map_err(|error| cache_error(format!("file read failed: {error}")))?.len() > MAX_IMPORT_BYTES {
-        return Err(cache_error("that file is too large to be a playlist"));
-    }
-    let contents = fs::read_to_string(&path).map_err(|error| cache_error(format!("file read failed: {error}")))?;
-    Ok(Some(OpenedTextFile { path: path.display().to_string(), contents }))
+    let label = path.to_string();
+    let contents = read_picked_file(&app, path, MAX_IMPORT_BYTES)?;
+    Ok(Some(OpenedTextFile { path: label, contents }))
 }
 
 /// Real tags from the file: the scanner's filename guesses must not be saved back as truth.
@@ -3493,6 +3538,71 @@ fn offline_dir(app: &tauri::AppHandle) -> Result<PathBuf, CommandError> {
         .map_err(|error| cache_error(format!("offline directory unavailable: {error}")))
 }
 
+/// The listening log behind the Stats page: one JSON object per line, append-only.
+fn listen_log_path(app: &tauri::AppHandle) -> Result<PathBuf, CommandError> {
+    app.path()
+        .app_data_dir()
+        .map(|path| path.join("listen-log-v1.jsonl"))
+        .map_err(|error| cache_error(format!("data directory unavailable: {error}")))
+}
+
+/// Upper bound on the log; past it the oldest half is dropped. Years of daily listening fit.
+const MAX_LISTEN_LOG_BYTES: u64 = 16 * 1024 * 1024;
+
+/// Appends listens (each one JSON object, no newlines) to the log.
+#[tauri::command(async)]
+fn listen_log_append(app: tauri::AppHandle, lines: Vec<String>) -> Result<(), CommandError> {
+    use std::io::Write;
+    let path = listen_log_path(&app)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| cache_error(format!("log directory failed: {error}")))?;
+    }
+    if fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0) > MAX_LISTEN_LOG_BYTES {
+        if let Ok(text) = fs::read_to_string(&path) {
+            let all: Vec<&str> = text.lines().collect();
+            let kept = all[all.len() / 2..].join("\n");
+            let _ = fs::write(&path, format!("{kept}\n"));
+        }
+    }
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .map_err(|error| cache_error(format!("log open failed: {error}")))?;
+    for line in lines {
+        if line.contains('\n') || serde_json::from_str::<serde_json::Value>(&line).is_err() {
+            continue;
+        }
+        writeln!(file, "{line}").map_err(|error| cache_error(format!("log write failed: {error}")))?;
+    }
+    Ok(())
+}
+
+/// The whole log as text (empty when nothing has been listened to yet).
+#[tauri::command(async)]
+fn listen_log_read(app: tauri::AppHandle) -> Result<String, CommandError> {
+    match fs::read_to_string(listen_log_path(&app)?) {
+        Ok(text) => Ok(text),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+        Err(error) => Err(cache_error(format!("log read failed: {error}"))),
+    }
+}
+
+/// Replaces the log (backup restore).
+#[tauri::command(async)]
+fn listen_log_replace(app: tauri::AppHandle, text: String) -> Result<(), CommandError> {
+    let path = listen_log_path(&app)?;
+    if text.len() as u64 > MAX_LISTEN_LOG_BYTES {
+        return Err(cache_error("listening history is too large"));
+    }
+    let clean: Vec<&str> = text
+        .lines()
+        .filter(|line| serde_json::from_str::<serde_json::Value>(line).is_ok())
+        .collect();
+    fs::write(&path, if clean.is_empty() { String::new() } else { format!("{}\n", clean.join("\n")) })
+        .map_err(|error| cache_error(format!("log write failed: {error}")))
+}
+
 /// Track ids come from YouTube and are already filename-safe, but a hostile id must not be
 /// able to escape the directory.
 fn offline_entry_path(app: &tauri::AppHandle, track_id: &str) -> Result<PathBuf, CommandError> {
@@ -4035,6 +4145,7 @@ fn offline_audio_source(
 fn offline_audio_remove(app: tauri::AppHandle, track_id: String) -> Result<(), CommandError> {
     let path = offline_entry_path(&app, &track_id)?;
     let _ = fs::remove_file(path.with_extension("art"));
+    let _ = fs::remove_file(path.with_extension("lyrics"));
     if path.exists() {
         fs::remove_file(&path)
             .map_err(|error| cache_error(format!("offline delete failed: {error}")))?;
@@ -4094,6 +4205,42 @@ fn offline_artwork(app: tauri::AppHandle, track_id: String) -> Result<Option<Loc
         mime_type: mime_type.to_string(),
         data_base64: base64::engine::general_purpose::STANDARD.encode(&data),
     }))
+}
+
+/// Lyrics are small; anything bigger than this is not lyrics.
+const MAX_OFFLINE_LYRICS_BYTES: usize = 512 * 1024;
+
+/**
+ * Keeps a downloaded track's lyrics next to its audio, so they show with no network.
+ *
+ * Only for tracks that are actually downloaded (the `.bin` exists): the frontend calls this for
+ * every lyrics hit and lets Rust decide, rather than tracking download state on that path too.
+ * Returns whether it was stored.
+ */
+#[tauri::command(async)]
+fn offline_lyrics_save(app: tauri::AppHandle, track_id: String, lyrics_json: String) -> Result<bool, CommandError> {
+    let path = offline_entry_path(&app, &track_id)?;
+    if !path.is_file() {
+        return Ok(false);
+    }
+    if lyrics_json.len() > MAX_OFFLINE_LYRICS_BYTES
+        || serde_json::from_str::<serde_json::Value>(&lyrics_json).is_err()
+    {
+        return Err(cache_error("lyrics are not valid JSON or too large"));
+    }
+    fs::write(path.with_extension("lyrics"), lyrics_json)
+        .map_err(|error| cache_error(format!("lyrics save failed: {error}")))?;
+    Ok(true)
+}
+
+#[tauri::command(async)]
+fn offline_lyrics_get(app: tauri::AppHandle, track_id: String) -> Result<Option<String>, CommandError> {
+    let path = offline_entry_path(&app, &track_id)?.with_extension("lyrics");
+    match fs::read_to_string(&path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(cache_error(format!("lyrics read failed: {error}"))),
+    }
 }
 
 /// The source of truth for what is downloaded. The frontend keeps its own manifest for track
@@ -4163,6 +4310,7 @@ fn offline_audio_prune(app: tauri::AppHandle, max_bytes: u64) -> Result<OfflineS
         }
         if fs::remove_file(path).is_ok() {
             let _ = fs::remove_file(path.with_extension("art"));
+            let _ = fs::remove_file(path.with_extension("lyrics"));
             used_bytes = used_bytes.saturating_sub(*size);
             entry_count = entry_count.saturating_sub(1);
         }
@@ -4849,6 +4997,36 @@ fn native_audio_set_equalizer(preamp_db: f32, bands_db: Vec<f32>) -> Result<(), 
     Ok(())
 }
 
+/// Starts (and resets) or stops measuring the playing track's band levels (analysis.rs).
+#[tauri::command(async)]
+fn native_audio_set_analysis(enabled: bool) {
+    analysis::set_active(enabled);
+}
+
+/// Mean dB per EQ band since the measurement started, then resets. None if too short.
+#[tauri::command(async)]
+fn native_audio_take_spectrum() -> Option<Vec<f32>> {
+    analysis::take_spectrum().map(|bands| bands.to_vec())
+}
+
+/// Bit-perfect (DAC) mode: no processing, unity volume, device opened at each track's rate.
+#[tauri::command(async)]
+fn native_audio_set_bit_perfect(enabled: bool) {
+    equalizer::set_bit_perfect(enabled);
+}
+
+/// What the output device is really being fed, for the bit-perfect indicator.
+#[tauri::command(async)]
+fn native_audio_output_format(state: tauri::State<'_, audio::NativeAudio>) -> Result<audio::OutputFormat, CommandError> {
+    audio::request(&state, audio::Command::OutputFormat).map_err(cache_error)
+}
+
+/// Bass/treble shelves, balance and stereo width. Neutral values cost nothing.
+#[tauri::command(async)]
+fn native_audio_set_effects(bass_db: f32, treble_db: f32, balance: f32, width: f32) {
+    equalizer::set_effects(equalizer::EffectsValues { bass_db, treble_db, balance, width });
+}
+
 #[tauri::command(async)]
 fn native_audio_play(state: tauri::State<'_, audio::NativeAudio>) -> Result<(), CommandError> {
     audio::request(&state, audio::Command::Play)
@@ -5225,6 +5403,7 @@ pub fn run() {
     builder = builder
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init());
 
     // Desktop only: Android serves the UI from its own `tauri.localhost` scheme, and a release
@@ -5359,6 +5538,11 @@ pub fn run() {
             offline_audio_save,
             offline_audio_source,
             offline_audio_remove,
+            offline_lyrics_save,
+            offline_lyrics_get,
+            listen_log_append,
+            listen_log_read,
+            listen_log_replace,
             offline_audio_list,
             offline_artwork_save,
             offline_artwork,
@@ -5376,6 +5560,11 @@ pub fn run() {
             native_audio_drop_active,
             native_audio_queue_next,
             native_audio_set_equalizer,
+            native_audio_set_effects,
+            native_audio_set_bit_perfect,
+            native_audio_set_analysis,
+            native_audio_take_spectrum,
+            native_audio_output_format,
             native_audio_set_normalization,
             native_audio_list_output_devices,
             native_audio_set_output_device,
@@ -5425,7 +5614,20 @@ pub fn run() {
             #[cfg(target_os = "android")]
             android::android_set_system_bars,
             #[cfg(target_os = "android")]
-            android::android_set_accent
+            android::android_set_accent,
+            #[cfg(target_os = "android")]
+            android::android_frontend_ready,
+            #[cfg(target_os = "android")]
+            android::android_set_headset_prefs,
+            #[cfg(target_os = "android")]
+            android::android_install_apk,
+            #[cfg(target_os = "android")]
+            android::android_set_bit_perfect,
+            #[cfg(target_os = "android")]
+            android::android_keep_screen_on,
+            ota::update_fetch_manifest,
+            ota::update_abi,
+            ota::update_download_apk
         ])
         .run(context)
         .expect("error while running tauri application");

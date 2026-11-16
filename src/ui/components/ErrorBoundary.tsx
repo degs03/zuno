@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { RefreshIcon } from "@/ui/icons";
 import { logInternalError } from "../../internal/logging";
+import { t } from "../../i18n";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -61,7 +62,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const { error } = this.state;
     if (!error) return this.props.children;
 
-    const { label, onDismiss, dismissLabel = "Go back" } = this.props;
+    // A class can't call useT; this fallback only shows after a crash, so translating at render is enough.
+    const { label, onDismiss, dismissLabel = t("Go back") } = this.props;
 
     return (
       <div
@@ -69,17 +71,16 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         className="flex h-full min-h-0 flex-col items-center justify-center gap-4 bg-background p-8 text-center"
       >
         <div className="flex flex-col gap-1.5">
-          <h2 className="text-lg font-semibold text-foreground">{label} stopped working</h2>
+          <h2 className="text-lg font-semibold text-foreground">{t("{label} stopped working", { label })}</h2>
           <p className="max-w-md text-sm text-muted-foreground">
-            The rest of Zuno is still running. Try again, and if it keeps happening the details
-            are in the internal log.
+            {t("The rest of Zuno is still running. Try again, and if it keeps happening the details are in the internal log.")}
           </p>
         </div>
 
         {/* The message, not the stack: a stack in the UI is noise to the person reading it
             and is already in the log for the person debugging it. */}
         <p className="max-w-md break-words rounded-lg bg-card/60 px-3 py-2 text-xs text-muted-foreground">
-          {error.message || "No error message was provided."}
+          {error.message || t("No error message was provided.")}
         </p>
 
         <div className="flex items-center gap-2">
@@ -92,7 +93,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             onClick={this.retry}
           >
             <RefreshIcon size={15} aria-hidden="true" />
-            Try again
+            {t("Try again")}
           </button>
           {onDismiss && (
             <button

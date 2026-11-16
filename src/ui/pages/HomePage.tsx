@@ -20,6 +20,7 @@ import { TrackRow } from "../components/TrackRow";
 import { useNowPlaying } from "../hooks/useNowPlaying";
 import { isOnline, useOnline } from "../../internal/connectivity";
 import { useOfflineEntries } from "../../player/offlineStore";
+import { useT } from "../../i18n";
 
 const FALLBACK_QUERIES = [
   "new music",
@@ -133,6 +134,7 @@ export function HomePage({
   onSignIn,
   destinations,
 }: HomePageProps) {
+  const t = useT();
   const { openTrackMenu } = useTrackContextMenu();
   const showMadeForYou = useMadeForYouVisible();
   const recentlyPlayed = useMemo(
@@ -289,7 +291,7 @@ export function HomePage({
     >
         
       <div className="flex items-center justify-between gap-3">
-        <h3>Made for you</h3>
+        <h3>{t("Made for you")}</h3>
       </div>
       {/*
         The picks ride the inside of a cylinder instead of sitting in a grid: the row recedes
@@ -312,7 +314,7 @@ export function HomePage({
           className="flex items-center justify-center gap-3 overflow-hidden"
           style={{ height: `min(${PICKS_STAGE_HEIGHT}px, 62vw)` }}
           aria-busy="true"
-          aria-label="Loading picks"
+          aria-label={t("Loading picks")}
         >
           {[0, 1, 2].map((index) => (
             <span
@@ -372,7 +374,7 @@ export function HomePage({
         )}
       </CylinderCarousel>
       )}
-      {isLoadingSuggestions && <span className="sr-only" role="status">Loading suggestions</span>}
+      {isLoadingSuggestions && <span className="sr-only" role="status">{t("Loading suggestions")}</span>}
 
     </section>
   );
@@ -396,10 +398,10 @@ export function HomePage({
         <section className="card-surface flex items-center justify-between gap-4 px-5 py-4 max-sm:flex-col max-sm:items-stretch">
           <div className="flex min-w-0 flex-col gap-1">
             <h1 className="text-lg font-semibold tracking-[-0.01em] text-foreground">
-              You&apos;re not signed in
+              {t("You're not signed in")}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Sign in to see your history, playlists and albums.
+              {t("Sign in to see your history, playlists and albums.")}
             </p>
           </div>
           <button
@@ -407,7 +409,7 @@ export function HomePage({
             className="pressable inline-flex h-10 shrink-0 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             onClick={() => void onSignIn()}
           >
-            Sign in
+            {t("Sign in")}
           </button>
         </section>
       )}
@@ -420,11 +422,11 @@ export function HomePage({
 
       {compactRecent.length === 0 && isWaitingForLibrary && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold text-foreground">Recently played</h2>
+          <h2 className="text-xl font-semibold text-foreground">{t("Recently played")}</h2>
           <div
             className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(min(16rem,100%),1fr))]"
             role="status"
-            aria-label="Loading recently played"
+            aria-label={t("Loading recently played")}
           >
             {Array.from({ length: RECENT_COMPACT_COUNT }, (_, index) => (
               <TrackRowSkeleton key={index} delayMs={index * 60} />
@@ -435,7 +437,7 @@ export function HomePage({
 
       {compactRecent.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold text-foreground">Recently played</h2>
+          <h2 className="text-xl font-semibold text-foreground">{t("Recently played")}</h2>
           <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(min(16rem,100%),1fr))]">
             {compactRecent.map((track) => (
               <button
@@ -464,14 +466,14 @@ export function HomePage({
 
       {moreSuggestions.length === 0 && isLoadingSuggestions && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold text-foreground">More recommendations</h2>
-          <AlbumGridSkeleton count={MORE_SUGGESTIONS_COUNT} label="Loading more recommendations" />
+          <h2 className="text-xl font-semibold text-foreground">{t("More recommendations")}</h2>
+          <AlbumGridSkeleton count={MORE_SUGGESTIONS_COUNT} label={t("Loading more recommendations")} />
         </section>
       )}
 
       {moreSuggestions.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold text-foreground">More recommendations</h2>
+          <h2 className="text-xl font-semibold text-foreground">{t("More recommendations")}</h2>
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
             {moreSuggestions.map((track) => (
               <AlbumCard
@@ -489,14 +491,14 @@ export function HomePage({
 
       {largeRecent.length === 0 && isWaitingForLibrary && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold text-foreground">Listen again</h2>
-          <AlbumGridSkeleton count={RECENT_LARGE_COUNT} label="Loading listen again" />
+          <h2 className="text-xl font-semibold text-foreground">{t("Listen again")}</h2>
+          <AlbumGridSkeleton count={RECENT_LARGE_COUNT} label={t("Loading listen again")} />
         </section>
       )}
 
       {largeRecent.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-xl font-semibold text-foreground">Listen again</h2>
+          <h2 className="text-xl font-semibold text-foreground">{t("Listen again")}</h2>
           <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
             {largeRecent.map((track) => (
               <AlbumCard
@@ -514,14 +516,14 @@ export function HomePage({
 
       {!isLoadingSuggestions && suggestions.length === 0 && (
         <div className="px-2 py-10 text-center text-sm text-muted-foreground">
-          <p>Recommendations could not be loaded.</p>
+          <p>{t("Recommendations could not be loaded.")}</p>
           {libraryState.status === "signed-out" && (
             <button
               type="button"
               className="pressable mt-3 inline-flex h-10 items-center rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               onClick={() => void onSignIn()}
             >
-              Sign in with YouTube Music
+              {t("Sign in with YouTube Music")}
             </button>
           )}
         </div>
@@ -552,28 +554,29 @@ function OfflineHome({
   onContextMenu: (event: MouseEvent<HTMLElement>, track: Track) => void;
   onOpenDownloads: () => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-1" role="status">
-        <h1 className="text-3xl font-bold tracking-[-0.02em] text-foreground">You&apos;re offline</h1>
+        <h1 className="text-3xl font-bold tracking-[-0.02em] text-foreground">{t("You're offline")}</h1>
         <p className="text-sm text-muted-foreground">
           {downloads.length > 0
-            ? "Your downloaded songs play without a connection."
-            : "Nothing is downloaded yet. Songs you download play here when you're offline."}
+            ? t("Your downloaded songs play without a connection.")
+            : t("Nothing is downloaded yet. Songs you download play here when you're offline.")}
         </p>
       </header>
 
       {downloads.length > 0 && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold text-foreground">Downloads</h2>
+            <h2 className="text-xl font-semibold text-foreground">{t("Downloads")}</h2>
             {downloads.length > OFFLINE_HOME_LIMIT && (
               <button
                 type="button"
                 className="rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={onOpenDownloads}
               >
-                See all {downloads.length}
+                {t("See all {count}", { count: downloads.length })}
               </button>
             )}
           </div>

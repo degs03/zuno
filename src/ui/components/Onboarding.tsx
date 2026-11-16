@@ -16,6 +16,7 @@ import {
   type OnboardingStep,
   type Rect,
 } from "./onboardingSteps";
+import { t, useT } from "../../i18n";
 
 export {
   ONBOARDING_STEPS,
@@ -29,42 +30,42 @@ type StepContent = { title: string; text: string; target: string; shortcut?: str
 function getStepContent(): Record<OnboardingStep, StepContent> {
   return {
     "open-search": {
-      title: "Find something to play",
-      text: `Press ${primaryModifierLabel} Space, or click the search bar.`,
+      title: t("Find something to play"),
+      text: t("Press {shortcut}, or click the search bar.", { shortcut: `${primaryModifierLabel} Space` }),
       target: '[data-onboarding="search"]',
       shortcut: `${primaryModifierLabel} Space`,
     },
     "type-first": {
-      title: "Search for a song",
-      text: "Type one of your favourites, then pick it from the results.",
+      title: t("Search for a song"),
+      text: t("Type one of your favourites, then pick it from the results."),
       target: '[data-onboarding="search-panel"]',
       shortcut: `${primaryModifierLabel} Space`,
     },
     "play-first": {
-      title: "Play it",
-      text: "Choose a result to start playing.",
+      title: t("Play it"),
+      text: t("Choose a result to start playing."),
       target: '[data-onboarding="search-panel"], [data-onboarding="search-results"]',
     },
     "new-tab": {
-      title: "Open a second tab",
-      text: "Tabs each keep their own music, so this song carries on playing here.",
+      title: t("Open a second tab"),
+      text: t("Tabs each keep their own music, so this song carries on playing here."),
       target: '[data-onboarding="new-tab"]',
       shortcut: `${primaryModifierLabel} T`,
     },
     "type-second": {
-      title: "Search again",
-      text: "Find a different song in this new tab.",
+      title: t("Search again"),
+      text: t("Find a different song in this new tab."),
       target: '[data-onboarding="search-panel"]',
       shortcut: `${primaryModifierLabel} Space`,
     },
     "play-second": {
-      title: "Play the second song",
-      text: "This tab now has music of its own.",
+      title: t("Play the second song"),
+      text: t("This tab now has music of its own."),
       target: '[data-onboarding="search-panel"], [data-onboarding="search-results"]',
     },
     "switch-back": {
-      title: "Switch back",
-      text: "Your first song is exactly where you left it.",
+      title: t("Switch back"),
+      text: t("Your first song is exactly where you left it."),
       target: '[data-onboarding="first-tab"]',
       shortcut: `${primaryModifierLabel} 1, 2, 3…`,
     },
@@ -172,6 +173,7 @@ interface OnboardingProps {
 }
 
 export function Onboarding({ step, onSkip, onSkipStep, onBack }: OnboardingProps) {
+  const t = useT();
   // The typewriter is a JS timer, so no stylesheet can stop it — this is the hook that can.
   const reduceMotion = useReduceMotion();
   const content = getStepContent()[step];
@@ -272,7 +274,7 @@ export function Onboarding({ step, onSkip, onSkipStep, onBack }: OnboardingProps
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col gap-0.5">
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Step {index + 1} of {ONBOARDING_STEPS.length}
+              {t("Step {step} of {total}", { step: index + 1, total: ONBOARDING_STEPS.length })}
             </span>
             <h2 id="onboarding-title" className="text-sm font-semibold">
               {content.title}
@@ -282,8 +284,8 @@ export function Onboarding({ step, onSkip, onSkipStep, onBack }: OnboardingProps
             className="rounded p-1 text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             type="button"
             onClick={onSkip}
-            aria-label="Skip the whole tour"
-            title="Skip tour (Esc)"
+            aria-label={t("Skip the whole tour")}
+            title={t("Skip tour ({key})", { key: "Esc" })}
           >
             <CloseIcon size={16} />
           </button>
@@ -317,10 +319,10 @@ export function Onboarding({ step, onSkip, onSkipStep, onBack }: OnboardingProps
             type="button"
             onClick={onBack}
             disabled={isFirst}
-            title="Previous step (Alt ←)"
+            title={t("Previous step ({key})", { key: "Alt ←" })}
           >
             <ArrowLeftIcon size={14} />
-            Back
+            {t("Back")}
           </button>
 
           <div className="flex items-center gap-1">
@@ -329,22 +331,22 @@ export function Onboarding({ step, onSkip, onSkipStep, onBack }: OnboardingProps
               type="button"
               onClick={onSkip}
             >
-              Skip tour
+              {t("Skip tour")}
             </button>
             <button
               className="flex items-center gap-1 rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               type="button"
               onClick={onSkipStep}
-              title={isLast ? "Finish" : "Skip this step (Alt →)"}
+              title={isLast ? t("Finish") : t("Skip this step ({key})", { key: "Alt →" })}
             >
               {isLast ? (
                 <>
-                  Finish
+                  {t("Finish")}
                   <CheckIcon size={14} />
                 </>
               ) : (
                 <>
-                  Skip step
+                  {t("Skip step")}
                   <ArrowRightIcon size={14} />
                 </>
               )}
@@ -357,6 +359,7 @@ export function Onboarding({ step, onSkip, onSkipStep, onBack }: OnboardingProps
 }
 
 export function OnboardingCompleteToast() {
+  const t = useT();
   return (
     <div
       className="fixed bottom-[var(--bottom-chrome)] left-1/2 z-[95] flex -translate-x-1/2 items-center gap-2 rounded-full bg-popover/95 px-4 py-2 shadow-2xl backdrop-blur"
@@ -365,24 +368,25 @@ export function OnboardingCompleteToast() {
       <span className="text-primary" aria-hidden="true">
         <CheckIcon size={18} />
       </span>
-      <span className="text-sm text-foreground">You're all set</span>
+      <span className="text-sm text-foreground">{t("You're all set")}</span>
     </div>
   );
 }
 
 export function OnboardingWelcome() {
+  const t = useT();
   return (
     <div
       className="fixed inset-0 z-[95] grid place-items-center bg-background"
       role="status"
-      aria-label="Welcome"
+      aria-label={t("Welcome")}
     >
       <div
         className="pointer-events-none absolute left-1/2 top-1/2 size-[660px] -translate-x-1/2 -translate-y-1/2 rounded-full"
         style={{ background: GLOW_GRADIENT }}
       />
       <div className="relative flex flex-col items-center gap-3 text-center">
-        <strong>Welcome</strong>
+        <strong>{t("Welcome")}</strong>
       </div>
     </div>
   );
@@ -393,6 +397,7 @@ interface KeychainNoticeProps {
 }
 
 export function KeychainNotice({ onContinue }: KeychainNoticeProps) {
+  const t = useT();
   return (
     <div
       className="fixed inset-0 z-[95] grid place-items-center bg-background/80 backdrop-blur"
@@ -411,21 +416,18 @@ export function KeychainNotice({ onContinue }: KeychainNoticeProps) {
         >
           <KeyIcon size={28} />
         </span>
-        <h1 id="keychain-title">A note about macOS Keychain</h1>
+        <h1 id="keychain-title">{t("A note about macOS Keychain")}</h1>
         <p>
-          This client uses Keychain to protect the encryption key for your YouTube Music session
-          cookie. macOS may ask for permission when you continue.
+          {t("This client uses Keychain to protect the encryption key for your YouTube Music session cookie. macOS may ask for permission when you continue.")}
         </p>
         <p>
-          The app only accesses the Keychain item it created for this purpose. It does not request
-          access to your passwords or any other Keychain items. You can deny this, but signing in
-          with YouTube Music will not work then.
+          {t("The app only accesses the Keychain item it created for this purpose. It does not request access to your passwords or any other Keychain items. You can deny this, but signing in with YouTube Music will not work then.")}
         </p>
         <p>
-          <strong>Choose “Always Allow” if you would rather not see the prompt again.</strong>
+          <strong>{t("Choose “Always Allow” if you would rather not see the prompt again.")}</strong>
         </p>
         <button type="button" onClick={onContinue}>
-          Continue
+          {t("Continue")}
         </button>
       </div>
     </div>

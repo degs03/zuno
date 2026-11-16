@@ -10,6 +10,7 @@ import {
   SkipPreviousIcon,
 } from "@/ui/icons";
 import { TrackArtwork } from "../../TrackArtwork";
+import { useT } from "../../../../i18n";
 import {
   clampProgress,
   formatSkinTime,
@@ -61,6 +62,7 @@ export function CassetteSkin({
   onRestore,
   onClose,
 }: MiniSkinProps) {
+  const t = useT();
   const seek = useSeekPreview(currentTime, onSeek);
   const shownTime = seek.preview ?? currentTime;
   const progress = clampProgress(shownTime, duration);
@@ -73,10 +75,10 @@ export function CassetteSkin({
   const leftPack = packSize(1 - progress);
   const rightPack = packSize(progress);
   const status = isError
-    ? "Couldn't play this song"
+    ? t("Couldn't play this song")
     : isLoading
-      ? "Loading…"
-      : artist ?? (hasTrack ? "" : "Side A · insert a song");
+      ? t("Loading…")
+      : artist ?? (hasTrack ? "" : t("Side A · insert a song"));
   const led = isError
     ? "bg-(--skin-led-error) shadow-[0_0_6px_var(--skin-led-error)]"
     : isLoading
@@ -121,7 +123,7 @@ export function CassetteSkin({
           />
           <div className="min-w-0 flex-1 leading-tight">
             <SkinTitle
-              text={title ?? "Nothing playing"}
+              text={title ?? t("Nothing playing")}
               className="text-[12px] font-bold tracking-[-0.01em]"
             />
             <p
@@ -133,10 +135,10 @@ export function CassetteSkin({
               {status}
             </p>
           </div>
-          <LabelButton label="Restore main window" onClick={onRestore}>
+          <LabelButton label={t("Restore main window")} onClick={onRestore}>
             <ArrowUpIcon size={11} aria-hidden="true" />
           </LabelButton>
-          <LabelButton label="Close mini player" onClick={onClose}>
+          <LabelButton label={t("Close mini player")} onClick={onClose}>
             <CloseIcon size={11} aria-hidden="true" />
           </LabelButton>
         </div>
@@ -202,8 +204,8 @@ export function CassetteSkin({
           onChange={(event) => seek.setPreview(Number(event.currentTarget.value))}
           onPointerUp={(event) => seek.commit(Number(event.currentTarget.value))}
           onKeyUp={(event) => seek.commit(Number(event.currentTarget.value))}
-          aria-label="Song position"
-          aria-valuetext={`${formatSkinTime(shownTime)} of ${formatSkinTime(duration)}`}
+          aria-label={t("Song position")}
+          aria-valuetext={t("{time} of {duration}", { time: formatSkinTime(shownTime), duration: formatSkinTime(duration) })}
           title={canSeek ? `-${formatSkinTime(duration - shownTime)}` : undefined}
           className={cn(
             "mx-2 mt-auto mb-1.5 h-2.5 cursor-pointer appearance-none rounded-full bg-transparent disabled:cursor-default",
@@ -228,10 +230,10 @@ export function CassetteSkin({
           <span className={cn("size-1.5 rounded-full transition-colors", led)} />
         </span>
         <span className="flex items-center gap-1.5">
-          <DeckKey label="Previous" onClick={onPrevious}>
+          <DeckKey label={t("Previous")} onClick={onPrevious}>
             <SkipPreviousIcon size={12} aria-hidden="true" />
           </DeckKey>
-          <DeckKey label={isLoading ? "Loading song" : isPlaying ? "Pause" : "Play"} onClick={onTogglePlay} wide>
+          <DeckKey label={isLoading ? t("Loading song") : isPlaying ? t("Pause") : t("Play")} onClick={onTogglePlay} wide>
             {isLoading ? (
               <SpinnerSteps size={12} color="currentColor" />
             ) : isPlaying ? (
@@ -240,7 +242,7 @@ export function CassetteSkin({
               <PlayActiveIcon size={13} aria-hidden="true" />
             )}
           </DeckKey>
-          <DeckKey label="Next" onClick={onNext}>
+          <DeckKey label={t("Next")} onClick={onNext}>
             <SkipNextIcon size={12} aria-hidden="true" />
           </DeckKey>
         </span>

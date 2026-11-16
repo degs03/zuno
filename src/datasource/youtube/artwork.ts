@@ -66,6 +66,10 @@ export function selectArtworkUrl(
 }
 
 function withYoutubeSize(url: string, size: number): string | null {
+  // Video thumbnails (i.ytimg.com) come in fixed names; big slots get the HD frame, and the
+  // candidate ladder falls back to the original name if a video has no HD thumbnail.
+  const video = url.match(/^(https:\/\/i\d?\.ytimg\.com\/vi(?:_webp)?\/[^/]+\/)[^/?]+\.(jpg|webp)(\?.*)?$/);
+  if (video) return size > 480 ? `${video[1]}maxresdefault.${video[2]}` : size > 240 ? `${video[1]}hqdefault.${video[2]}` : null;
   if (!/googleusercontent\.com|ggpht\.com|yt3\.ggpht\.com/.test(url)) return null;
   if (/[?&]/.test(url)) return null;
   if (/=/.test(url)) {
@@ -91,17 +95,22 @@ function withYoutubeSize(url: string, size: number): string | null {
  * One extra bucket is the whole cost. It was chosen to catch both card widths at 2× rather than
  * splitting them across two new entries, which is what would actually fragment the cache.
  */
-const ARTWORK_SIZE_BUCKETS = [120, 240, 400, 544];
+const ARTWORK_SIZE_BUCKETS = [120, 240, 400, 544, 800, 1200];
 
 /**
- * The smallest bucket that still covers `cssPx` at this display's pixel density.
- *
- * Null means the slot is larger than any bucket — those keep the original, full-size URL,
- * since downscaling a hero image is the one place the extra bytes are visible.
+ * The largest size ever requested. A slot bigger than this (a phone's full-screen player at 3x)
+ * gets 1200 rather than "the original URL": for songs that original is usually the 60–120 px
+ * thumbnail from a list row, which is what made the big player's cover look blurred.
+ */
+const MAX_ARTWORK_SIZE = 1200;
+
+/**
+ * The smallest bucket that still covers `cssPx` at this display's pixel density, capped at
+ * `MAX_ARTWORK_SIZE`.
  */
 export function getArtworkSizeBucket(cssPx: number): number | null {
   const needed = cssPx * (globalThis.devicePixelRatio || 1);
-  return ARTWORK_SIZE_BUCKETS.find((bucket) => bucket >= needed) ?? null;
+  return ARTWORK_SIZE_BUCKETS.find((bucket) => bucket >= needed) ?? MAX_ARTWORK_SIZE;
 }
 
 /**

@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { msg } from "../../i18n";
 
 /**
  * Multiplier applied to the lyric type scale.
@@ -13,11 +14,11 @@ const CHANGE_EVENT = "lyrics-font-scale-change";
 export const DEFAULT_LYRICS_FONT_SCALE = 1;
 
 export const LYRICS_FONT_SCALES = [
-  { value: 0.7, label: "Extra small" },
-  { value: 0.85, label: "Small" },
-  { value: 1, label: "Default" },
-  { value: 1.2, label: "Large" },
-  { value: 1.45, label: "Extra large" },
+  { value: 0.7, label: msg("Extra small") },
+  { value: 0.85, label: msg("Small") },
+  { value: 1, label: msg("Default") },
+  { value: 1.2, label: msg("Large") },
+  { value: 1.45, label: msg("Extra large") },
 ];
 
 /** Snapped to a known step: a hand-edited localStorage value must not produce 40rem lyrics. */

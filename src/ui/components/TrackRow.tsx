@@ -25,6 +25,7 @@ import { libraryController, useLibrarySelector } from "../../player/playerStore"
 import { useTrackContextMenu } from "./TrackContextMenu";
 import { ArtistLinks } from "./ArtistLinks";
 import { TrackArtwork } from "./TrackArtwork";
+import { useT } from "../../i18n";
 
 /**
  * Anything else a caller needs on the underlying button — the playlist page attaches
@@ -85,11 +86,13 @@ interface TrackRowProps extends PassthroughButtonProps {
  * state you need to see without hovering, the same reasoning as the queue's stop marker.
  */
 function DownloadProgress({ title }: { title: string }) {
+  const t = useT();
   const progress = useOfflineProgress();
-  return <Loader variant="percent" size={18} value={progress ?? undefined} label={`Downloading ${title}`} />;
+  return <Loader variant="percent" size={18} value={progress ?? undefined} label={t("Downloading {title}", { title })} />;
 }
 
 function DownloadAction({ track }: { track: Track }) {
+  const t = useT();
   // This row's status only: a whole-store subscription re-rendered every row on each progress tick.
   const status = useOfflineStatus(track.id);
   const isDownloading = status === "downloading";
@@ -97,11 +100,11 @@ function DownloadAction({ track }: { track: Track }) {
   if (track.source === "local") return null;
 
   const label = status === "ready"
-    ? `Remove ${track.title} from downloads`
-    : `Download ${track.title}`;
+    ? t("Remove {title} from downloads", { title: track.title })
+    : t("Download {title}", { title: track.title });
 
   return (
-    <Tooltip content={status === "ready" ? "Downloaded — click to remove" : "Download"}>
+    <Tooltip content={status === "ready" ? t("Downloaded — click to remove") : t("Download")}>
       <span
         role="button"
         tabIndex={0}
@@ -208,6 +211,7 @@ function QuickAction({
  * other row actions.
  */
 function RatingActions({ track }: { track: Track }) {
+  const t = useT();
   const { rateTrack } = useTrackContextMenu();
   const rating = useLibrarySelector(() => libraryController.getTrackRating(track.id));
   const isPending = useLibrarySelector((state) => state.pendingLikeTrackIds.has(track.id));
@@ -215,14 +219,31 @@ function RatingActions({ track }: { track: Track }) {
   // Local files have no YouTube rating to set, and a signed-out session has nowhere to put one.
   if (track.source === "local") return null;
 
-  const button = (target: Exclude<TrackRating, "none">, icon: ReactNode, label: string) => {
+  /* Whole phrases per rating rather than "Undo " + label: word order differs between languages. */
+  const labels = {
+    like: {
+      tooltip: t("Like"),
+      undoTooltip: t("Undo like"),
+      aria: t("Like {title}", { title: track.title }),
+      undoAria: t("Undo like for {title}", { title: track.title }),
+    },
+    dislike: {
+      tooltip: t("Dislike"),
+      undoTooltip: t("Undo dislike"),
+      aria: t("Dislike {title}", { title: track.title }),
+      undoAria: t("Undo dislike for {title}", { title: track.title }),
+    },
+  };
+
+  const button = (target: Exclude<TrackRating, "none">, icon: ReactNode) => {
     const isActive = rating === target;
+    const label = labels[target];
     return (
-      <Tooltip content={isActive ? `Undo ${label.toLowerCase()}` : label}>
+      <Tooltip content={isActive ? label.undoTooltip : label.tooltip}>
         <span
           role="button"
           tabIndex={0}
-          aria-label={isActive ? `Undo ${label.toLowerCase()} for ${track.title}` : `${label} ${track.title}`}
+          aria-label={isActive ? label.undoAria : label.aria}
           aria-pressed={isActive}
           aria-busy={isPending}
           className={cn(
@@ -256,12 +277,10 @@ function RatingActions({ track }: { track: Track }) {
       {button(
         "like",
         rating === "like" ? <HeartActiveIcon size={17} /> : <HeartIcon size={17} />,
-        "Like",
       )}
       {button(
         "dislike",
         rating === "dislike" ? <DislikeActiveIcon size={17} /> : <DislikeIcon size={17} />,
-        "Dislike",
       )}
     </span>
   );
@@ -296,10 +315,11 @@ function RatingActions({ track }: { track: Track }) {
  * its own means nothing.
  */
 function ExplicitBadge() {
+  const t = useT();
   return (
     <span
-      title="Explicit"
-      aria-label="Explicit"
+      title={t("Explicit")}
+      aria-label={t("Explicit")}
       role="img"
       className="grid size-[15px] shrink-0 place-items-center rounded-[3px] bg-muted-foreground/85 text-[10px] font-bold leading-none text-background"
     >
@@ -318,12 +338,13 @@ function SelectionCheckbox({
   isSelected: boolean;
   onToggle: () => void;
 }) {
+  const t = useT();
   return (
     <span
       role="checkbox"
       aria-checked={isSelected}
       tabIndex={0}
-      aria-label={`Select ${title}`}
+      aria-label={t("Select {title}", { title })}
       className={cn(
         "grid size-6 shrink-0 place-items-center rounded-md border transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -370,6 +391,7 @@ export const TrackRow = memo(function TrackRow({
   children,
   ...buttonProps
 }: TrackRowProps) {
+  const t = useT();
   /*
    * The handlers, read at call time instead of captured at render time.
    *
@@ -465,7 +487,7 @@ export const TrackRow = memo(function TrackRow({
         unavailableOffline && "opacity-40",
         className,
       )}
-      title={unavailableOffline ? "Not downloaded. Plays when you're back online." : buttonProps.title}
+      title={unavailableOffline ? t("Not downloaded. Plays when you're back online.") : buttonProps.title}
     >
       {children}
 
@@ -613,8 +635,8 @@ export const TrackRow = memo(function TrackRow({
         <span className="flex shrink-0 items-center">
           {onQuickAddToQueue && (
             <QuickAction
-              label={`Add ${track.title} to the queue`}
-              tooltip="Add to queue"
+              label={t("Add {title} to the queue", { title: track.title })}
+              tooltip={t("Add to queue")}
               onActivate={handleQuickAddToQueue}
             >
               <ListIcon size={17} aria-hidden="true" />
@@ -622,8 +644,8 @@ export const TrackRow = memo(function TrackRow({
           )}
           {onQuickAdd && (
             <QuickAction
-              label={`Add ${track.title} to a playlist`}
-              tooltip="Add to playlist"
+              label={t("Add {title} to a playlist", { title: track.title })}
+              tooltip={t("Add to playlist")}
               onActivate={handleQuickAdd}
             >
               <PlaylistAddIcon size={17} aria-hidden="true" />
@@ -640,7 +662,7 @@ export const TrackRow = memo(function TrackRow({
         <span
           role="button"
           tabIndex={0}
-          aria-label={`More options for ${track.title}`}
+          aria-label={t("More options for {title}", { title: track.title })}
           className="-mr-1 grid size-10 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors active:bg-card active:text-foreground"
           onClick={(event) => {
             event.stopPropagation();
@@ -666,7 +688,7 @@ export const TrackRow = memo(function TrackRow({
 
       {/* Announced to screen readers only; the meter above is decorative. */}
       {isCurrent ? (
-        <span className="sr-only">{isPlaying ? "Now playing" : "Paused"}</span>
+        <span className="sr-only">{isPlaying ? t("Now playing") : t("Paused")}</span>
       ) : null}
     </button>
   );

@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { getAppSetting, setAppSetting } from "../../internal/appSettings";
 import { isMacOS } from "../platform";
+import { msg, t } from "../../i18n";
 
 export type KeyboardShortcutAction =
   | "playPause"
@@ -45,93 +46,93 @@ export const KEYBOARD_SHORTCUT_ACTIONS: Array<{
 }> = [
   {
     id: "playPause",
-    label: "Play / pause",
-    description: "Toggle playback for the current track.",
+    label: msg("Play / pause"),
+    description: msg("Toggle playback for the current track."),
   },
   {
     id: "mute",
-    label: "Mute / unmute",
-    description: "Toggle player audio.",
+    label: msg("Mute / unmute"),
+    description: msg("Toggle player audio."),
   },
   {
     id: "previousTrack",
-    label: "Previous track",
-    description: "Go back to the previous track.",
+    label: msg("Previous track"),
+    description: msg("Go back to the previous track."),
   },
   {
     id: "nextTrack",
-    label: "Next track",
-    description: "Skip to the next track.",
+    label: msg("Next track"),
+    description: msg("Skip to the next track."),
   },
   {
     id: "closeTab",
-    label: "Close tab",
-    description: "Close the active tab.",
+    label: msg("Close tab"),
+    description: msg("Close the active tab."),
   },
   {
     id: "newTab",
-    label: "New tab",
-    description: "Open a new music tab.",
+    label: msg("New tab"),
+    description: msg("Open a new music tab."),
   },
   {
     id: "search",
-    label: "Search",
-    description: "Open or close search.",
+    label: msg("Search"),
+    description: msg("Open or close search."),
   },
   {
     id: "navigateBack",
-    label: "Go back",
-    description: "Go back in the active tab.",
+    label: msg("Go back"),
+    description: msg("Go back in the active tab."),
   },
   {
     id: "navigateForward",
-    label: "Go forward",
-    description: "Go forward in the active tab.",
+    label: msg("Go forward"),
+    description: msg("Go forward in the active tab."),
   },
   {
     id: "tab1",
-    label: "Go to tab 1",
-    description: "Switch to the first tab.",
+    label: msg("Go to tab 1"),
+    description: msg("Switch to the first tab."),
   },
   {
     id: "tab2",
-    label: "Go to tab 2",
-    description: "Switch to the second tab.",
+    label: msg("Go to tab 2"),
+    description: msg("Switch to the second tab."),
   },
   {
     id: "tab3",
-    label: "Go to tab 3",
-    description: "Switch to the third tab.",
+    label: msg("Go to tab 3"),
+    description: msg("Switch to the third tab."),
   },
   {
     id: "tab4",
-    label: "Go to tab 4",
-    description: "Switch to the fourth tab.",
+    label: msg("Go to tab 4"),
+    description: msg("Switch to the fourth tab."),
   },
   {
     id: "tab5",
-    label: "Go to tab 5",
-    description: "Switch to the fifth tab.",
+    label: msg("Go to tab 5"),
+    description: msg("Switch to the fifth tab."),
   },
   {
     id: "tab6",
-    label: "Go to tab 6",
-    description: "Switch to the sixth tab.",
+    label: msg("Go to tab 6"),
+    description: msg("Switch to the sixth tab."),
   },
   {
     id: "tab7",
-    label: "Go to tab 7",
-    description: "Switch to the seventh tab.",
+    label: msg("Go to tab 7"),
+    description: msg("Switch to the seventh tab."),
   },
   {
     id: "tab8",
-    label: "Go to tab 8",
-    description: "Switch to the eighth tab.",
+    label: msg("Go to tab 8"),
+    description: msg("Switch to the eighth tab."),
   },
   {
     id: "tab9",
-    label: "Go to tab 9",
-    description: "Switch to the ninth tab.",
+    label: msg("Go to tab 9"),
+    description: msg("Switch to the ninth tab."),
   },
 ];
 
@@ -386,7 +387,7 @@ function getKeyLabel(shortcut: KeyboardShortcut): string {
 }
 
 export function formatKeyboardShortcut(shortcut: KeyboardShortcut | null): string {
-  if (!shortcut) return "None";
+  if (!shortcut) return t("None");
 
   const parts: string[] = [];
   if (shortcut.primary) parts.push(isMacOS ? "Cmd" : "Ctrl");

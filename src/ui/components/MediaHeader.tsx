@@ -1,11 +1,12 @@
 import { useEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Tooltip } from "@/components/motion/tooltip";
-import { CheckIcon, DownloadIcon, ListIcon, PauseActiveIcon, PlayActiveIcon, PlaylistAddIcon, RepeatActiveIcon, RepeatOneActiveIcon, ShuffleActiveIcon } from "@/ui/icons";
+import { CheckIcon, DownloadIcon, ListIcon, PinIcon, PauseActiveIcon, PlayActiveIcon, PlaylistAddIcon, RepeatActiveIcon, RepeatOneActiveIcon, ShuffleActiveIcon } from "@/ui/icons";
 import { SpinnerSteps } from "@/components/motion/loader";
 import { TrackArtwork } from "./TrackArtwork";
 import { CoverButton } from "./CoverButton";
 import { setAmbientArtwork } from "../stores/ambientArtworkStore";
+import { t, tn, useT } from "../../i18n";
 
 /**
  * "24 songs · 1 hr 32 min".
@@ -20,7 +21,9 @@ export function formatCollectionMeta(
   hasMore = false,
 ): string {
   const trackCount = tracks.length;
-  const countLabel = `${trackCount}${hasMore ? "+" : ""} ${trackCount === 1 ? "song" : "songs"}`;
+  const countLabel = hasMore
+    ? tn("{n}+ song", "{n}+ songs", trackCount)
+    : tn("{n} song", "{n} songs", trackCount);
   if (hasMore || trackCount === 0) return countLabel;
 
   let totalDurationSec = 0;
@@ -32,7 +35,9 @@ export function formatCollectionMeta(
   const totalMinutes = Math.round(totalDurationSec / 60);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  const durationLabel = hours > 0 ? `${hours} hr ${minutes} min` : `${minutes} min`;
+  const durationLabel = hours > 0
+    ? t("{hours} hr {minutes} min", { hours, minutes })
+    : t("{minutes} min", { minutes });
   return `${countLabel} · ${durationLabel}`;
 }
 
@@ -93,6 +98,11 @@ interface MediaHeaderProps {
       /** True while pages remain unfetched, so `total` is a floor rather than the real total. */
       isPartial?: boolean;
     };
+    /**
+     * Keep this collection offline: download it, follow it as it changes, never trim it for
+     * space. Omit where that makes no sense (local folders).
+     */
+    keepOffline?: { pinned: boolean; onToggle: () => void };
   };
   /** Play-from-the-top-on-repeat. Omit to hide the control. */
   loop?: {
@@ -140,6 +150,7 @@ export function MediaHeader({
   actionsDisabled = false,
   actions,
 }: MediaHeaderProps) {
+  const t = useT();
   /* Destructured once, so the body below reads the same as it did when these were flat props
      rather than threading `playback?.` through every branch. */
   const isPlaying = playback?.isPlaying ?? false;
@@ -204,12 +215,12 @@ export function MediaHeader({
              * Pause control while the track being played belongs here. Playing something
              * else leaves this reading "Play", which is what the button would then do.
              */
-            <Tooltip content={isPlaying ? "Pause" : "Play"}>
+            <Tooltip content={isPlaying ? t("Pause") : t("Play")}>
               <button
                 type="button"
                 disabled={actionsDisabled}
                 onClick={playback.onToggle}
-                aria-label={isPlaying ? "Pause" : "Play"}
+                aria-label={isPlaying ? t("Pause") : t("Play")}
                 /* size-13 against the siblings' size-11: the primary action reads as primary
                    through size and fill, so it does not need a word as well. Fixed width also
                    drops the `min-w` that existed to stop Play/Pause/Loading jumping. */
@@ -234,18 +245,18 @@ export function MediaHeader({
               className="flex items-center gap-2 rounded-full bg-card px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ShuffleActiveIcon size={18} aria-hidden="true" />
-              Shuffle
+              {t("Shuffle")}
             </button>
           ) : null}
 
           {loop ? (
-            <Tooltip content={loopMode === "repeat-one" ? "Loop current song" : loopMode === "repeat-all" ? "Loop the whole playlist" : "Loop the whole playlist"}>
+            <Tooltip content={loopMode === "repeat-one" ? t("Loop current song") : loopMode === "repeat-all" ? t("Loop the whole playlist") : t("Loop the whole playlist")}>
               <button
                 type="button"
                 disabled={actionsDisabled}
                 onClick={isLooping && loop.onCycle ? loop.onCycle : loop.onPlay}
                 aria-pressed={isLooping}
-                aria-label={loopMode === "repeat-one" ? "Loop current song" : loopMode === "repeat-all" ? "Loop queue" : "Play in loop"}
+                aria-label={loopMode === "repeat-one" ? t("Loop current song") : loopMode === "repeat-all" ? t("Loop queue") : t("Play in loop")}
                 className={cn(
                   "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-colors",
                   "disabled:pointer-events-none disabled:opacity-50",
@@ -260,18 +271,18 @@ export function MediaHeader({
                 ) : (
                   <RepeatActiveIcon size={18} aria-hidden="true" />
                 )}
-                {loopMode === "repeat-one" ? "Loop one" : loopMode === "repeat-all" ? "Loop all" : "Loop"}
+                {loopMode === "repeat-one" ? t("Loop one") : loopMode === "repeat-all" ? t("Loop all") : t("Loop")}
               </button>
             </Tooltip>
           ) : null}
 
           {onAddToPlaylist ? (
-            <Tooltip content="Add every song here to a playlist">
+            <Tooltip content={t("Add every song here to a playlist")}>
               <button
                 type="button"
                 disabled={actionsDisabled}
                 onClick={onAddToPlaylist}
-                aria-label="Add to playlist"
+                aria-label={t("Add to playlist")}
                 className="flex size-11 items-center justify-center rounded-full bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <PlaylistAddIcon size={18} aria-hidden="true" />
@@ -280,12 +291,12 @@ export function MediaHeader({
           ) : null}
 
           {onAddToQueue ? (
-            <Tooltip content="Add every song here to the queue">
+            <Tooltip content={t("Add every song here to the queue")}>
               <button
                 type="button"
                 disabled={actionsDisabled}
                 onClick={onAddToQueue}
-                aria-label="Add to queue"
+                aria-label={t("Add to queue")}
                 className="flex size-11 items-center justify-center rounded-full bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <ListIcon size={18} aria-hidden="true" />
@@ -309,12 +320,12 @@ export function MediaHeader({
               <Tooltip
                 content={
                   allDownloaded
-                    ? "Every song here is downloaded"
+                    ? t("Every song here is downloaded")
                     : downloadCounts?.isPartial
-                      ? "Download every song here for offline"
+                      ? t("Download every song here for offline")
                       : remaining > 0
-                        ? `Download ${remaining} song${remaining === 1 ? "" : "s"} for offline`
-                        : "Download for offline"
+                        ? tn("Download {n} song for offline", "Download {n} songs for offline", remaining)
+                        : t("Download for offline")
                 }
               >
                 <button
@@ -322,7 +333,7 @@ export function MediaHeader({
                   disabled={actionsDisabled || allDownloaded || downloadBusy}
                   onClick={download.onStart}
                   aria-busy={downloadBusy}
-                  aria-label={allDownloaded ? "Already downloaded" : "Download for offline"}
+                  aria-label={allDownloaded ? t("Already downloaded") : t("Download for offline")}
                   className="relative flex size-11 items-center justify-center rounded-full bg-card text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {downloadBusy ? (
@@ -336,6 +347,30 @@ export function MediaHeader({
               </Tooltip>
             );
           })() : null}
+
+          {download?.keepOffline ? (
+            <Tooltip
+              content={
+                download.keepOffline.pinned
+                  ? t("Kept offline: new songs download automatically. Click to stop.")
+                  : t("Keep offline: download it and follow new songs")
+              }
+            >
+              <button
+                type="button"
+                disabled={actionsDisabled}
+                aria-pressed={download.keepOffline.pinned}
+                aria-label={download.keepOffline.pinned ? t("Stop keeping offline") : t("Keep offline")}
+                onClick={download.keepOffline.onToggle}
+                className={cn(
+                  "relative flex size-11 items-center justify-center rounded-full transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  download.keepOffline.pinned ? "bg-primary text-primary-foreground" : "bg-card text-foreground hover:bg-muted",
+                )}
+              >
+                <PinIcon size={18} aria-hidden="true" />
+              </button>
+            </Tooltip>
+          ) : null}
 
           {actions}
         </div>

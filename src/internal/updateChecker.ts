@@ -1,13 +1,21 @@
 import { getVersion } from "@tauri-apps/api/app";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check, type DownloadEvent, type Update } from "@tauri-apps/plugin-updater";
 import { logInternalError } from "./logging";
+import { getInvokeErrorMessage } from "./appSettings";
+import { t } from "../i18n";
+import { isNewerVersion as isNewer, parseAndroidManifest, pickApk, type AndroidApk } from "./androidUpdate";
+import {
+  ANDROID_MANIFEST_URL,
+  RELEASES_API_URL,
+  RELEASES_PAGE_URL,
+  UPDATE_REPO_CONFIGURED,
+} from "./updateConfig";
 
 const RELEASE_TAG_PREFIX = "v";
-const RELEASES_URL =
-  "https://github.com/noFAYZ/zuno/releases/tag";
-const RELEASES_API_URL =
-  "https://api.github.com/repos/noFAYZ/zuno/releases/latest";
+const RELEASES_URL = `${RELEASES_PAGE_URL}/tag`;
 const SNOOZE_PREFIX = "just-another-music-client:update-snooze:";
 const SNOOZE_DURATION_MS = 24 * 60 * 60 * 1000;
 
@@ -17,6 +25,9 @@ export interface UpdateInfo {
   releaseUrl: string;
   canInstall: boolean;
   update?: Update;
+  /** Android: the APK for this device and its checksum, from `android-latest.json`. */
+  androidApk?: AndroidApk;
+  notes?: string;
 }
 
 export interface UpdateInstallProgress {
@@ -54,7 +65,7 @@ async function checkViaGithubApi(): Promise<UpdateInfo | null> {
     const latestVersion = tagName.replace(RELEASE_TAG_PREFIX, "");
     const installedVersion = await getVersion();
 
-    if (!latestVersion || !isNewerVersion(installedVersion, latestVersion)) {
+    if (!UPDATE_REPO_CONFIGURED || !latestVersion || !isNewerVersion(installedVersion, latestVersion)) {
       return null;
     }
 
@@ -69,10 +80,70 @@ async function checkViaGithubApi(): Promise<UpdateInfo | null> {
   }
 }
 
+const isAndroidRuntime = () => typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+
+/** Android: `android-latest.json` from the latest release, fetched by Rust (GitHub sends no CORS). */
+async function checkAndroid(): Promise<UpdateInfo | null> {
+  if (!UPDATE_REPO_CONFIGURED) return null;
+  const text = await invoke<string | null>("update_fetch_manifest", { url: ANDROID_MANIFEST_URL });
+  if (!text) return null;
+  const manifest = parseAndroidManifest(text);
+  if (!manifest) throw new Error("the release has an invalid android-latest.json");
+  const installedVersion = await getVersion();
+  if (!isNewer(installedVersion, manifest.version)) return null;
+  const apk = pickApk(manifest, await invoke<string>("update_abi"));
+  return {
+    installedVersion,
+    version: manifest.version,
+    releaseUrl: `${RELEASES_URL}/${RELEASE_TAG_PREFIX}${encodeURIComponent(manifest.version)}`,
+    canInstall: apk !== null,
+    androidApk: apk ?? undefined,
+    notes: manifest.notes,
+  };
+}
+
+async function installAndroid(
+  info: UpdateInfo,
+  onProgress?: (progress: UpdateInstallProgress) => void,
+): Promise<void> {
+  const apk = info.androidApk;
+  if (!apk) throw new Error(t("There is no download for this phone in that release."));
+  const stop = await listen<{ downloaded: number; total?: number }>("update-download-progress", ({ payload }) => {
+    onProgress?.({
+      downloadedBytes: payload.downloaded,
+      totalBytes: payload.total,
+      percent: payload.total ? Math.min(100, Math.round((payload.downloaded / payload.total) * 100)) : undefined,
+    });
+  });
+  try {
+    let path: string;
+    try {
+      path = await invoke<string>("update_download_apk", { url: apk.url, sha256: apk.sha256 });
+    } catch (error) {
+      throw new Error(getInvokeErrorMessage(error));
+    }
+    try {
+      await invoke("android_install_apk", { path });
+    } catch (error) {
+      const message = getInvokeErrorMessage(error);
+      if (message.includes("permission")) {
+        throw new Error("Allow Zuno to install apps in the screen that just opened, then tap Install again.");
+      }
+      throw new Error(message);
+    }
+  } finally {
+    stop();
+  }
+}
+
 export async function checkForUpdates(): Promise<UpdateInfo | null> {
-  // The Android build has no self-updater and no release artifact to point at yet.
-  if (typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent)) {
-    return null;
+  if (isAndroidRuntime()) {
+    try {
+      return await checkAndroid();
+    } catch (error) {
+      logInternalError("updateChecker.checkAndroid failed", error);
+      throw error;
+    }
   }
   const isMacOS =
     typeof navigator !== "undefined" && /Macintosh|Mac OS X/.test(navigator.userAgent);
@@ -104,9 +175,10 @@ export async function installUpdate(
   info: UpdateInfo,
   onProgress?: (progress: UpdateInstallProgress) => void,
 ): Promise<void> {
+  if (info.androidApk) return installAndroid(info, onProgress);
   if (!info.update) {
     throw new Error(
-      "This update cannot be installed automatically. Please download it from the release page.",
+      t("This update cannot be installed automatically. Please download it from the release page."),
     );
   }
 
@@ -148,10 +220,10 @@ export function getUpdateFailureMessage(error: unknown): string {
   const message = rawMessage.trim();
 
   if (!message) {
-    return "Unable to check for updates. The updater did not return an error message.";
+    return t("Unable to check for updates. The updater did not return an error message.");
   }
 
-  return `Unable to check for updates: ${message}`;
+  return t("Unable to check for updates: {message}", { message });
 }
 
 export function isUpdateSnoozed(version: string): boolean {

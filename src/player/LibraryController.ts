@@ -26,6 +26,7 @@ import type {
 import { logInternalError, logInternalInfo } from "../internal/logging";
 import { getInvokeErrorMessage } from "../internal/appSettings";
 import { isOnline } from "../internal/connectivity";
+import { t } from "../i18n";
 import { getAppSetting, setAppSetting } from "../internal/appSettings";
 import { forgetTrackInPlaylist, rememberTrackInPlaylist } from "./playlistMembership";
 import {
@@ -223,7 +224,7 @@ export class LibraryController {
        * this one — and would otherwise leave the library stuck loading forever.
        */
       if (!(error instanceof AuthExpiredError)) {
-        this.setFailure("Unable to load your YouTube Music library.", error);
+        this.setFailure(t("Unable to load your YouTube Music library."), error);
         return;
       }
     }
@@ -243,7 +244,7 @@ export class LibraryController {
     this.setState({
       status: "signed-out",
       authPrompt: null,
-      error: "Your YouTube Music session expired. Sign in again to sync and to like songs.",
+      error: t("Your YouTube Music session expired. Sign in again to sync and to like songs."),
       sessionConfirmedAt: null,
     });
   }
@@ -264,7 +265,7 @@ export class LibraryController {
         this.setState({ status: "signed-out", authPrompt: null, error: null });
       }
     } catch (error) {
-      this.setFailure("Unable to restore your YouTube Music session.", error);
+      this.setFailure(t("Unable to restore your YouTube Music session."), error);
     }
   }
 
@@ -289,7 +290,7 @@ export class LibraryController {
       }
       await this.refresh();
     } catch (error) {
-      this.setFailure("Unable to restore your YouTube Music session.", error);
+      this.setFailure(t("Unable to restore your YouTube Music session."), error);
     }
   }
 
@@ -336,10 +337,10 @@ export class LibraryController {
         this.setState({ status: "loading", authPrompt: null });
         await this.recoverConnection();
         if (this.state.status === "ready") {
-          this.setState({ error: `YouTube Music sign-in failed.\n\n${getInvokeErrorMessage(error)}` });
+          this.setState({ error: `${t("YouTube Music sign-in failed.")}\n\n${getInvokeErrorMessage(error)}` });
         }
       } else {
-        this.setFailure("YouTube Music sign-in failed.", error);
+        this.setFailure(t("YouTube Music sign-in failed."), error);
       }
     } finally {
       // Cleared on every exit, success or failure: a stale stage would leave the overlay
@@ -389,7 +390,7 @@ export class LibraryController {
         sessionConfirmedAt: null,
       });
     } catch (error) {
-      this.setFailure("Unable to sign out.", error);
+      this.setFailure(t("Unable to sign out."), error);
     }
   }
 
@@ -422,7 +423,7 @@ export class LibraryController {
       this.setAuthStage("library");
       await this.refresh();
     } catch (error) {
-      this.setFailure("Unable to switch account.", error);
+      this.setFailure(t("Unable to switch account."), error);
     } finally {
       this.setState({ authProgress: null });
     }
@@ -447,7 +448,7 @@ export class LibraryController {
       this.setAuthStage("library");
       await this.refresh();
     } catch (error) {
-      this.setFailure("Unable to switch account.", error);
+      this.setFailure(t("Unable to switch account."), error);
     } finally {
       this.setState({ authProgress: null });
     }
@@ -477,7 +478,7 @@ export class LibraryController {
       this.setState({ status: "loading", library: null, authPrompt: null, error: null, sessionConfirmedAt: null });
       await this.refresh();
     } catch (error) {
-      this.setFailure("Unable to remove that account.", error);
+      this.setFailure(t("Unable to remove that account."), error);
     }
   }
 
@@ -497,7 +498,7 @@ export class LibraryController {
           },
         ),
         LIBRARY_REFRESH_TIMEOUT_MS,
-        "YouTube Music library sync timed out.",
+        t("YouTube Music library sync timed out."),
       );
       this.applyLibrary(library);
     } catch (error) {
@@ -507,7 +508,7 @@ export class LibraryController {
         return;
       }
       if (options.suppressFailure) throw error;
-      this.setFailure("Unable to load your YouTube Music library.", error);
+      this.setFailure(t("Unable to load your YouTube Music library."), error);
     }
   }
 
@@ -558,7 +559,7 @@ export class LibraryController {
     }
 
     if (this.state.library) return;
-    throw lastError ?? new Error("YouTube Music library did not finish syncing after sign-in.");
+    throw lastError ?? new Error(t("YouTube Music library did not finish syncing after sign-in."));
   }
 
   async getAlbumTracks(album: Album, onUpdate?: (tracks: Track[]) => void): Promise<Track[]> {
@@ -571,20 +572,20 @@ export class LibraryController {
     onUpdate?: (artist: ArtistPage) => void,
   ): Promise<ArtistPage> {
     if (!this.dataSource.getArtist) {
-      throw new Error("Artist pages are unavailable.");
+      throw new Error(t("Artist pages are unavailable."));
     }
     return this.dataSource.getArtist(artistId, onUpdate);
   }
 
   async setArtistSubscribed(artist: Artist, subscribed: boolean): Promise<void> {
     if (!this.dataSource.setArtistSubscribed) {
-      throw new Error("Subscribing to artists is unavailable.");
+      throw new Error(t("Subscribing to artists is unavailable."));
     }
     if (this.state.status === "signed-out" || !this.state.library) {
-      throw new Error("Sign in to YouTube Music to update subscriptions.");
+      throw new Error(t("Sign in to YouTube Music to update subscriptions."));
     }
     if (!artist.id.startsWith("UC")) {
-      throw new Error("This artist does not have a subscribable channel.");
+      throw new Error(t("This artist does not have a subscribable channel."));
     }
     return this.dataSource.setArtistSubscribed(artist.id, subscribed);
   }
@@ -600,13 +601,13 @@ export class LibraryController {
     level: ArtistNotificationLevel,
   ): Promise<void> {
     if (!this.dataSource.setArtistNotificationLevel) {
-      throw new Error("Artist notifications are unavailable.");
+      throw new Error(t("Artist notifications are unavailable."));
     }
     if (this.state.status === "signed-out" || !this.state.library) {
-      throw new Error("Sign in to YouTube Music to change notifications.");
+      throw new Error(t("Sign in to YouTube Music to change notifications."));
     }
     if (!artist.id.startsWith("UC")) {
-      throw new Error("This artist does not have a subscribable channel.");
+      throw new Error(t("This artist does not have a subscribable channel."));
     }
     return this.dataSource.setArtistNotificationLevel(artist.id, level);
   }
@@ -650,10 +651,10 @@ export class LibraryController {
 
   async setAlbumSaved(album: Album, saved: boolean): Promise<void> {
     if (!this.dataSource.setAlbumSaved) {
-      throw new Error("Saving albums is unavailable.");
+      throw new Error(t("Saving albums is unavailable."));
     }
     if (this.state.status === "signed-out" || !this.state.library) {
-      throw new Error("Sign in to YouTube Music to update your library.");
+      throw new Error(t("Sign in to YouTube Music to update your library."));
     }
 
     const previousLibrary = this.state.library;
@@ -745,7 +746,7 @@ export class LibraryController {
       // are shadowed in local storage instead — that is what addLocalTrackToPlaylist does.)
       if (isLocalPlaylist(playlist)) {
         if (!track.localPath) {
-          throw new Error("This song has no file on disk to add.");
+          throw new Error(t("This song has no file on disk to add."));
         }
         const paths = getLocalPlaylist(playlist.id)?.paths ?? [];
         if (paths.includes(track.localPath)) return "already-present";
@@ -755,10 +756,10 @@ export class LibraryController {
       return addLocalTrackToPlaylist(track, playlist);
     }
     if (!this.dataSource.addTrackToPlaylist) {
-      throw new Error("Adding songs to playlists is unavailable.");
+      throw new Error(t("Adding songs to playlists is unavailable."));
     }
     if (this.state.status === "signed-out" || !this.state.library) {
-      throw new Error("Sign in to YouTube Music before adding songs to playlists.");
+      throw new Error(t("Sign in to YouTube Music before adding songs to playlists."));
     }
     const result = await this.dataSource.addTrackToPlaylist(track, playlist);
     rememberTrackInPlaylist(track, playlist);
@@ -821,10 +822,10 @@ export class LibraryController {
         trackId: track.id,
         playlistId: playlist.id,
       });
-      throw new Error("Removing songs from playlists is unavailable.");
+      throw new Error(t("Removing songs from playlists is unavailable."));
     }
     if (this.state.status === "signed-out" || !this.state.library) {
-      throw new Error("Sign in to YouTube Music before removing songs from playlists.");
+      throw new Error(t("Sign in to YouTube Music before removing songs from playlists."));
     }
     return this.dataSource.removeTrackFromPlaylist(track, playlist);
   }
@@ -847,16 +848,16 @@ export class LibraryController {
     options: { local?: boolean; trackIds?: string[] } = {},
   ): Promise<Playlist> {
     const trimmed = title.trim();
-    if (!trimmed) throw new Error("Give the playlist a name.");
+    if (!trimmed) throw new Error(t("Give the playlist a name."));
 
     if (options.local) {
       return localPlaylistToPlaylist(createLocalPlaylist(trimmed));
     }
     if (!this.dataSource.createPlaylist) {
-      throw new Error("Creating playlists is unavailable.");
+      throw new Error(t("Creating playlists is unavailable."));
     }
     if (this.state.status === "signed-out" || !this.state.library) {
-      throw new Error("Sign in to YouTube Music to create playlists.");
+      throw new Error(t("Sign in to YouTube Music to create playlists."));
     }
 
     const created = await this.dataSource.createPlaylist(trimmed, options.trackIds);
@@ -877,7 +878,7 @@ export class LibraryController {
       return;
     }
     if (!this.dataSource.renamePlaylist) {
-      throw new Error("Renaming playlists is unavailable.");
+      throw new Error(t("Renaming playlists is unavailable."));
     }
 
     const previousLibrary = this.state.library;
@@ -914,7 +915,7 @@ export class LibraryController {
   async setPlaylistDescription(playlist: Playlist, description: string): Promise<void> {
     if (isLocalPlaylist(playlist)) return;
     if (!this.dataSource.setPlaylistDescription) {
-      throw new Error("Playlist descriptions are unavailable.");
+      throw new Error(t("Playlist descriptions are unavailable."));
     }
 
     const trimmed = description.trim();
@@ -944,7 +945,7 @@ export class LibraryController {
       return;
     }
     if (!this.dataSource.deletePlaylist) {
-      throw new Error("Deleting playlists is unavailable.");
+      throw new Error(t("Deleting playlists is unavailable."));
     }
 
     const previousLibrary = this.state.library;
@@ -990,10 +991,10 @@ export class LibraryController {
 
   async setPlaylistSaved(playlist: Playlist, saved: boolean): Promise<void> {
     if (!this.dataSource.setPlaylistSaved) {
-      throw new Error("Saving playlists is unavailable.");
+      throw new Error(t("Saving playlists is unavailable."));
     }
     if (this.state.status === "signed-out" || !this.state.library) {
-      throw new Error("Sign in to YouTube Music to update your library.");
+      throw new Error(t("Sign in to YouTube Music to update your library."));
     }
 
     const previousLibrary = this.state.library;
@@ -1050,11 +1051,11 @@ export class LibraryController {
 
     if (!applyRating) {
       throw new Error(
-        rating === "dislike" ? "Disliking songs is unavailable." : "Liking songs is unavailable.",
+        rating === "dislike" ? t("Disliking songs is unavailable.") : t("Liking songs is unavailable."),
       );
     }
     if (this.state.status === "signed-out" || !this.state.library) {
-      throw new Error("Sign in to like");
+      throw new Error(t("Sign in to like"));
     }
     if (this.state.pendingLikeTrackIds.has(track.id)) return;
 
@@ -1118,7 +1119,7 @@ export class LibraryController {
       status: "error",
       // recoverConnection retries on reconnect, so offline this is a wait, not a failure.
       error: !isOnline()
-        ? "You're offline. Zuno will retry when you reconnect."
+        ? t("You're offline. Zuno will retry when you reconnect.")
         : detail && detail !== "[object Object]" ? `${message}\n\n${detail}` : message,
       authPrompt: null,
     });

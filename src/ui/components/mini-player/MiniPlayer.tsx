@@ -33,6 +33,7 @@ import { saveMiniPlayerPosition, useMiniPlayerHoverAction } from "../../settings
 import { isLinux, isMacOS, isWindows } from "../../platform";
 import { Marquee } from "@/components/motion/marquee";
 import { TrackArtwork } from "../TrackArtwork";
+import { useT } from "../../../i18n";
 import { restoreMainWindow, showMiniPlayerCloseMenu, useMiniPlayerBridge } from "./useMiniPlayerBridge";
 
 const win = getCurrentWindow();
@@ -88,6 +89,7 @@ const MINI_BUTTON =
   "flex size-7 shrink-0 items-center justify-center rounded-full text-neutral-300 transition-all hover:bg-white/10 hover:text-white active:scale-90 disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50";
 
 export default function MiniPlayer() {
+  const t = useT();
   const { playerState, timeState, volumeState, artworkUrl } = useMiniPlayerBridge();
   const [expanded, setExpanded] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -903,8 +905,8 @@ export default function MiniPlayer() {
             className="group/art relative grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
             onMouseDown={(event) => void handleAlbumArtMouseDown(event)}
             onClick={handleAlbumArtClick}
-            aria-label="Restore main window"
-            title="Restore"
+            aria-label={t("Restore main window")}
+            title={t("Restore")}
           >
             {/*
               Progress drawn as a ring around the art: position without spending width.
@@ -959,7 +961,7 @@ export default function MiniPlayer() {
                   isTitleOverflowing && "invisible absolute",
                 )}
               >
-                {playerState.title ?? "Nothing playing"}
+                {playerState.title ?? t("Nothing playing")}
               </span>
               {isTitleOverflowing && (
                 <Marquee
@@ -1001,8 +1003,8 @@ export default function MiniPlayer() {
               event.stopPropagation();
               void showMiniPlayerCloseMenu();
             }}
-            aria-label="Close mini player"
-            title="Close (right-click for more)"
+            aria-label={t("Close mini player")}
+            title={t("Close (right-click for more)")}
           >
             <CloseIcon size={13} aria-hidden="true" />
           </button>
@@ -1025,7 +1027,7 @@ export default function MiniPlayer() {
             <button
               className={MINI_BUTTON}
               onClick={() => emit("mini-player:skip-previous")}
-              aria-label="Previous"
+              aria-label={t("Previous")}
               tabIndex={expanded ? 0 : -1}
             >
               <SkipPreviousIcon size={15} aria-hidden="true" />
@@ -1033,7 +1035,7 @@ export default function MiniPlayer() {
             <button
               className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-neutral-900 transition-transform duration-150 hover:scale-105 active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
               onClick={() => emit("mini-player:toggle-play-pause")}
-              aria-label={isLoading ? "Loading song" : isPlaying ? "Pause" : "Play"}
+              aria-label={isLoading ? t("Loading song") : isPlaying ? t("Pause") : t("Play")}
               tabIndex={expanded ? 0 : -1}
             >
               <span className="relative grid size-4 place-items-center" aria-hidden="true">
@@ -1051,7 +1053,7 @@ export default function MiniPlayer() {
             <button
               className={MINI_BUTTON}
               onClick={() => emit("mini-player:skip-next")}
-              aria-label="Next"
+              aria-label={t("Next")}
               tabIndex={expanded ? 0 : -1}
             >
               <SkipNextIcon size={15} aria-hidden="true" />
@@ -1072,7 +1074,7 @@ export default function MiniPlayer() {
             onPointerCancel={handleSliderPointerCancel}
             tabIndex={expanded ? 0 : -1}
             className="h-1 min-w-24 flex-1 cursor-pointer appearance-none rounded-full bg-transparent [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-[linear-gradient(to_right,#fff_var(--slider-progress),rgba(255,255,255,0.18)_var(--slider-progress))] [&::-webkit-slider-thumb]:size-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:-mt-[3px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:transition-transform hover:[&::-webkit-slider-thumb]:scale-125"
-            aria-label={hoverAction === "volume" ? "Volume" : "Song position"}
+            aria-label={hoverAction === "volume" ? t("Volume") : t("Song position")}
             style={{ "--slider-progress": `${sliderProgress}%` } as CSSProperties}
           />
         </div>

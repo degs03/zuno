@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 4x2: cover on the left, title/artist and the transport on the right. -->
+<!-- 4x2: cover on the left; title/artist, progress and the transport (with like) on the right. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -11,8 +11,8 @@
 
     <ImageView
         android:id="@+id/widget_art"
-        android:layout_width="112dp"
-        android:layout_height="112dp"
+        android:layout_width="104dp"
+        android:layout_height="104dp"
         android:contentDescription="@string/widget_art_description"
         android:scaleType="centerCrop"
         android:src="@mipmap/ic_launcher" />
@@ -20,7 +20,7 @@
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="match_parent"
-        android:layout_marginStart="14dp"
+        android:layout_marginStart="12dp"
         android:layout_weight="1"
         android:gravity="center_vertical"
         android:orientation="vertical">
@@ -33,7 +33,7 @@
             android:maxLines="1"
             android:text="@string/app_name"
             android:textColor="#FFFFFFFF"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
         <TextView
@@ -44,29 +44,55 @@
             android:maxLines="1"
             android:text="@string/widget_idle"
             android:textColor="#B3FFFFFF"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
+
+        <ProgressBar
+            android:id="@+id/widget_progress"
+            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="match_parent"
+            android:layout_height="3dp"
+            android:layout_marginTop="8dp"
+            android:max="1000"
+            android:progress="0"
+            android:progressDrawable="@drawable/widget_progress" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="6dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
             <ImageView
+                android:id="@+id/widget_like"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/widget_btn_bg"
+                android:contentDescription="@string/widget_like"
+                android:padding="8dp"
+                android:src="@drawable/widget_ic_heart" />
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <ImageView
                 android:id="@+id/widget_prev"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:background="@drawable/widget_btn_bg"
                 android:contentDescription="@string/widget_previous"
                 android:padding="8dp"
                 android:src="@drawable/widget_ic_prev" />
 
             <FrameLayout
                 android:id="@+id/widget_play"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="10dp"
-                android:layout_marginEnd="10dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:background="@drawable/widget_btn_bg"
                 android:contentDescription="@string/widget_play">
 
                 <ImageView
@@ -81,14 +107,15 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:importantForAccessibility="no"
-                    android:padding="12dp"
+                    android:padding="11dp"
                     android:src="@drawable/widget_ic_play" />
             </FrameLayout>
 
             <ImageView
                 android:id="@+id/widget_next"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:background="@drawable/widget_btn_bg"
                 android:contentDescription="@string/widget_next"
                 android:padding="8dp"
                 android:src="@drawable/widget_ic_next" />

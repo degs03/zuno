@@ -8,9 +8,16 @@ import { loadAppSession } from "./appSession";
 import { readSessionRestoreEnabled } from "../ui/settings/sessionRestore";
 import {
   hydrateOfflineStore,
+  hydratePinnedCollections,
+  setOfflineLyricsFetcher,
   setOfflineStreamResolver,
+  setPinnedCollectionLoader,
   startOfflineProgressFeed,
 } from "./offlineStore";
+import type { Album, Playlist } from "../datasource/types";
+import { startListenLog } from "./listenLog";
+import { startDynamicAccent } from "../ui/settings/dynamicAccent";
+import { startPersonalEq } from "../ui/settings/personalEq";
 
 const dataSource = new YouTubeMusicDataSource();
 
@@ -35,7 +42,12 @@ setOfflineStreamResolver((track, quality) => {
   if (!resolver) throw new Error("Downloads are unavailable for this source.");
   return resolver.call(dataSource, track, quality);
 });
-void hydrateOfflineStore();
+setOfflineLyricsFetcher((track) => dataSource.getLyrics(track));
+setPinnedCollectionLoader(async (pin) => {
+  if (pin.kind === "album") return dataSource.getAlbumTracks(pin.ref as Album);
+  return dataSource.getPlaylistTracks(pin.ref as Playlist);
+});
+void hydrateOfflineStore().then(hydratePinnedCollections);
 startOfflineProgressFeed();
 
 export const tabManager = new TabManager(dataSource);
@@ -80,6 +92,7 @@ type PlayerControllerMethod =
   | "isOnFallbackPlayer"
   | "setSleepTimer"
   | "getSleepTimerRemainingMs"
+  | "extendSleepTimer"
   | "getLyrics"
   | "getPlayerSession"
   | "removeFromQueueAt"
@@ -155,8 +168,9 @@ class ActivePlayerController implements PlayerControllerActions {
   setPitch = (semitones: number) => tabManager.getActivePlayer().setPitch(semitones);
   getPitch = () => tabManager.getActivePlayer().getPitch();
   isOnFallbackPlayer = () => tabManager.getActivePlayer().isOnFallbackPlayer();
-  setSleepTimer = (minutes: number | null) =>
-    tabManager.getActivePlayer().setSleepTimer(minutes);
+  setSleepTimer = (minutes: number | null, fadeSec?: number) =>
+    tabManager.getActivePlayer().setSleepTimer(minutes, fadeSec);
+  extendSleepTimer = (minutes: number) => tabManager.getActivePlayer().extendSleepTimer(minutes);
   getSleepTimerRemainingMs = () =>
     tabManager.getActivePlayer().getSleepTimerRemainingMs();
   getLyrics = (...args: Parameters<PlayerController["getLyrics"]>) =>
@@ -193,6 +207,18 @@ export const playerController: PlayerControllerActions = new ActivePlayerControl
 const subscribeToPlayer = (listener: () => void) => tabManager.subscribe(listener);
 const subscribeToLibrary = (listener: () => void) => libraryController.subscribe(listener);
 const getPlayerState = () => tabManager.getActiveState();
+
+// Personal EQ: learns from, and measures, the songs you like.
+startPersonalEq(subscribeToPlayer, () => getPlayerState().currentTrack?.id);
+
+// "From cover" accent follows the playing song.
+startDynamicAccent(subscribeToPlayer, () => getPlayerState().currentTrack?.artworkUrl);
+
+// Listening stats: every state change of the active player feeds the recorder.
+startListenLog(subscribeToPlayer, () => {
+  const state = getPlayerState();
+  return { track: state.currentTrack, status: state.status };
+});
 const getPlayerSession = () => tabManager.getActiveSession();
 const getLibraryState = () => libraryController.getState();
 

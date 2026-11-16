@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { getAppSetting, setAppSetting } from "../../internal/appSettings";
+import { msg } from "../../i18n";
 
 /**
  * Accent colour and visual style. Same shape as `theme.ts`: localStorage for a correct first
@@ -20,7 +21,9 @@ export type AccentId =
   | "cyber"
   | "neon-mint"
   | "mono"
-  | "custom";
+  | "custom"
+  /** Follows the playing song's cover (dynamicAccent.ts). */
+  | "dynamic";
 export type StylePreset = "zuno" | "glass" | "ios" | "solid";
 
 /**
@@ -28,22 +31,22 @@ export type StylePreset = "zuno" | "glass" | "ios" | "solid";
  * swaps in a deeper shade of the same hue in global.css so it still reads as text on white.
  */
 export const ACCENTS: ReadonlyArray<{ id: Exclude<AccentId, "custom">; label: string; swatch: string }> = [
-  { id: "zuno", label: "Zuno red", swatch: "#e8002e" },
-  { id: "neon-pink", label: "Neon pink", swatch: "#ff2e88" },
-  { id: "electric", label: "Electric blue", swatch: "#00d1ff" },
-  { id: "lime", label: "Laser lime", swatch: "#a6ff00" },
-  { id: "neon-orange", label: "Neon orange", swatch: "#ff6a00" },
-  { id: "ultraviolet", label: "Ultraviolet", swatch: "#b026ff" },
-  { id: "cyber", label: "Cyber yellow", swatch: "#ffe600" },
-  { id: "neon-mint", label: "Neon mint", swatch: "#00ffa3" },
-  { id: "mono", label: "Graphite", swatch: "#71717a" },
+  { id: "zuno", label: msg("Zuno red"), swatch: "#e8002e" },
+  { id: "neon-pink", label: msg("Neon pink"), swatch: "#ff2e88" },
+  { id: "electric", label: msg("Electric blue"), swatch: "#00d1ff" },
+  { id: "lime", label: msg("Laser lime"), swatch: "#a6ff00" },
+  { id: "neon-orange", label: msg("Neon orange"), swatch: "#ff6a00" },
+  { id: "ultraviolet", label: msg("Ultraviolet"), swatch: "#b026ff" },
+  { id: "cyber", label: msg("Cyber yellow"), swatch: "#ffe600" },
+  { id: "neon-mint", label: msg("Neon mint"), swatch: "#00ffa3" },
+  { id: "mono", label: msg("Graphite"), swatch: "#71717a" },
 ];
 
 export const STYLES: ReadonlyArray<{ id: StylePreset; label: string; hint: string }> = [
-  { id: "zuno", label: "Zuno", hint: "Soft cards with a subtle lift." },
-  { id: "glass", label: "Glass", hint: "Frosted, see-through panels." },
-  { id: "ios", label: "Rounded", hint: "Big corners and grouped lists, iPhone-like." },
-  { id: "solid", label: "Solid", hint: "Flat and high-contrast, no shadows." },
+  { id: "zuno", label: "Zuno", hint: msg("Soft cards with a subtle lift.") },
+  { id: "glass", label: msg("Glass"), hint: msg("Frosted, see-through panels.") },
+  { id: "ios", label: msg("Rounded"), hint: msg("Big corners and grouped lists, iPhone-like.") },
+  { id: "solid", label: msg("Solid"), hint: msg("Flat and high-contrast, no shadows.") },
 ];
 
 const ACCENT_KEY = "appearance-accent";
@@ -53,7 +56,16 @@ const CHANGE_EVENT = "appearance-change";
 const DEFAULT_CUSTOM = "#00ffa3";
 
 const isAccent = (value: unknown): value is AccentId =>
-  value === "custom" || ACCENTS.some((accent) => accent.id === value);
+  value === "custom" || value === "dynamic" || ACCENTS.some((accent) => accent.id === value);
+
+/** The colour taken from the current cover, while the accent is "dynamic". Null: none yet. */
+let dynamicHex: string | null = null;
+
+export function setDynamicAccentColor(hex: string | null): void {
+  if (hex === dynamicHex) return;
+  dynamicHex = hex;
+  if (readAccent() === "dynamic") applyAppearance();
+}
 
 /** Earlier builds' accent ids, mapped onto the closest neon so a saved choice survives. */
 const LEGACY_ACCENTS: Record<string, AccentId> = {
@@ -110,8 +122,11 @@ export function applyAppearance(): void {
   const accent = readAccent();
   root.setAttribute("data-accent", accent);
   root.setAttribute("data-style", readStyle());
-  if (accent === "custom") {
-    const hex = readCustomAccent();
+  const inline = accent === "custom" ? readCustomAccent() : accent === "dynamic" ? dynamicHex : null;
+  // "dynamic" keeps Zuno red's stylesheet entry underneath until a cover provides a colour.
+  if (accent === "dynamic") root.setAttribute("data-accent", "zuno");
+  if (inline) {
+    const hex = inline;
     root.style.setProperty("--color-primary", hex);
     root.style.setProperty("--color-ring", hex);
     root.style.setProperty("--color-primary-foreground", foregroundFor(hex));
@@ -120,7 +135,7 @@ export function applyAppearance(): void {
     root.style.removeProperty("--color-ring");
     root.style.removeProperty("--color-primary-foreground");
   }
-  syncNativeAccent(accent === "custom" ? readCustomAccent() : ACCENTS.find((a) => a.id === accent)?.swatch);
+  syncNativeAccent(inline ?? ACCENTS.find((a) => a.id === (accent === "dynamic" ? "zuno" : accent))?.swatch);
 }
 
 let lastNativeAccent: string | undefined;

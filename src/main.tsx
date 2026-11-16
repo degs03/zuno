@@ -20,6 +20,14 @@ import { hydrateMediaSessionSettings } from "./ui/settings/mediaSession";
 import { hydrateAudioQualitySettings } from "./internal/audioQuality";
 import { hydrateAudioEngineMode } from "./ui/settings/audioEngine";
 import { hydrateEqualizer } from "./ui/settings/equalizer";
+import { hydrateAudioProfiles } from "./ui/settings/audioProfiles";
+import { startOutputDeviceWatch } from "./ui/settings/currentOutputDevice";
+import { hydrateHeadsetSettings } from "./ui/settings/headset";
+import { hydrateOfflineMode } from "./internal/connectivity";
+import { initI18n } from "./i18n";
+import { hydrateBitPerfect } from "./ui/settings/bitPerfect";
+import { hydrateCarDevices } from "./ui/settings/carDevices";
+import { hydratePersonalEq } from "./ui/settings/personalEq";
 import { hydrateVolumeNormalization } from "./ui/settings/volumeNormalization";
 import { hydrateHiddenPlaylists } from "./ui/settings/hiddenPlaylists";
 import { hydratePinnedPlaylists } from "./ui/settings/pinnedPlaylists";
@@ -87,7 +95,14 @@ void Promise.all([
   hydrateAudioEngineMode(),
   // Rust starts flat every launch, so the stored curve has to be pushed back down.
   hydrateEqualizer(),
+  // Device watch needs the device→profile links loaded first, or the first route is missed.
+  hydrateAudioProfiles().then(startOutputDeviceWatch),
   hydrateVolumeNormalization(),
+  hydrateHeadsetSettings(),
+  hydrateBitPerfect(),
+  hydrateCarDevices(),
+  hydratePersonalEq(),
+  hydrateOfflineMode(),
   hydrateHiddenPlaylists(),
   hydratePinnedPlaylists(),
   // Same reason: a fresh Rust process opens the OS default device until told otherwise.
@@ -126,13 +141,16 @@ window.addEventListener("unhandledrejection", (event) => {
  * job is to make sure a render error leaves something on screen with a button on it rather
  * than a blank window — a desktop shell has no address bar to reload from.
  */
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <ErrorBoundary label="Zuno">
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>,
-);
+// The language catalog loads first (a few ms, local), so the first frame is already translated.
+void initI18n().finally(() => {
+  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+    <React.StrictMode>
+      <ErrorBoundary label="Zuno">
+        <App />
+      </ErrorBoundary>
+    </React.StrictMode>,
+  );
+});
 
 /*
  * Local folders are watched for the whole session. The event carries no detail on purpose —

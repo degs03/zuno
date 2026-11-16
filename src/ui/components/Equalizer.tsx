@@ -10,11 +10,12 @@ import {
   useState,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { RangeSlider } from "@/components/motion/range-slider";
+import { Knob } from "@/components/motion/knob";
+import { VerticalFader } from "@/components/motion/vertical-fader";
 import { Tooltip } from "@/components/motion/tooltip";
 import { SPRING_LAYOUT, SPRING_PRESS } from "@/lib/ease";
 import { cn } from "@/lib/utils";
-import { PencilIcon, SaveIcon, TrashIcon } from "@/ui/icons";
+import { PencilIcon, SaveIcon, StarActiveIcon, TrashIcon } from "@/ui/icons";
 import {
   activeEqualizerPreset,
   deleteEqualizerPreset,
@@ -43,11 +44,27 @@ import {
   responseCurveDb,
   snapGain,
 } from "../settings/equalizerCurve";
+import { AUDIO_EFFECT_LIMITS, setAudioEffects, useAudioEffects } from "../settings/audioEffects";
+import { msg, tn, useT } from "../../i18n";
+import { isMobile } from "../platform";
+import { usePersonalEq } from "../settings/personalEq";
+import { sameEqualizerCurve } from "../settings/equalizerCurve";
 
 const BAND_COUNT = EQUALIZER_BANDS_HZ.length;
 
 /** What each band is for. "250 Hz" means nothing to most people; "Warmth" does. */
-const BAND_ROLES = ["Sub", "Bass", "Punch", "Warmth", "Body", "Mids", "Bite", "Presence", "Clarity", "Air"];
+const BAND_ROLES = [
+  msg("Sub"),
+  msg("Bass"),
+  msg("Punch"),
+  msg("Warmth"),
+  msg("Body"),
+  msg("Mids"),
+  msg("Bite"),
+  msg("Presence"),
+  msg("Clarity"),
+  msg("Air"),
+];
 
 /** Wider than a band's ±12 dB: neighbouring boosts stack past it (ten at +12 peak near +18). */
 const DISPLAY_DB = 15;
@@ -115,6 +132,7 @@ type Gesture =
  * through the nodes. Red above the dashed line is what the preamp hasn't made room for.
  */
 export function EqualizerGraph({ compact = false, disabled = false }: { compact?: boolean; disabled?: boolean }) {
+  const t = useT();
   const { bandsDb, preampDb } = useEqualizer();
   const enabled = useEqualizerEnabled();
   const reduceMotion = useReducedMotion();
@@ -133,7 +151,9 @@ export function EqualizerGraph({ compact = false, disabled = false }: { compact?
   const ceilingY = yOf(-preampDb);
   const shownBand = disabled ? null : (dragBand ?? keyboardBand ?? hoverBand);
   // Instant under the pointer (a trailing node feels broken); a glide for presets, keys and Auto.
-  const glide = dragBand !== null || reduceMotion ? { duration: 0 } : SPRING_LAYOUT;
+  // Phones snap instead of springing: four morphing paths plus ten nodes per frame was the
+  // equaliser's whole cost there, and the curve is a preview beside the faders anyway.
+  const glide = dragBand !== null || reduceMotion || isMobile ? { duration: 0 } : SPRING_LAYOUT;
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (disabled || event.button !== 0) return;
@@ -174,8 +194,8 @@ export function EqualizerGraph({ compact = false, disabled = false }: { compact?
     const changes: Array<[number, number]> = [];
     const direction = band >= current.band ? 1 : -1;
     for (let crossed = current.band; crossed !== band + direction; crossed += direction) {
-      const t = band === current.band ? 1 : (crossed - current.band) / (band - current.band);
-      changes.push([crossed, snapGain(current.gain + (gain - current.gain) * t)]);
+      const fraction = band === current.band ? 1 : (crossed - current.band) / (band - current.band);
+      changes.push([crossed, snapGain(current.gain + (gain - current.gain) * fraction)]);
     }
     setBands(changes);
     gesture.current = { kind: "draw", band, gain };
@@ -231,7 +251,7 @@ export function EqualizerGraph({ compact = false, disabled = false }: { compact?
 
         <div
           role="group"
-          aria-label="Equaliser bands"
+          aria-label={t("Equaliser bands")}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={endGesture}
@@ -355,7 +375,7 @@ export function EqualizerGraph({ compact = false, disabled = false }: { compact?
                 }}
                 role="slider"
                 tabIndex={!disabled && band === tabBand ? 0 : -1}
-                aria-label={`${spokenHz(hz)}, ${BAND_ROLES[band]}`}
+                aria-label={`${spokenHz(hz)}, ${t(BAND_ROLES[band])}`}
                 aria-orientation="vertical"
                 aria-valuemin={-EQUALIZER_MAX_DB}
                 aria-valuemax={EQUALIZER_MAX_DB}
@@ -410,6 +430,7 @@ export function EqualizerGraph({ compact = false, disabled = false }: { compact?
 }
 
 function BandReadout({ band, gain, compact }: { band: number; gain: number; compact: boolean }) {
+  const t = useT();
   const hz = EQUALIZER_BANDS_HZ[band];
   const x = frequencyPosition(hz) * 100;
   return (
@@ -434,7 +455,7 @@ function BandReadout({ band, gain, compact }: { band: number; gain: number; comp
       ) : (
         <>
           <span className="block text-[10px] text-muted-foreground">
-            {spokenHz(hz)} · {BAND_ROLES[band]}
+            {spokenHz(hz)} · {t(BAND_ROLES[band])}
           </span>
           <span className="block text-sm font-semibold tabular-nums text-foreground">
             {formatDb(gain)} dB
@@ -455,6 +476,7 @@ export function EqualizerPresets({
   disabled?: boolean;
   children?: ReactNode;
 }) {
+  const t = useT();
   const equalizer = useEqualizer();
   const userPresets = useEqualizerUserPresets();
   const custom = useEqualizerCustom();
@@ -462,7 +484,8 @@ export function EqualizerPresets({
   const pillId = useId();
   const active = activeEqualizerPreset(equalizer, userPresets);
 
-  const chip = (name: string, isActive: boolean, onSelect: () => void) => (
+  // `name` stays English (the key and what presets match on); `label` is what is shown.
+  const chip = (name: string, label: string, isActive: boolean, onSelect: () => void) => (
     <button
       key={name}
       type="button"
@@ -488,17 +511,23 @@ export function EqualizerPresets({
           transition={reduceMotion ? { duration: 0 } : SPRING_LAYOUT}
         />
       )}
-      <span className="relative">{name}</span>
+      <span className="relative">{label}</span>
     </button>
   );
 
   return (
-    <div role="group" aria-label="Equaliser presets" className="flex flex-wrap items-center gap-1.5">
+    <div role="group" aria-label={t("Equaliser presets")} className="flex flex-wrap items-center gap-1.5">
       {[...EQUALIZER_PRESETS, ...userPresets].map((preset) =>
-        chip(preset.name, preset === active, () => setEqualizer(preset.settings)),
+        chip(
+          preset.name,
+          // Built-in names were marked with msg(); the user's own names are shown as typed.
+          EQUALIZER_PRESETS.includes(preset) ? t(preset.name) : preset.name,
+          preset === active,
+          () => setEqualizer(preset.settings),
+        ),
       )}
       {custom !== null && !activeEqualizerPreset(custom, userPresets)
-        && chip(EQUALIZER_CUSTOM_NAME, active === undefined, () => setEqualizer(custom))}
+        && chip(EQUALIZER_CUSTOM_NAME, t("Custom"), active === undefined, () => setEqualizer(custom))}
       {children}
     </div>
   );
@@ -511,6 +540,7 @@ const ROW_BUTTON =
 
 /** Actions for the lit chip: save Custom, or rename/delete a user preset. Built-ins have none. */
 function EqualizerPresetActions() {
+  const t = useT();
   const equalizer = useEqualizer();
   const userPresets = useEqualizerUserPresets();
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -535,7 +565,7 @@ function EqualizerPresetActions() {
     return (
       <button type="button" onClick={() => setEditing({ mode: "save" })} className={cn(ROW_BUTTON, "px-3")}>
         <SaveIcon size={14} aria-hidden="true" />
-        Save as preset
+        {t("Save as preset")}
       </button>
     );
   }
@@ -544,20 +574,20 @@ function EqualizerPresetActions() {
   const { name } = activeUserPreset;
   return (
     <span className="flex items-center">
-      <Tooltip content="Rename">
+      <Tooltip content={t("Rename")}>
         <button
           type="button"
-          aria-label={`Rename ${name}`}
+          aria-label={t("Rename {name}", { name })}
           onClick={() => setEditing({ mode: "rename", from: name })}
           className={cn(ROW_BUTTON, "w-7 justify-center")}
         >
           <PencilIcon size={14} aria-hidden="true" />
         </button>
       </Tooltip>
-      <Tooltip content="Delete — the curve stays as Custom">
+      <Tooltip content={t("Delete — the curve stays as Custom")}>
         <button
           type="button"
-          aria-label={`Delete ${name}`}
+          aria-label={t("Delete {name}", { name })}
           onClick={() => deleteEqualizerPreset(name)}
           className={cn(ROW_BUTTON, "w-7 justify-center hover:text-destructive")}
         >
@@ -569,6 +599,7 @@ function EqualizerPresetActions() {
 }
 
 function PresetNameEditor({ renaming, onDone }: { renaming?: string; onDone: () => void }) {
+  const t = useT();
   const [name, setName] = useState(() => renaming ?? suggestEqualizerPresetName());
   const errorId = useId();
   const error = equalizerPresetNameError(name, renaming);
@@ -596,7 +627,7 @@ function PresetNameEditor({ renaming, onDone }: { renaming?: string; onDone: () 
           event.preventDefault();
           onDone();
         }}
-        aria-label={renaming ? `New name for ${renaming}` : "Preset name"}
+        aria-label={renaming ? t("New name for {name}", { name: renaming }) : t("Preset name")}
         aria-invalid={error !== null}
         aria-describedby={error ? errorId : undefined}
         className="h-7 w-36 rounded-full bg-background px-3 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -606,10 +637,10 @@ function PresetNameEditor({ renaming, onDone }: { renaming?: string; onDone: () 
         disabled={error !== null}
         className="h-7 rounded-full bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        {renaming !== undefined ? "Rename" : replaces ? "Replace" : "Save"}
+        {renaming !== undefined ? t("Rename") : replaces ? t("Replace") : t("Save")}
       </button>
       <button type="button" onClick={onDone} className={cn(ROW_BUTTON, "px-3")}>
-        Cancel
+        {t("Cancel")}
       </button>
       {error && (
         <span id={errorId} role="status" className="text-xs text-destructive">
@@ -620,74 +651,236 @@ function PresetNameEditor({ renaming, onDone }: { renaming?: string; onDone: () 
   );
 }
 
-/** Preamp, and the headroom left at the curve's peak. Over 0 dB is flagged like the graph's red. */
-function EqualizerPreamp({ disabled }: { disabled: boolean }) {
+const FADER_TICKS = [12, 6, 0, -6, -12] as const;
+const formatFaderDb = (db: number) => (db === 0 ? "0" : `${db > 0 ? "+" : "−"}${Math.abs(db)}`);
+
+/**
+ * The equaliser as a mixing desk: a preamp (master) fader, then one fader per band, labelled by
+ * frequency and by what it does. Same store as the graph, so the two move together.
+ */
+export function EqualizerMixer({ disabled = false, compact = false }: { disabled?: boolean; compact?: boolean }) {
+  const t = useT();
+  const { bandsDb, preampDb } = useEqualizer();
+  const height = compact ? "h-32 max-sm:h-36" : "h-44 max-sm:h-40";
+  return (
+    <div className="flex items-stretch gap-2 max-sm:gap-1" role="group" aria-label={t("Equaliser faders")}>
+      <VerticalFader
+        className="w-10 shrink-0 max-sm:w-8"
+        heightClassName={height}
+        value={preampDb}
+        min={-EQUALIZER_MAX_DB}
+        max={EQUALIZER_MAX_DB}
+        step={EQUALIZER_STEP_DB}
+        ticks={FADER_TICKS}
+        tone="neutral"
+        format={formatFaderDb}
+        valueText={(db) => `${formatDb(db)} dB`}
+        label={t("Pre")}
+        sublabel={t("Gain")}
+        aria-label={t("Preamp")}
+        disabled={disabled}
+        onValueChange={(next) => setEqualizer({ ...getEqualizer(), preampDb: next })}
+      />
+      <span aria-hidden="true" className="w-px shrink-0 self-stretch bg-foreground/10" />
+      <div className="grid min-w-0 flex-1 grid-cols-10 gap-1 max-sm:gap-0.5">
+        {EQUALIZER_BANDS_HZ.map((hz, band) => (
+          <VerticalFader
+            key={hz}
+            heightClassName={height}
+            value={bandsDb[band]}
+            min={-EQUALIZER_MAX_DB}
+            max={EQUALIZER_MAX_DB}
+            step={EQUALIZER_STEP_DB}
+            ticks={FADER_TICKS}
+            format={formatFaderDb}
+            valueText={(db) => `${formatDb(db)} dB`}
+            label={shortHz(hz)}
+            sublabel={compact ? undefined : t(BAND_ROLES[band])}
+            aria-label={`${spokenHz(hz)}, ${t(BAND_ROLES[band])}`}
+            disabled={disabled}
+            onValueChange={(next) => setBands([[band, next]])}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const signed = (value: number, unit = "") => (value === 0 ? `0${unit}` : `${value > 0 ? "+" : "−"}${Math.abs(value)}${unit}`);
+
+/** Bass boost, treble, balance and stereo width as amplifier-style knobs. */
+export function ToneKnobs({ disabled = false, size = 60 }: { disabled?: boolean; size?: number }) {
+  const t = useT();
+  const effects = useAudioEffects();
+  return (
+    <div className="grid grid-cols-4 justify-items-center gap-2" role="group" aria-label={t("Tone and stereo")}>
+      <Knob
+        label={t("Bass")}
+        size={size}
+        disabled={disabled}
+        value={effects.bassDb}
+        {...AUDIO_EFFECT_LIMITS.bassDb}
+        resetValue={0}
+        format={(v) => signed(v, " dB")}
+        aria-label={t("Bass boost")}
+        onValueChange={(bassDb) => setAudioEffects({ bassDb })}
+      />
+      <Knob
+        label={t("Treble")}
+        size={size}
+        disabled={disabled}
+        value={effects.trebleDb}
+        {...AUDIO_EFFECT_LIMITS.trebleDb}
+        resetValue={0}
+        format={(v) => signed(v, " dB")}
+        onValueChange={(trebleDb) => setAudioEffects({ trebleDb })}
+      />
+      <Knob
+        label={t("Balance")}
+        size={size}
+        disabled={disabled}
+        value={effects.balance}
+        {...AUDIO_EFFECT_LIMITS.balance}
+        resetValue={0}
+        format={(v) => (v === 0 ? "C" : `${v < 0 ? "L" : "R"} ${Math.round(Math.abs(v) * 100)}`)}
+        valueText={(v) => {
+          if (v === 0) return t("Centre");
+          const percent = Math.round(Math.abs(v) * 100);
+          return v < 0 ? t("{percent}% left", { percent }) : t("{percent}% right", { percent });
+        }}
+        onValueChange={(balance) => setAudioEffects({ balance })}
+      />
+      <Knob
+        label={t("Width")}
+        size={size}
+        disabled={disabled}
+        value={effects.width}
+        {...AUDIO_EFFECT_LIMITS.width}
+        resetValue={1}
+        format={(v) => (v === 0 ? t("Mono") : `${Math.round(v * 100)}%`)}
+        aria-label={t("Stereo width")}
+        onValueChange={(width) => setAudioEffects({ width })}
+      />
+    </div>
+  );
+}
+
+/** Headroom left at the curve's peak, and the Auto preamp. Over 0 dB is flagged like the graph's red. */
+function EqualizerHeadroom({ disabled }: { disabled: boolean }) {
+  const t = useT();
   const { bandsDb, preampDb } = useEqualizer();
   const enabled = useEqualizerEnabled();
   const peak = useMemo(() => Math.max(...responseCurveDb(bandsDb)), [bandsDb]);
   const auto = useMemo(() => autoPreampDb(bandsDb), [bandsDb]);
   const out = peak + preampDb;
   const over = enabled && out > 0.05;
-  const setPreamp = (next: number) => setEqualizer({ ...getEqualizer(), preampDb: next });
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-3">
-        <span className="w-14 shrink-0 text-sm font-medium text-foreground">Preamp</span>
-        <RangeSlider
-          className="min-w-0 flex-1"
-          value={preampDb}
-          min={-EQUALIZER_MAX_DB}
-          max={EQUALIZER_MAX_DB}
-          step={EQUALIZER_STEP_DB}
-          showTicks={false}
-          disabled={disabled}
-          onValueChange={setPreamp}
-          aria-label="Preamp in decibels"
-        />
-        <span className="w-14 shrink-0 text-right text-sm tabular-nums text-muted-foreground">
-          {formatDb(preampDb)} dB
-        </span>
-        <Tooltip content="Set it so the loudest point lands at 0 dB">
-          <button
-            type="button"
-            disabled={disabled || auto === preampDb}
-            onClick={() => setPreamp(auto)}
-            className={cn(
-              ROW_BUTTON,
-              "px-3 text-foreground disabled:pointer-events-none disabled:opacity-50",
-              over ? "bg-primary/15 hover:bg-primary/25" : "bg-background/40",
-            )}
-          >
-            Auto
-          </button>
-        </Tooltip>
-      </div>
-      <p className={cn("pl-[4.25rem] text-xs tabular-nums", over ? "text-primary" : "text-muted-foreground")}>
+    <div className="flex items-center gap-3">
+      <p className={cn("min-w-0 flex-1 text-xs tabular-nums", over ? "text-primary" : "text-muted-foreground")}>
         {!enabled
-          ? "Bypassed — the track plays untouched."
+          ? t("Bypassed — the track plays untouched.")
           : over
-            ? `Peaks ${out.toFixed(1)} dB over — the limiter is holding it back.`
-            : `${Math.abs(out).toFixed(1)} dB of headroom.`}
+            ? t("Peaks {db} dB over — the limiter is holding it back.", { db: out.toFixed(1) })
+            : t("{db} dB of headroom.", { db: Math.abs(out).toFixed(1) })}
       </p>
+      <Tooltip content={t("Set the preamp so the loudest point lands at 0 dB")}>
+        <button
+          type="button"
+          disabled={disabled || auto === preampDb}
+          onClick={() => setEqualizer({ ...getEqualizer(), preampDb: auto })}
+          className={cn(
+            ROW_BUTTON,
+            "px-3 text-foreground disabled:pointer-events-none disabled:opacity-50",
+            over ? "bg-primary/15 hover:bg-primary/25" : "bg-background/40",
+          )}
+        >
+          {t("Auto preamp")}
+        </button>
+      </Tooltip>
     </div>
   );
 }
 
-/** The whole equaliser, as the Settings card lays it out. */
+/** The whole equaliser, as the Settings card lays it out: presets, live curve, faders, knobs. */
+/**
+ * "For you" and "Made for you": EQ curves built from the songs you like (personalEq.ts). Shown
+ * greyed out with what is still needed until there is enough listening to build them.
+ */
+export function PersonalEqChips({ disabled = false, compact = false }: { disabled?: boolean; compact?: boolean }) {
+  const t = useT();
+  const personal = usePersonalEq();
+  const current = useEqualizer();
+  if (!personal.enabled) return null;
+  const chips = [
+    {
+      key: "learned",
+      label: t("For you"),
+      curve: personal.learned,
+      hint: personal.learned
+        ? t("Your average EQ while your favourite songs play")
+        : personal.learnNeeds.songs > 0
+          ? tn("Listen to {n} more song you like", "Listen to {n} more songs you like", personal.learnNeeds.songs)
+          : tn("Listen {n} more minute to songs you like", "Listen {n} more minutes to songs you like", personal.learnNeeds.minutes),
+    },
+    {
+      key: "made",
+      label: t("Made for you"),
+      curve: personal.madeForYou,
+      hint: personal.madeForYou
+        ? t("Built from the sound of your favourite songs")
+        : tn("Zuno is listening: {n} more song you like to analyse", "Zuno is listening: {n} more songs you like to analyse", personal.analysisNeeds),
+    },
+  ];
+  return (
+    <div role="group" aria-label={t("Personal EQ")} className="flex flex-wrap items-center gap-1.5">
+      {chips.map((chip) => {
+        const active = chip.curve !== null && sameEqualizerCurve(chip.curve, current);
+        return (
+          <Tooltip key={chip.key} content={chip.hint}>
+            <button
+              type="button"
+              disabled={disabled || chip.curve === null}
+              aria-pressed={active}
+              aria-description={chip.hint}
+              onClick={() => chip.curve && setEqualizer(chip.curve)}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed",
+                compact ? "px-2 py-0.5 text-[10px] max-sm:min-h-9 max-sm:px-3 max-sm:text-xs" : "px-3 py-1 text-xs max-sm:min-h-10",
+                chip.curve === null
+                  ? "bg-muted/40 text-muted-foreground/70"
+                  : active
+                    ? "glow bg-primary text-primary-foreground"
+                    : "bg-primary/15 text-primary hover:bg-primary/25",
+              )}
+            >
+              <StarActiveIcon size={compact ? 11 : 13} aria-hidden="true" />
+              {chip.label}
+            </button>
+          </Tooltip>
+        );
+      })}
+    </div>
+  );
+}
+
 export function EqualizerPanel({ disabled }: { disabled: boolean }) {
+  const t = useT();
   const enabled = useEqualizerEnabled();
   return (
     <div className={cn("flex flex-col gap-4", disabled ? "opacity-50" : !enabled && "opacity-60")}>
+      <PersonalEqChips disabled={disabled} />
       <EqualizerPresets disabled={disabled}>{!disabled && <EqualizerPresetActions />}</EqualizerPresets>
-      <EqualizerGraph disabled={disabled} />
-      <EqualizerPreamp disabled={disabled} />
+      <EqualizerGraph compact disabled={disabled} />
+      <EqualizerMixer disabled={disabled} />
+      <EqualizerHeadroom disabled={disabled} />
+      <div className="rounded-xl bg-background/30 p-3">
+        <ToneKnobs disabled={disabled} />
+      </div>
       <p className="text-xs text-muted-foreground">
-        {/Android/i.test(navigator.userAgent)
-          ? "Changes play as you make them. Slide a band up or down with your finger; pick Flat to start over."
-          : "Changes play as you make them. Drag a point, or sweep across the graph to draw a curve; double-click a band to flatten it."}{" "}
-        Anything over the dashed line is held back by the limiter — lower the preamp, or let Auto
-        do it.
+        {t(
+          "Changes play as you make them. Push a fader up or down, or draw on the curve; double-tap a fader or knob to reset it. Turn a knob by dragging up or down. Anything over the dashed line is held back by the limiter — lower the preamp, or let Auto do it.",
+        )}
       </p>
     </div>
   );

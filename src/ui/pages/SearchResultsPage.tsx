@@ -16,6 +16,7 @@ import { ArtistLinks } from "../components/ArtistLinks";
 import { TrackArtwork } from "../components/TrackArtwork";
 import { usePlaylistContextMenu } from "../components/PlaylistContextMenu";
 import { useTrackContextMenu } from "../components/TrackContextMenu";
+import { msg, useT } from "../../i18n";
 
 function normalizeSearchKey(value: string): string {
   return value
@@ -41,11 +42,11 @@ const SCOPES: Array<{
   /** The filter YouTube Music runs for a deep search of this scope. */
   category?: SearchCategory;
 }> = [
-  { value: "all", label: "All", field: "tracks" },
-  { value: "songs", label: "Songs", field: "tracks", category: "song" },
-  { value: "artists", label: "Artists", field: "artists", category: "artist" },
-  { value: "albums", label: "Albums", field: "albums", category: "album" },
-  { value: "playlists", label: "Playlists", field: "playlists", category: "playlist" },
+  { value: "all", label: msg("All"), field: "tracks" },
+  { value: "songs", label: msg("Songs"), field: "tracks", category: "song" },
+  { value: "artists", label: msg("Artists"), field: "artists", category: "artist" },
+  { value: "albums", label: msg("Albums"), field: "albums", category: "album" },
+  { value: "playlists", label: msg("Playlists"), field: "playlists", category: "playlist" },
 ];
 
 const EMPTY_RESULTS: SearchResults = { artists: [], tracks: [], albums: [], playlists: [] };
@@ -65,8 +66,9 @@ function buildFlatItems(results: SearchResults, songsFirst: boolean): Selectable
 }
 
 function SearchLoadingSpinner() {
+  const t = useT();
   return (
-    <div className="grid place-items-center px-2 py-16 text-muted-foreground" role="status" aria-live="polite" aria-label="Searching">
+    <div className="grid place-items-center px-2 py-16 text-muted-foreground" role="status" aria-live="polite" aria-label={t("Searching")}>
       <SpinnerSteps size={30} color="currentColor" />
     </div>
   );
@@ -91,6 +93,7 @@ export function SearchResultsPage({
   onOpenAlbum: (album: Album) => void;
   onOpenPlaylist: (playlist: Playlist) => void;
 }) {
+  const t = useT();
   const { openTrackMenu } = useTrackContextMenu();
   const { openPlaylistMenu, openAlbumMenu } = usePlaylistContextMenu();
   const [scope, setScope] = useState<SearchScope>("all");
@@ -312,14 +315,14 @@ export function SearchResultsPage({
     <div className="flex flex-col gap-8">
       <header className="flex flex-col gap-3">
         <div>
-          <p className="text-lg font-semibold text-foreground">Search results</p>
+          <p className="text-lg font-semibold text-foreground">{t("Search results")}</p>
           <h1>{query}</h1>
         </div>
 
         {/* Only offered when there is something to narrow to: a row of filters where every
             one but "All" is empty is just noise. */}
         {!isLoading && availableScopes.length > 2 && (
-          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filter results" data-scroll-row>
+          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={t("Filter results")} data-scroll-row>
             {availableScopes.map((item) => (
               <button
                 key={item.value}
@@ -335,7 +338,7 @@ export function SearchResultsPage({
                     : "bg-card text-muted-foreground hover:text-foreground",
                 )}
               >
-                {item.label}
+                {t(item.label)}
                 {item.value !== "all" && (
                   <span className="ml-1.5 tabular-nums opacity-60">
                     {results[item.field].length}
@@ -350,12 +353,12 @@ export function SearchResultsPage({
       {isLoading || (isDeepLoading && !hasResults) ? (
         <SearchLoadingSpinner />
       ) : !hasResults ? (
-        <p className="px-2 py-10 text-center text-sm text-muted-foreground">No results found.</p>
+        <p className="px-2 py-10 text-center text-sm text-muted-foreground">{t("No results found.")}</p>
       ) : (
         <div className="flex flex-col gap-8">
           {scopedResults.artists.length > 0 && (
             <section className="flex flex-col gap-3" style={{ order: songsFirst ? 1 : 0 }}>
-              <h2>Artists</h2>
+              <h2>{t("Artists")}</h2>
               <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
                 {scopedResults.artists.map((artist) => {
                   const index = flatItems.findIndex(
@@ -379,7 +382,7 @@ export function SearchResultsPage({
                         variant="artist"
                       />
                       <strong>{artist.name}</strong>
-                      <span>{artist.subscriberCount || "Artist"}</span>
+                      <span>{artist.subscriberCount || t("Artist")}</span>
                     </button>
                   );
                 })}
@@ -389,7 +392,7 @@ export function SearchResultsPage({
 
           {scopedResults.tracks.length > 0 && (
             <section className="flex flex-col gap-3" style={{ order: songsFirst ? 0 : 1 }}>
-              <h2>Songs</h2>
+              <h2>{t("Songs")}</h2>
               <div className="flex flex-col gap-0.5" data-onboarding="search-results">
                 {scopedResults.tracks.map((track, displayIndex) => {
                   const index = flatItems.findIndex(
@@ -427,7 +430,7 @@ export function SearchResultsPage({
 
           {scopedResults.albums.length > 0 && (
             <section className="flex flex-col gap-3" style={{ order: 2 }}>
-              <h2>Albums</h2>
+              <h2>{t("Albums")}</h2>
               <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
                 {scopedResults.albums.map((album) => {
                   const index = flatItems.findIndex(
@@ -459,7 +462,7 @@ export function SearchResultsPage({
 
           {scopedResults.playlists.length > 0 && (
             <section className="flex flex-col gap-3" style={{ order: 3 }}>
-              <h2>Playlists</h2>
+              <h2>{t("Playlists")}</h2>
               <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(9.5rem,1fr))] max-sm:[grid-template-columns:repeat(2,minmax(0,1fr))]">
                 {scopedResults.playlists.map((playlist) => {
                   const index = flatItems.findIndex(

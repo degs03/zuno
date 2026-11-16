@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { ShuffleActiveIcon } from "@/ui/icons";
 import type { Track } from "../../datasource/types";
 import { PickCard } from "./PickCard";
+import { useT } from "../../i18n";
 
 interface DiceCardProps {
   tracks: Track[];
@@ -11,6 +12,7 @@ interface DiceCardProps {
 }
 
 export function DiceCard({ tracks, isSpinning = false, onClick }: DiceCardProps) {
+  const t = useT();
   const [previewIndex, setPreviewIndex] = useState(0);
 
   useEffect(() => {
@@ -32,8 +34,8 @@ export function DiceCard({ tracks, isSpinning = false, onClick }: DiceCardProps)
   return (
     <PickCard
       artworkUrl={preview?.artworkUrl}
-      title="Surprise me"
-      subtitle="Pick something for me"
+      title={t("Surprise me")}
+      subtitle={t("Pick something for me")}
       disabled={tracks.length === 0 || isSpinning}
       onSelect={onClick}
       accessory={

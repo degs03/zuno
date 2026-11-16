@@ -2,6 +2,7 @@ import { Button } from "@/components/motion/button";
 import { Tooltip } from "@/components/motion/tooltip";
 import { ArrowLeftIcon, ArrowRightIcon, SearchIcon } from "@/ui/icons";
 import { isMobile, primaryModifierLabel } from "../platform";
+import { useT } from "../../i18n";
 
 interface SearchBarProps {
   onOpen: () => void;
@@ -18,18 +19,19 @@ export function SearchBar({
   onBack,
   onForward,
 }: SearchBarProps) {
+  const t = useT();
   const showBackButton = canGoBack || canGoForward;
 
   return (
     <div className="flex items-center gap-2 max-w-3xl mx-auto">
       {showBackButton && (
-        <Tooltip content="Back">
+        <Tooltip content={t("Back")}>
           <Button
             variant="ghost"
             size="icon"
             onClick={onBack}
             disabled={!canGoBack}
-            aria-label="Go back"
+            aria-label={t("Go back")}
             className="shrink-0 rounded-full"
           >
             <ArrowLeftIcon size={18} aria-hidden="true" />
@@ -37,12 +39,12 @@ export function SearchBar({
         </Tooltip>
       )}
       {canGoForward && (
-        <Tooltip content="Forward">
+        <Tooltip content={t("Forward")}>
           <Button
             variant="ghost"
             size="icon"
             onClick={onForward}
-            aria-label="Go forward"
+            aria-label={t("Go forward")}
             className="shrink-0 rounded-full"
           >
             <ArrowRightIcon size={18} aria-hidden="true" />
@@ -57,7 +59,7 @@ export function SearchBar({
         className="group flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-full bg-card px-3.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         <SearchIcon size={17} className="shrink-0" />
-        <span className="truncate">Search artists, songs, playlists, and albums</span>
+        <span className="truncate">{t("Search artists, songs, playlists, and albums")}</span>
         {!isMobile && (
           <kbd className="ml-auto shrink-0 rounded bg-background/60 px-1.5 py-0.5 font-sans text-xs text-muted-foreground">
             {primaryModifierLabel} Space

@@ -4,6 +4,7 @@ import { Menu } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { setMiniPlayerEnabled } from "../../settings/miniPlayer";
+import { t } from "../../../i18n";
 
 export interface PlayerSync {
   status: string;
@@ -91,8 +92,8 @@ export async function restoreMainWindow(): Promise<void> {
 export async function showMiniPlayerCloseMenu(): Promise<void> {
   const menu = await Menu.new({
     items: [
-      { text: "Hide for now", action: () => void getCurrentWindow().destroy() },
-      { text: "Don't show again", action: () => setMiniPlayerEnabled(false) },
+      { text: t("Hide for now"), action: () => void getCurrentWindow().destroy() },
+      { text: t("Don't show again"), action: () => setMiniPlayerEnabled(false) },
     ],
   });
   await menu.popup();

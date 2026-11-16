@@ -65,12 +65,16 @@ import {
   shallowEqual,
 } from "../player/playerStore";
 import { clearAppSession, loadAppSession, saveAppSession } from "../player/appSession";
-import { useMediaSession } from "../player/useMediaSession";
+import { OPEN_PLAYER_EVENT, useMediaSession } from "../player/useMediaSession";
 import { LastFmService } from "../player/LastFm";
 import { playerUIStore, usePlayerUIState } from "./stores/playerUIStore";
 import { AppLoadingScreen } from "./components/AppLoadingScreen";
 import { AuthOverlay } from "./components/AuthOverlay";
 import { UpdateToast } from "./components/UpdateToast";
+import { GlobalNotice } from "./notice";
+import { ErrorSheet, type ErrorSheetState } from "./components/ErrorSheet";
+import { CarModeView, OPEN_CAR_MODE_EVENT } from "./components/CarModeView";
+import { startSleepShake } from "./settings/sleepShake";
 import { ReleaseNoteDialog } from "./components/ReleaseNoteDialog";
 import { markReleaseNoteSeen, resolveReleaseNoteVersion } from "../internal/releaseNote";
 import {
@@ -95,7 +99,8 @@ import {
   type OnboardingStep,
 } from "./components/Onboarding";
 import { isLinux, isMacOS, isMobile } from "./platform";
-import { CloseIcon } from "@/ui/icons";
+import { CloseIcon, DownloadIcon, OfflineIcon, RefreshIcon, SkipNextIcon } from "@/ui/icons";
+import { setOfflineMode, useOnline } from "../internal/connectivity";
 import { useReduceMotion } from "./settings/renderEffects";
 
 import { emit, listen } from "@tauri-apps/api/event";
@@ -125,6 +130,7 @@ import {
 import { useLastFmScrobblingEnabled } from "./settings/lastfm";
 import { persistMainWindowGeometry } from "./settings/mainWindowGeometry";
 import { hydratePlaybackSettings } from "../player/playbackSettings";
+import { useT } from "../i18n";
 const restoredSession = loadAppSession();
 const LOADING_SCREEN_FADE_MS = 80;
 const LOADING_SCREEN_MAX_MS = 4000;
@@ -293,6 +299,7 @@ function isTextEntry(target: EventTarget | null): boolean {
 }
 
 export default function App() {
+  const t = useT();
   useDisableContextMenu();
   const libraryState = useLibraryState();
   /*
@@ -306,6 +313,8 @@ export default function App() {
       currentTrack: state.currentTrack,
       status: state.status,
       error: state.error,
+      errorKind: state.errorKind,
+      errorDetail: state.errorDetail,
     }),
     shallowEqual,
   );
@@ -383,6 +392,19 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   // Phones: the full-screen Now Playing sheet the player pill opens.
   const [isNowPlayingOpen, setIsNowPlayingOpen] = useState(false);
+  const [isCarMode, setIsCarMode] = useState(false);
+  useEffect(() => startSleepShake(), []);
+  useEffect(() => {
+    const open = () => setIsCarMode(true);
+    window.addEventListener(OPEN_CAR_MODE_EVENT, open);
+    return () => window.removeEventListener(OPEN_CAR_MODE_EVENT, open);
+  }, []);
+  // The Android widget's cover opens the full player.
+  useEffect(() => {
+    const open = () => setIsNowPlayingOpen(true);
+    window.addEventListener(OPEN_PLAYER_EVENT, open);
+    return () => window.removeEventListener(OPEN_PLAYER_EVENT, open);
+  }, []);
   /*
    * The sidebar is a fixed icon rail. 72px sits below the Sidebar's own text-hide threshold,
    * so every row renders as artwork only and explains itself through a tooltip on hover.
@@ -705,21 +727,68 @@ export default function App() {
     void libraryController.initialize();
   }, [showKeychainNotice]);
 
+  /*
+   * Errors open the app's own sheet (ErrorSheet), never the system alert — that grey box read
+   * as the app itself having crashed. Each is shown once; an offline miss is shown once per
+   * outage rather than for every song the queue tries.
+   */
+  const [errorSheet, setErrorSheet] = useState<ErrorSheetState | null>(null);
+  const closeErrorSheet = useCallback(() => setErrorSheet(null), []);
+  const offlineSheetShownRef = useRef(false);
+  const isOnlineNow = useOnline();
+  useEffect(() => {
+    if (isOnlineNow) offlineSheetShownRef.current = false;
+  }, [isOnlineNow]);
+
   useEffect(() => {
     if (libraryState.status !== "error" || !libraryState.error) return;
-    const message = `YouTube Music sign-in or library sync failed:\n\n${libraryState.error}`;
-    if (lastErrorAlertRef.current === message) return;
-    lastErrorAlertRef.current = message;
-    window.alert(message);
-  }, [libraryState.error, libraryState.status]);
+    const key = `library:${libraryState.error}`;
+    if (lastErrorAlertRef.current === key) return;
+    lastErrorAlertRef.current = key;
+    setErrorSheet({
+      kind: "library",
+      detail: libraryState.error,
+      actions: [
+        { label: t("Try again"), primary: true, icon: <RefreshIcon size={18} aria-hidden="true" />, onClick: () => void libraryController.recoverConnection() },
+        { label: t("Close"), onClick: () => {} },
+      ],
+    });
+  }, [libraryState.error, libraryState.status, t]);
 
   useEffect(() => {
     if (playerState.status !== "error" || !playerState.error) return;
-    const message = `Playback failed:\n\n${playerState.error}`;
-    if (lastErrorAlertRef.current === message) return;
-    lastErrorAlertRef.current = message;
-    window.alert(message);
-  }, [playerState.error, playerState.status]);
+    const offline = playerState.errorKind === "offline";
+    if (offline && offlineSheetShownRef.current) return;
+    const key = `player:${playerState.currentTrack?.id ?? ""}:${playerState.error}`;
+    if (lastErrorAlertRef.current === key) return;
+    lastErrorAlertRef.current = key;
+    if (offline) offlineSheetShownRef.current = true;
+    const trackId = playerState.currentTrack?.id;
+    const retry = () => {
+      if (trackId) void playerController.playTrackById(trackId);
+    };
+    setErrorSheet(
+      offline
+        ? {
+          kind: "offline",
+          actions: [
+            { label: t("Play my downloads"), primary: true, icon: <DownloadIcon size={18} aria-hidden="true" />, onClick: () => handleOpenBrowse("downloads") },
+            { label: t("Turn on offline mode"), icon: <OfflineIcon size={18} aria-hidden="true" />, onClick: () => setOfflineMode(true) },
+            { label: t("Try again"), icon: <RefreshIcon size={18} aria-hidden="true" />, onClick: retry },
+          ],
+        }
+        : {
+          kind: "playback",
+          detail: playerState.errorDetail ?? playerState.error,
+          actions: [
+            { label: t("Next song"), primary: true, icon: <SkipNextIcon size={18} aria-hidden="true" />, onClick: () => void playerController.skipToNext() },
+            { label: t("Try again"), icon: <RefreshIcon size={18} aria-hidden="true" />, onClick: retry },
+          ],
+        },
+    );
+    // handleOpenBrowse is only read when an action is tapped; re-running on its identity would re-open the sheet.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playerState.error, playerState.errorKind, playerState.status, t]);
 
   useEffect(() => {
     if (showKeychainNotice) return;
@@ -801,9 +870,33 @@ export default function App() {
     };
   }, [persistAppSession, playerState.status]);
 
+  /*
+   * Tab changes are saved shortly after, when the app is idle — not in the same frame. The save
+   * stringifies every tab's queue and history and writes it synchronously, and doing that on
+   * every navigation landed right on top of the new page mounting: that was the stutter when
+   * switching tabs on a phone. Leaving the app (hidden) still saves at once.
+   */
   useEffect(() => {
-    persistAppSession();
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number })
+      .requestIdleCallback;
+    let idleId = 0;
+    const timer = window.setTimeout(() => {
+      if (idle) idleId = idle(persistAppSession, { timeout: 2000 });
+      else persistAppSession();
+    }, 600);
+    return () => {
+      window.clearTimeout(timer);
+      if (idleId) (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback?.(idleId);
+    };
   }, [activeTabId, nextTabId, persistAppSession, tabs]);
+
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") persistAppSession();
+    };
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [persistAppSession]);
 
   // Subscribed outside render: as a hook this re-rendered the whole app and stringified every
   // tab's queue on each player emit, a volume drag included.
@@ -946,7 +1039,7 @@ export default function App() {
     if (track.albumId) {
       handleNavigateAlbum({
         id: track.albumId,
-        title: track.album ?? "Album",
+        title: track.album ?? t("Album"),
         artist: track.artist ?? "",
         artworkUrl: track.artworkUrl,
       });
@@ -1039,7 +1132,7 @@ export default function App() {
   const handleNavigateRelated = (track: Track) => {
     playerUIStore.setLyricsOpen(false);
     navigateTab(activeTabId, {
-      title: `Related to ${track.title}`,
+      title: t("Related to {title}", { title: track.title }),
       view: "related",
       relatedTrack: track,
     });
@@ -1115,7 +1208,7 @@ export default function App() {
        * page loaded. Fetching the tracks first — a request the album view then serves from
        * cache — supplies a real title and cover from the first row.
        */
-      const stub: Album = { id: resolved.id, title: "Album", artist: "" };
+      const stub: Album = { id: resolved.id, title: t("Album"), artist: "" };
       const tracks = await libraryController.getAlbumTracks(stub).catch(() => [] as Track[]);
       handleNavigateAlbum({
         ...stub,
@@ -1133,7 +1226,7 @@ export default function App() {
     );
     handleNavigatePlaylist(saved ?? {
       id: resolved.id,
-      title: "Playlist",
+      title: t("Playlist"),
       owner: "",
     });
     return true;
@@ -1242,7 +1335,7 @@ export default function App() {
     }
 
     const newId = nextTabId.toString();
-    setTabs((prevTabs) => [...prevTabs, { id: newId, view: "history", title: "History" }]);
+    setTabs((prevTabs) => [...prevTabs, { id: newId, view: "history", title: t("History") }]);
     setActiveTabId(newId);
     setNextTabId((currentId) => currentId + 1);
   };
@@ -1256,7 +1349,7 @@ export default function App() {
     }
 
     const newId = nextTabId.toString();
-    setTabs((prevTabs) => [...prevTabs, { id: newId, view: "library", title: "Library" }]);
+    setTabs((prevTabs) => [...prevTabs, { id: newId, view: "library", title: t("Library") }]);
     setActiveTabId(newId);
     setNextTabId((currentId) => currentId + 1);
   };
@@ -1278,7 +1371,7 @@ export default function App() {
     const newId = nextTabId.toString();
     setTabs((prevTabs) => [
       ...prevTabs,
-      { id: newId, view: "browse", title: "Browse", browseTab },
+      { id: newId, view: "browse", title: t("Browse"), browseTab },
     ]);
     setActiveTabId(newId);
     setNextTabId((currentId) => currentId + 1);
@@ -1523,7 +1616,23 @@ export default function App() {
     }
     setIsSearchOpen(false);
     playerUIStore.setLyricsOpen(false);
-    if (target === "home") handleNavigateHome();
+    if (target === "home") {
+      /*
+       * Phones: Home is a place of its own. Turning the Library/Browse/Settings tab into Home
+       * (the desktop behaviour) meant the next tap on that destination had to create a brand
+       * new tab, so tabs — and the session saved on every switch — kept growing.
+       */
+      const homeTab = tabs.find((tab) => tab.view === "home");
+      const onDestinationTab = activeTab && ["library", "browse", "settings"].includes(activeTab.view);
+      if (homeTab) setActiveTabId(homeTab.id);
+      else if (onDestinationTab) {
+        // A view tab like Library's, not a new player: the queue that is playing stays put.
+        const newId = nextTabId.toString();
+        setTabs((prevTabs) => [...prevTabs, { id: newId, view: "home" }]);
+        setActiveTabId(newId);
+        setNextTabId((currentId) => currentId + 1);
+      } else handleNavigateHome();
+    }
     if (target === "browse") handleOpenBrowse();
     if (target === "library") handleOpenLibrary();
     if (target === "settings") handleOpenSettings();
@@ -2124,7 +2233,7 @@ useEffect(() => {
           */}
           <ErrorBoundary
             key={`boundary:${activeViewKey}`}
-            label="This page"
+            label={t("This page")}
             onDismiss={canNavigateBack ? handleNavigateBack : undefined}
           >
           <Suspense fallback={<div className="min-h-0 flex-1" />}>
@@ -2271,7 +2380,7 @@ useEffect(() => {
         >
           {/* Its own boundary: the player bar is the one region whose loss ends the session —
               audio keeps playing but nothing can pause or skip it. */}
-          <ErrorBoundary label="Playback controls">
+          <ErrorBoundary label={t("Playback controls")}>
             <PlayerBar
               onToggleLyrics={handleToggleLyrics}
               onToggleQueue={handleToggleQueue}
@@ -2299,11 +2408,11 @@ useEffect(() => {
           {/* Its own header: the panel's close control sits at the end of the list, which on a
               long queue is a long way down. */}
           <div className="flex shrink-0 items-center justify-between px-4 pb-1 pt-3">
-            <h2 className="text-lg font-semibold text-foreground">Queue</h2>
+            <h2 className="text-lg font-semibold text-foreground">{t("Queue")}</h2>
             <button
               type="button"
               className="pressable grid size-10 place-items-center rounded-full text-muted-foreground active:bg-[var(--color-pressed)]"
-              aria-label="Close queue"
+              aria-label={t("Close queue")}
               onClick={() => setIsQueuePanelOpen(false)}
             >
               <CloseIcon size={22} />
@@ -2351,6 +2460,9 @@ useEffect(() => {
           {showOnboardingComplete && <OnboardingCompleteToast />}
         </>
       )}
+      <GlobalNotice />
+      <ErrorSheet state={errorSheet} onClose={closeErrorSheet} />
+      {isCarMode && <CarModeView onClose={() => setIsCarMode(false)} />}
       {availableUpdate && (
         <UpdateToast
           update={availableUpdate}

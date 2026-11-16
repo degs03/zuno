@@ -7,6 +7,7 @@ import { TrackArtwork } from "./TrackArtwork";
 import { useTrackContextMenu } from "./TrackContextMenu";
 import { isMacOS, isMobile, primaryModifierLabel } from "../platform";
 import { usePlaylistContextMenu } from "./PlaylistContextMenu";
+import { useT } from "../../i18n";
 
 const RECENT_SEARCHES_KEY = "yt-music-dock:recent-searches";
 const MAX_RECENT_SEARCHES = 5;
@@ -80,6 +81,7 @@ export function SearchOverlay({
   onOpenPlaylist,
   onQueryChange,
 }: SearchOverlayProps) {
+  const t = useT();
   const { openTrackMenu } = useTrackContextMenu();
   const { openPlaylistMenu, openAlbumMenu } = usePlaylistContextMenu();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -325,6 +327,157 @@ export function SearchOverlay({
     if (recentSearch) submitQuery(recentSearch, openInNewTab);
   };
 
+  /*
+   * Phones: a search *page*, not a dialog. It stops above the floating nav buttons
+   * (`--mobile-nav-height`, reported by MobileNavBar) so the nav stays visible and usable, with
+   * "Search" lit; any other tab closes it.
+   */
+  if (isMobile) {
+    const previewSubtitle = preview
+      ? preview.type === "playlist"
+        ? t("Playlist - {owner}", { owner: preview.value.owner })
+        : preview.type === "album"
+          ? t("Album - {artist}", { artist: preview.value.artist })
+          : preview.type === "artist"
+            ? preview.value.subscriberCount || t("Artist")
+            : preview.value.artist
+      : "";
+    return (
+      <div
+        className="fixed inset-x-0 top-0 z-[70] flex flex-col bg-background pt-[env(safe-area-inset-top)]"
+        style={{ bottom: "var(--mobile-nav-height, 0px)" }}
+        data-onboarding="search-panel"
+        role="search"
+        aria-label={t("Search")}
+      >
+        <header className="flex flex-col gap-3 px-4 pb-3 pt-4">
+          <h1 className="text-3xl font-bold tracking-[-0.02em] text-foreground">{t("Search")}</h1>
+          <div className="flex h-12 items-center gap-2.5 rounded-full bg-muted/70 pl-4 pr-1.5 text-muted-foreground ring-1 ring-inset ring-foreground/[0.06] focus-within:ring-2 focus-within:ring-primary/60">
+            <SearchIcon size={20} aria-hidden="true" />
+            <input
+              ref={inputRef}
+              value={query}
+              enterKeyHint="search"
+              onChange={(event) => {
+                setQuery(event.target.value);
+                onQueryChange?.(event.target.value);
+                setSelectedIndex(0);
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder={t("Songs, artists, albums or playlists")}
+              aria-label={t("Search artists, songs, playlists, and albums")}
+              className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-muted-foreground"
+            />
+            {query ? (
+              <button
+                type="button"
+                aria-label={t("Clear search")}
+                onClick={() => {
+                  setQuery("");
+                  onQueryChange?.("");
+                  inputRef.current?.focus();
+                }}
+                className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground active:bg-[var(--color-pressed)]"
+              >
+                <CloseIcon size={18} />
+              </button>
+            ) : null}
+          </div>
+        </header>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4">
+          {isLoading ? <p className="text-sm text-muted-foreground">{t("Searching")}</p> : null}
+
+          {preview ? (
+            <button
+              type="button"
+              onClick={openPreview}
+              className="pressable flex w-full items-center gap-3 rounded-card bg-card p-3 text-left shadow-card"
+            >
+              <TrackArtwork
+                className={cn("size-16 shrink-0 object-cover", preview.type === "artist" ? "rounded-full" : "rounded-xl")}
+                size={64}
+                artworkUrl={preview.value.artworkUrl}
+                iconSize={32}
+                loading="eager"
+                variant={preview.type === "artist" ? "artist" : "track"}
+              />
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">{t("Top result")}</span>
+                <strong className="truncate text-base font-semibold text-foreground">
+                  {preview.type === "artist" ? preview.value.name : preview.value.title}
+                </strong>
+                <span className="truncate text-sm text-muted-foreground">{previewSubtitle}</span>
+              </span>
+              <span className="shrink-0 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground">
+                {preview.type === "track" ? t("Play") : t("Open")}
+              </span>
+            </button>
+          ) : null}
+
+          {suggestions.length > 0 ? (
+            <ul className="flex flex-col">
+              {suggestions.map((suggestion) => (
+                <li key={suggestion}>
+                  <button
+                    type="button"
+                    onClick={() => submitQuery(suggestion, false)}
+                    className="flex min-h-14 w-full items-center gap-3 rounded-xl px-1 text-left active:bg-[var(--color-pressed)]"
+                  >
+                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-muted/70 text-muted-foreground">
+                      <SearchIcon size={17} aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-[15px] text-foreground">{suggestion}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          {!query && visibleRecentSearches.length > 0 ? (
+            <section className="flex flex-col gap-2.5">
+              <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{t("Recent searches")}</h2>
+              <div className="flex flex-wrap gap-2">
+                {visibleRecentSearches.map((recentSearch) => (
+                  <span key={recentSearch} className="flex items-center rounded-full bg-card shadow-sm ring-1 ring-inset ring-foreground/[0.06]">
+                    <button
+                      type="button"
+                      onClick={() => submitQuery(recentSearch, false)}
+                      className="flex h-10 items-center gap-2 rounded-full pl-3.5 pr-1 text-sm font-medium text-foreground"
+                    >
+                      <ClockIcon size={14} className="text-muted-foreground" aria-hidden="true" />
+                      <span className="max-w-[12rem] truncate">{recentSearch}</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t("Remove {query}", { query: recentSearch })}
+                      onClick={() => removeRecentSearch(recentSearch)}
+                      className="grid size-9 place-items-center rounded-full text-muted-foreground active:bg-[var(--color-pressed)]"
+                    >
+                      <CloseIcon size={13} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {!query && visibleRecentSearches.length === 0 ? (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
+              <span className="glow grid size-16 place-items-center rounded-full bg-primary/15 text-primary">
+                <SearchIcon size={28} aria-hidden="true" />
+              </span>
+              <p className="text-base font-semibold text-foreground">{t("Find something to play")}</p>
+              <p className="max-w-[16rem] text-sm text-muted-foreground">
+                {t("Search for songs, artists, albums or playlists.")}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -345,7 +498,7 @@ export function SearchOverlay({
         data-onboarding="search-panel"
         role="dialog"
         aria-modal="true"
-        aria-label="Search artists, songs, playlists, and albums"
+        aria-label={t("Search artists, songs, playlists, and albums")}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={cn("flex items-center gap-2.5 px-4 py-3 bg-muted/50 text-muted-foreground [&_input]:min-w-0 [&_input]:flex-1 [&_input]:bg-transparent [&_input]:text-base [&_input]:text-foreground [&_input]:outline-none", selectedIndex === 0 && "bg-muted/70 text-foreground")}>
@@ -359,10 +512,10 @@ export function SearchOverlay({
               setSelectedIndex(0);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Search artists, songs, playlists, and albums"
-            aria-label="Search artists, songs, playlists, and albums"
+            placeholder={t("Search artists, songs, playlists, and albums")}
+            aria-label={t("Search artists, songs, playlists, and albums")}
           />
-          {isLoading && <span className="px-4   text-center text-sm text-muted-foreground">Searching</span>}
+          {isLoading && <span className="px-4   text-center text-sm text-muted-foreground">{t("Searching")}</span>}
           {/* Full-screen on a phone, so there is no outside to tap: give it a way out. */}
           {isMobile && (
             <button
@@ -370,7 +523,7 @@ export function SearchOverlay({
               className="pressable -mr-2 h-10 shrink-0 rounded-full px-3 text-sm font-medium text-foreground active:bg-[var(--color-pressed)]"
               onClick={onClose}
             >
-              Cancel
+              {t("Cancel")}
             </button>
           )}
         </div>
@@ -403,16 +556,16 @@ export function SearchOverlay({
               </strong>
               <span>
                 {preview.type === "playlist"
-                  ? `Playlist - ${preview.value.owner}`
+                  ? t("Playlist - {owner}", { owner: preview.value.owner })
                   : preview.type === "album"
-                    ? `Album - ${preview.value.artist}`
+                    ? t("Album - {artist}", { artist: preview.value.artist })
                     : preview.type === "artist"
-                      ? preview.value.subscriberCount || "Artist"
+                      ? preview.value.subscriberCount || t("Artist")
                     : preview.value.artist}
               </span>
             </span>
             <span className="flex items-center gap-1 [&_kbd]:rounded [&_kbd]:bg-card [&_kbd]:px-1.5 [&_kbd]:py-0.5 [&_kbd]:font-sans">
-              {preview.type === "track" ? "Play" : "Open"}
+              {preview.type === "track" ? t("Play") : t("Open")}
             </span>
           </button>
         )}
@@ -492,7 +645,7 @@ export function SearchOverlay({
                 e.stopPropagation();
                 removeRecentSearch(recentSearch);
               }}
-              aria-label={`Remove ${recentSearch}`}
+              aria-label={t("Remove {query}", { query: recentSearch })}
               className={cn(
                 "mr-2 flex size-8 items-center justify-center rounded-lg transition-all",
                 "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
@@ -511,9 +664,9 @@ export function SearchOverlay({
         {/* Keyboard hints; a phone has neither the keys nor the tabs they open. */}
         {!isMobile && (
           <footer className="flex items-center gap-3 px-4 py-2 text-xs text-muted-foreground">
-            <span>Enter search</span>
-            <span>Shift or {primaryModifierLabel} + Enter new tab</span>
-            <span>Esc close</span>
+            <span>{t("{key} search", { key: "Enter" })}</span>
+            <span>{t("Shift or {modifier} + Enter new tab", { modifier: primaryModifierLabel })}</span>
+            <span>{t("{key} close", { key: "Esc" })}</span>
           </footer>
         )}
       </section>

@@ -1,9 +1,11 @@
+import { openCarMode } from "./CarModeView";
 import { motion } from "motion/react";
 import { cn } from "@/lib/utils";
-import { AlbumIcon, ClockIcon, CompassIcon, DownloadIcon } from "@/ui/icons";
+import { AlbumIcon, ClockIcon, CompassIcon, DownloadIcon, CarIcon } from "@/ui/icons";
 import { useOfflineState } from "../../player/offlineStore";
 import { usePlayHistory } from "../../player/playHistory";
 import { useLibraryState } from "../../player/playerStore";
+import { tn, useT } from "../../i18n";
 
 export interface HomeDestinationHandlers {
   onOpenLibrary: () => void;
@@ -26,6 +28,7 @@ export function HomeDestinations({
   onOpenHistory,
   onOpenDownloads,
 }: HomeDestinationHandlers) {
+  const t = useT();
   const libraryState = useLibraryState();
   const offline = useOfflineState();
   const history = usePlayHistory();
@@ -45,46 +48,53 @@ export function HomeDestinations({
   }> = [
     {
       key: "library",
-      label: "Library",
-      hint: "Songs, albums, artists",
+      label: t("Library"),
+      hint: t("Songs, albums, artists"),
       icon: AlbumIcon,
       onClick: onOpenLibrary,
-      badge: savedCount > 0 ? `${savedCount} saved` : undefined,
+      badge: savedCount > 0 ? t("{count} saved", { count: savedCount }) : undefined,
     },
     {
       key: "browse",
-      label: "Browse",
-      hint: "Charts, moods, podcasts",
+      label: t("Browse"),
+      hint: t("Charts, moods, podcasts"),
       icon: CompassIcon,
       onClick: onOpenBrowse,
     },
     {
       key: "history",
-      label: "History",
-      hint: "Everything you played",
+      label: t("History"),
+      hint: t("Everything you played"),
       icon: ClockIcon,
       onClick: onOpenHistory,
-      badge: history.length > 0 ? `${history.length} plays` : undefined,
+      badge: history.length > 0 ? tn("{n} play", "{n} plays", history.length) : undefined,
     },
     {
       key: "downloads",
-      label: "Downloads",
-      hint: "Saved for offline",
+      label: t("Downloads"),
+      hint: t("Saved for offline"),
       icon: DownloadIcon,
       onClick: onOpenDownloads,
       // A download in flight outranks the total: it is the thing that is changing.
       badge: offline.downloadingId
         ? offline.progress !== null
           ? `${offline.progress}%`
-          : "downloading"
+          : t("downloading")
         : downloadCount > 0
-          ? `${downloadCount} songs`
+          ? tn("{n} song", "{n} songs", downloadCount)
           : undefined,
+    },
+    {
+      key: "car",
+      label: t("Car mode"),
+      hint: t("Big buttons for the road"),
+      icon: CarIcon,
+      onClick: openCarMode,
     },
   ];
 
   return (
-    <section className="flex flex-col gap-3" aria-label="Go to">
+    <section className="flex flex-col gap-3" aria-label={t("Go to")}>
       <div className="grid gap-2.5 [grid-template-columns:repeat(auto-fit,minmax(min(12rem,100%),1fr))] max-sm:grid-cols-2">
         {cards.map((card) => (
           <motion.button

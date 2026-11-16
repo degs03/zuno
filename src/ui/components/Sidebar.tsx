@@ -47,6 +47,7 @@ import { TrackArtwork } from "./TrackArtwork";
 import { usePlaylistContextMenu } from "./PlaylistContextMenu";
 import { Button } from "@/components/motion/button";
 import { AddCircleIcon } from "@solar-icons/react/bold-duotone";
+import { msg, useT } from "../../i18n";
  
 const PLAYLIST_ORDER_KEY = "ytc-sidebar-playlist-order";
 const ALBUM_ORDER_KEY = "ytc-sidebar-album-order";
@@ -205,6 +206,7 @@ function CreatePlaylistButton({
    */
   onOpenChange?: (open: boolean) => void;
 }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -261,7 +263,7 @@ function CreatePlaylistButton({
       setOpen(false);
       onCreated(created);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not import that playlist.");
+      setError(cause instanceof Error ? cause.message : t("Could not import that playlist."));
     } finally {
       setBusy(false);
     }
@@ -270,7 +272,7 @@ function CreatePlaylistButton({
   const submit = async () => {
     const trimmed = name.trim();
     if (!trimmed) {
-      setError("Give the playlist a name.");
+      setError(t("Give the playlist a name."));
       inputRef.current?.focus();
       return;
     }
@@ -286,7 +288,7 @@ function CreatePlaylistButton({
       setOpen(false);
       onCreated(created);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not create the playlist.");
+      setError(cause instanceof Error ? cause.message : t("Could not create the playlist."));
     } finally {
       setBusy(false);
     }
@@ -304,7 +306,7 @@ function CreatePlaylistButton({
       trigger={
         <Button
           type="button"
-          aria-label="New playlist"
+          aria-label={t("New playlist")}
           size="icon"
           variant="ghost"
           aria-expanded={open}
@@ -330,12 +332,12 @@ function CreatePlaylistButton({
           )}
         >
           <AddCircleIcon size={18} aria-hidden="true" />
-          {!collapsed && <span>New playlist</span>}
+          {!collapsed && <span>{t("New playlist")}</span>}
         </Button>
       }
     >
       <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium text-foreground">New playlist</span>
+        <span className="text-sm font-medium text-foreground">{t("New playlist")}</span>
 
         {/* Segmented control rather than a checkbox: these are two destinations, not a
             modifier, and the description below changes with the choice so the consequence is
@@ -344,7 +346,7 @@ function CreatePlaylistButton({
           <div
             className="mt-0.5 flex rounded-lg bg-card p-0.5"
             role="radiogroup"
-            aria-label="Where to create the playlist"
+            aria-label={t("Where to create the playlist")}
           >
             {(["youtube", "local"] as const).map((value) => (
               <button
@@ -361,7 +363,7 @@ function CreatePlaylistButton({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {value === "youtube" ? "YouTube Music" : "This computer"}
+                {value === "youtube" ? "YouTube Music" : t("This computer")}
               </button>
             ))}
           </div>
@@ -369,15 +371,15 @@ function CreatePlaylistButton({
 
         <span className="text-xs text-muted-foreground">
           {destination === "youtube"
-            ? "Saved to your account, so it syncs everywhere."
-            : "Built from folders on this computer."}
+            ? t("Saved to your account, so it syncs everywhere.")
+            : t("Built from folders on this computer.")}
         </span>
         <input
           ref={inputRef}
           className="mt-1 w-full min-w-0 rounded-lg bg-background px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-inset focus:ring-border"
           value={name}
-          placeholder="Playlist name"
-          aria-label="Playlist name"
+          placeholder={t("Playlist name")}
+          aria-label={t("Playlist name")}
           onChange={(event) => {
             setName(event.target.value);
             if (error) setError(null);
@@ -394,7 +396,7 @@ function CreatePlaylistButton({
           disabled={busy}
           onClick={() => void submit()}
         >
-          {busy ? "Creating..." : "Create playlist"}
+          {busy ? t("Creating...") : t("Create playlist")}
         </button>
 
         <button
@@ -403,7 +405,7 @@ function CreatePlaylistButton({
           className="rounded-full px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => void importFromFile()}
         >
-          Import from file...
+          {t("Import from file...")}
         </button>
       </div>
     </FloatingPanel>
@@ -417,8 +419,8 @@ const LIBRARY_VIEWS: Array<{
   hint: string;
   icon: typeof PlaylistIcon;
 }> = [
-  { value: "playlists", label: "Playlists", hint: "Your playlists", icon: PlaylistIcon },
-  { value: "albums", label: "Albums", hint: "Saved albums", icon: AlbumIcon },
+  { value: "playlists", label: msg("Playlists"), hint: msg("Your playlists"), icon: PlaylistIcon },
+  { value: "albums", label: msg("Albums"), hint: msg("Saved albums"), icon: AlbumIcon },
 ];
 
 const ARTWORK_TILE = "size-10 shrink-0 rounded object-cover";
@@ -474,6 +476,7 @@ export function Sidebar({
   onNavigateAlbum,
   onNavigatePlaylist,
 }: SidebarProps) {
+  const t = useT();
   const libraryState = useLibraryState();
   const { openPlaylistMenu, openAlbumMenu } = usePlaylistContextMenu();
   const [libraryView, setLibraryView] = useState<LibraryView>("playlists");
@@ -1028,9 +1031,10 @@ export function Sidebar({
 
   const totalLibraryCount = libraryView === "albums" ? albums.length : playlists.length;
   const activeSortLabel =
-    LIBRARY_SORTS.find((option) => option.value === librarySort)?.label ?? "Custom";
+    t(LIBRARY_SORTS.find((option) => option.value === librarySort)?.label ?? msg("Custom"));
   const canReorder = canReorderLibrary(librarySort, libraryFilter);
-  const reorderBlocked = reorderBlockedReason(librarySort, libraryFilter);
+  const reorderBlockedKey = reorderBlockedReason(librarySort, libraryFilter);
+  const reorderBlocked = reorderBlockedKey ? t(reorderBlockedKey) : null;
 
   const handleSidebarItemPointerDown = (
     event: React.PointerEvent<HTMLButtonElement>,
@@ -1132,7 +1136,7 @@ export function Sidebar({
             shouldHideText ? "mx-auto flex-col" : "mx-2",
           )}
           role="group"
-          aria-label="Library view"
+          aria-label={t("Library view")}
         >
           {LIBRARY_VIEWS.map((view) => {
             const isActive = libraryView === view.value;
@@ -1140,8 +1144,8 @@ export function Sidebar({
               <SidebarItemTooltip
                 key={view.value}
                 enabled={shouldHideText}
-                title={view.label}
-                subtitle={view.hint}
+                title={t(view.label)}
+                subtitle={t(view.hint)}
               >
                 <button
                   type="button"
@@ -1152,7 +1156,7 @@ export function Sidebar({
                     isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                   )}
                   aria-pressed={isActive}
-                  aria-label={view.label}
+                  aria-label={t(view.label)}
                   onClick={() => setLibraryView(view.value)}
                 >
                   {isActive && (
@@ -1209,8 +1213,8 @@ export function Sidebar({
                   event.stopPropagation();
                   setLibraryFilter("");
                 }}
-                placeholder={libraryView === "albums" ? "Filter albums" : "Filter playlists"}
-                aria-label={libraryView === "albums" ? "Filter albums" : "Filter playlists"}
+                placeholder={libraryView === "albums" ? t("Filter albums") : t("Filter playlists")}
+                aria-label={libraryView === "albums" ? t("Filter albums") : t("Filter playlists")}
                 type="text"
               />
               {libraryFilter && (
@@ -1221,7 +1225,7 @@ export function Sidebar({
                     setLibraryFilter("");
                     filterInputRef.current?.focus();
                   }}
-                  aria-label="Clear filter"
+                  aria-label={t("Clear filter")}
                 >
                   <CloseIcon size={14} aria-hidden="true" />
                 </button>
@@ -1243,14 +1247,14 @@ export function Sidebar({
                   side="bottom"
                   content={
                     reorderBlocked
-                      ? `Sort: ${activeSortLabel} — ${reorderBlocked}`
-                      : `Sort: ${activeSortLabel}`
+                      ? t("Sort: {sort} — {reason}", { sort: activeSortLabel, reason: reorderBlocked })
+                      : t("Sort: {sort}", { sort: activeSortLabel })
                   }
                 >
                   <button
                     type="button"
                     className="grid size-7 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={`Sort order: ${activeSortLabel}`}
+                    aria-label={t("Sort order: {sort}", { sort: activeSortLabel })}
                     aria-haspopup="menu"
                   >
                     <SortIcon size={15} aria-hidden="true" />
@@ -1258,7 +1262,7 @@ export function Sidebar({
                 </Tooltip>
               }
             >
-              <div role="menu" aria-label="Sort order">
+              <div role="menu" aria-label={t("Sort order")}>
                 {LIBRARY_SORTS.map((option) => (
                   <button
                     key={option.value}
@@ -1281,8 +1285,8 @@ export function Sidebar({
                       )}
                     </span>
                     <span className="flex min-w-0 flex-col">
-                      <span className="text-sm">{option.label}</span>
-                      <span className="text-xs text-muted-foreground">{option.hint}</span>
+                      <span className="text-sm">{t(option.label)}</span>
+                      <span className="text-xs text-muted-foreground">{t(option.hint)}</span>
                     </span>
                   </button>
                 ))}
@@ -1368,7 +1372,7 @@ export function Sidebar({
                       </div>
                     )}
                     {!shouldHideText && pinnedPlaylistIds.includes(playlist.id) && (
-                      <PinIcon size={14} className="shrink-0 text-muted-foreground" aria-label="Pinned" />
+                      <PinIcon size={14} className="shrink-0 text-muted-foreground" aria-label={t("Pinned")} />
                     )}
                   </button>
                   </SidebarItemTooltip>
@@ -1377,19 +1381,19 @@ export function Sidebar({
                   <div className={EMPTY_STATE}>
                     <PlaylistIcon size={28} aria-hidden="true" />
                     {!shouldHideText && (
-                      <span>No user-created playlists were found.</span>
+                      <span>{t("No user-created playlists were found.")}</span>
                     )}
                     <button
                       type="button"
                       className={RETRY_BUTTON}
                       onClick={handlePlaylistRetry}
                       disabled={isRetryingPlaylists}
-                      title="Retry playlist sync"
-                      aria-label="Retry playlist sync"
+                      title={t("Retry playlist sync")}
+                      aria-label={t("Retry playlist sync")}
                     >
                       <RefreshIcon size={15} aria-hidden="true" />
                       {!shouldHideText && (
-                        <span>{isRetryingPlaylists ? "Retrying..." : "Retry"}</span>
+                        <span>{isRetryingPlaylists ? t("Retrying...") : t("Retry")}</span>
                       )}
                     </button>
                   </div>
@@ -1404,7 +1408,7 @@ export function Sidebar({
                 <SearchIcon size={26} aria-hidden="true" />
                 {!shouldHideText && (
                   <span>
-                    Nothing matches “{libraryFilter.trim()}”.
+                    {t("Nothing matches “{query}”.", { query: libraryFilter.trim() })}
                   </span>
                 )}
                 <button
@@ -1416,7 +1420,7 @@ export function Sidebar({
                   }}
                 >
                   <CloseIcon size={15} aria-hidden="true" />
-                  {!shouldHideText && <span>Clear filter</span>}
+                  {!shouldHideText && <span>{t("Clear filter")}</span>}
                 </button>
               </div>
             ) : (
@@ -1425,8 +1429,8 @@ export function Sidebar({
                 {!shouldHideText && (
                   <span>
                     {libraryState.status === "signed-out"
-                      ? "Sign in to see your playlists."
-                      : "No user-created playlists were found."}
+                      ? t("Sign in to see your playlists.")
+                      : t("No user-created playlists were found.")}
                   </span>
                 )}
                 {libraryState.status === "signed-out" && (
@@ -1442,12 +1446,12 @@ export function Sidebar({
                     className={RETRY_BUTTON}
                     onClick={handlePlaylistRetry}
                     disabled={isRetryingPlaylists}
-                    title="Retry playlist sync"
-                    aria-label="Retry playlist sync"
+                    title={t("Retry playlist sync")}
+                    aria-label={t("Retry playlist sync")}
                   >
                     <RefreshIcon size={15} aria-hidden="true" />
                     {!shouldHideText && (
-                      <span>{isRetryingPlaylists ? "Retrying..." : "Retry"}</span>
+                      <span>{isRetryingPlaylists ? t("Retrying...") : t("Retry")}</span>
                     )}
                   </button>
                 )}

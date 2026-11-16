@@ -23,15 +23,69 @@ import { getAppSetting, setAppSetting } from "./appSettings";
  */
 const SEEN_VERSION_KEY = "release-note-seen-version";
 
-export const RELEASE_NOTE_BODY = `**Offline** — downloads play with their artwork and no connection, and Zuno starts offline with your library intact.
-**Sound** — volume normalization, separate speed and pitch, a draw-your-own equaliser, and gapless with no pause.
-**Mini player** — Cassette, Vinyl and Y2K skins.
-**Library** — pinned playlists, remembered sort order, full-size covers, app zoom and settings search.
-**Fixes** — sped-up songs, Windows sign-in error 8, the Wayland crash on NVIDIA and lyrics memory spikes. Windows on ARM gets native builds.
+export const RELEASE_NOTE_BODY = `**Your language** — Zuno now speaks Español, Português, Français, Deutsch and Italiano (Settings → Appearance).
+**New look** — a floating navigation bar, and an accent colour that can follow each song's cover.
+**For audiophiles** — bit-perfect output for external DACs, at each song's own sample rate.
+**On the move** — car mode with huge buttons, and karaoke lyrics in full screen.
+**Sleep** — shake to extend the sleep timer, with a longer, gentler fade-out.
 
 Report anything broken on GitHub, or come say hello at /r/ZunoMusic.
 
 Thanks :)`;
+
+/** The same note in each interface language; English (above) is the fallback. */
+const RELEASE_NOTE_BODIES: Record<string, string> = {
+  es: `**Tu idioma** — Zuno ahora habla español, portugués, francés, alemán e italiano (Ajustes → Apariencia).
+**Nuevo diseño** — una barra de navegación flotante y un color de acento que puede seguir la portada de cada canción.
+**Para audiófilos** — salida bit-perfect para DAC externos, a la frecuencia de muestreo propia de cada canción.
+**En movimiento** — modo auto con botones enormes y letras en modo karaoke a pantalla completa.
+**Dormir** — agita el teléfono para alargar el temporizador, con un final que se apaga más suave.
+
+Reporta cualquier problema en GitHub, o pasa a saludar en /r/ZunoMusic.
+
+¡Gracias! :)`,
+  "pt-BR": `**Seu idioma** — o Zuno agora fala português, espanhol, francês, alemão e italiano (Ajustes → Aparência).
+**Novo visual** — uma barra de navegação flutuante e uma cor de destaque que pode seguir a capa de cada música.
+**Para audiófilos** — saída bit-perfect para DACs externos, na taxa de amostragem original de cada música.
+**Em movimento** — modo carro com botões enormes e letras no modo karaokê em tela cheia.
+**Dormir** — balance o celular para estender o timer, com um final mais suave.
+
+Relate qualquer problema no GitHub, ou venha dizer oi em /r/ZunoMusic.
+
+Valeu! :)`,
+  fr: `**Votre langue** — Zuno parle désormais français, espagnol, portugais, allemand et italien (Réglages → Apparence).
+**Nouveau look** — une barre de navigation flottante et une couleur d'accent qui peut suivre la pochette de chaque titre.
+**Pour les audiophiles** — sortie bit-perfect pour DAC externes, à la fréquence d'échantillonnage propre à chaque titre.
+**En déplacement** — un mode voiture aux énormes boutons et des paroles en mode karaoké en plein écran.
+**Dormir** — secouez le téléphone pour prolonger la minuterie, avec une fin en fondu plus douce.
+
+Signalez tout problème sur GitHub, ou venez dire bonjour sur /r/ZunoMusic.
+
+Merci :)`,
+  de: `**Deine Sprache** — Zuno spricht jetzt Deutsch, Spanisch, Portugiesisch, Französisch und Italienisch (Einstellungen → Darstellung).
+**Neuer Look** — eine schwebende Navigationsleiste und eine Akzentfarbe, die sich dem Cover jedes Songs anpassen kann.
+**Für Audiophile** — Bit-perfect-Ausgabe für externe DACs, in der eigenen Abtastrate jedes Songs.
+**Unterwegs** — Automodus mit riesigen Tasten und Karaoke-Songtexte im Vollbild.
+**Schlafen** — Handy schütteln, um den Sleep-Timer zu verlängern, mit sanfterem Ausblenden.
+
+Melde Fehler auf GitHub oder sag Hallo auf /r/ZunoMusic.
+
+Danke :)`,
+  it: `**La tua lingua** — Zuno ora parla italiano, spagnolo, portoghese, francese e tedesco (Impostazioni → Aspetto).
+**Nuovo look** — una barra di navigazione fluttuante e un colore d'accento che può seguire la copertina di ogni brano.
+**Per audiofili** — uscita bit-perfect per DAC esterni, alla frequenza di campionamento originale di ogni brano.
+**In movimento** — modalità auto con pulsanti enormi e testi in modalità karaoke a schermo intero.
+**Dormire** — scuoti il telefono per prolungare il timer, con una dissolvenza finale più dolce.
+
+Segnala qualsiasi problema su GitHub, o passa a salutare su /r/ZunoMusic.
+
+Grazie :)`,
+};
+
+/** The release note in `locale`, English when there is no translation. */
+export function releaseNoteBody(locale: string): string {
+  return RELEASE_NOTE_BODIES[locale] ?? RELEASE_NOTE_BODY;
+}
 
 export type ReleaseNoteSegment =
   | { kind: "text"; value: string }

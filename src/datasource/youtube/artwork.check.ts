@@ -75,7 +75,8 @@ check(
 (globalThis as Record<string, unknown>).devicePixelRatio = 1;
 check(getArtworkSizeBucket(40) === 120, "a 40px slot asks for the smallest bucket");
 check(getArtworkSizeBucket(200) === 240, "a bucket must cover the slot, not merely be near it");
-check(getArtworkSizeBucket(900) === null, "a slot larger than every bucket keeps the original");
+check(getArtworkSizeBucket(900) === 1200, "a slot larger than 800 asks for the largest size");
+check(getArtworkSizeBucket(5000) === 1200, "and never more than that");
 
 (globalThis as Record<string, unknown>).devicePixelRatio = 2;
 check(getArtworkSizeBucket(40) === 120, "a retina 40px slot needs 80px, so still 120");
@@ -96,8 +97,26 @@ check(
   "one pixel past the 400 bucket steps up rather than rendering soft",
 );
 check(
-  getArtworkSizeBucket(280) === null,
-  "a 2x slot needing more than 544 still keeps the original",
+  getArtworkSizeBucket(280) === 800,
+  "a 2x slot needing more than 544 asks for 800, not the (often 60px) original",
+);
+
+// A full-screen phone player: 352px at 3x must not fall back to a list-row thumbnail.
+(globalThis as Record<string, unknown>).devicePixelRatio = 3;
+check(getArtworkSizeBucket(352) === 1200, "the big phone cover is requested at 1200");
+check(
+  getArtworkUrlCandidates("https://lh3.googleusercontent.com/abc=w60-h60-l90-rj", 1200)[0]
+    === "https://lh3.googleusercontent.com/abc=w1200-h1200-l90-rj",
+  "a 60px thumbnail URL is rewritten up to the requested size",
+);
+check(
+  getArtworkUrlCandidates("https://i.ytimg.com/vi/abc/default.jpg", 1200)[0]
+    === "https://i.ytimg.com/vi/abc/maxresdefault.jpg",
+  "a video thumbnail asks for the HD frame first",
+);
+check(
+  getArtworkUrlCandidates("https://i.ytimg.com/vi/abc/default.jpg", 1200).includes("https://i.ytimg.com/vi/abc/default.jpg"),
+  "and keeps the original as a fallback",
 );
 
 // A saved download cover has to match the same song at every size it is shown at.

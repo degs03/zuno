@@ -4,6 +4,7 @@ import { Loader } from "@/components/motion/loader";
 import { cn } from "@/lib/utils";
 import type { AuthFlow, AuthProgress, AuthStage } from "../../datasource/types";
 import { CheckActiveIcon, GlobalIcon, LoginIcon, PlaylistIcon, UserIcon } from "../icons";
+import { msg, useT } from "../../i18n";
 
 interface Stage {
   id: AuthStage;
@@ -15,8 +16,8 @@ interface Stage {
 
 const LIBRARY_STAGE: Stage = {
   id: "library",
-  title: "Fetching your account",
-  description: "Loading your channel, playlists, albums and liked songs.",
+  title: msg("Fetching your account"),
+  description: msg("Loading your channel, playlists, albums and liked songs."),
   Icon: PlaylistIcon,
 };
 
@@ -35,14 +36,14 @@ const STAGES_BY_FLOW: Record<AuthFlow, ReadonlyArray<Stage>> = {
   "sign-in": [
     {
       id: "browser",
-      title: "Signing in",
-      description: "Finish signing in to YouTube Music in the window that opened.",
+      title: msg("Signing in"),
+      description: msg("Finish signing in to YouTube Music in the window that opened."),
       Icon: LoginIcon,
     },
     {
       id: "session",
-      title: "Securing your session",
-      description: "Confirming the account and clearing anything cached from before.",
+      title: msg("Securing your session"),
+      description: msg("Confirming the account and clearing anything cached from before."),
       Icon: GlobalIcon,
     },
     LIBRARY_STAGE,
@@ -50,8 +51,8 @@ const STAGES_BY_FLOW: Record<AuthFlow, ReadonlyArray<Stage>> = {
   "account-switch": [
     {
       id: "session",
-      title: "Switching channel",
-      description: "Handing over to the new channel and clearing the previous one's cache.",
+      title: msg("Switching channel"),
+      description: msg("Handing over to the new channel and clearing the previous one's cache."),
       Icon: UserIcon,
     },
     LIBRARY_STAGE,
@@ -59,8 +60,8 @@ const STAGES_BY_FLOW: Record<AuthFlow, ReadonlyArray<Stage>> = {
   "google-account-switch": [
     {
       id: "session",
-      title: "Switching account",
-      description: "Handing over to the other account and clearing the previous one's cache.",
+      title: msg("Switching account"),
+      description: msg("Handing over to the other account and clearing the previous one's cache."),
       Icon: UserIcon,
     },
     LIBRARY_STAGE,
@@ -69,19 +70,19 @@ const STAGES_BY_FLOW: Record<AuthFlow, ReadonlyArray<Stage>> = {
 
 const HEADINGS: Record<AuthFlow, { title: string; waiting: string; working: string }> = {
   "sign-in": {
-    title: "Connecting to YouTube Music",
-    waiting: "This waits on you — the rest takes a few seconds.",
-    working: "Nearly there. Keep this window open.",
+    title: msg("Connecting to YouTube Music"),
+    waiting: msg("This waits on you — the rest takes a few seconds."),
+    working: msg("Nearly there. Keep this window open."),
   },
   "account-switch": {
-    title: "Switching channel",
-    waiting: "Moving your library over to the new channel.",
-    working: "Nearly there. Keep this window open.",
+    title: msg("Switching channel"),
+    waiting: msg("Moving your library over to the new channel."),
+    working: msg("Nearly there. Keep this window open."),
   },
   "google-account-switch": {
-    title: "Switching account",
-    waiting: "Moving your library over to the other account.",
-    working: "Nearly there. Keep this window open.",
+    title: msg("Switching account"),
+    waiting: msg("Moving your library over to the other account."),
+    working: msg("Nearly there. Keep this window open."),
   },
 };
 
@@ -97,6 +98,7 @@ interface AuthOverlayProps {
  * the time — the parent renders it conditionally rather than toggling a `hidden` class.
  */
 export function AuthOverlay({ progress, onCancel }: AuthOverlayProps) {
+  const t = useT();
   const reduce = useReduceMotion();
   const stages = STAGES_BY_FLOW[progress.flow];
   const headings = HEADINGS[progress.flow];
@@ -124,13 +126,13 @@ export function AuthOverlay({ progress, onCancel }: AuthOverlayProps) {
       transition={{ duration: 0.18 }}
       role="status"
       aria-live="polite"
-      aria-label={headings.title}
+      aria-label={t(headings.title)}
     >
       <div className="flex w-full max-w-sm flex-col gap-6 rounded-3xl bg-card p-7 shadow-2xl">
         <div className="flex flex-col gap-1.5">
-          <strong className="text-base font-semibold text-foreground">{headings.title}</strong>
+          <strong className="text-base font-semibold text-foreground">{t(headings.title)}</strong>
           <span className="text-sm text-muted-foreground">
-            {activeIndex <= 0 ? headings.waiting : headings.working}
+            {activeIndex <= 0 ? t(headings.waiting) : t(headings.working)}
           </span>
         </div>
 
@@ -144,7 +146,7 @@ export function AuthOverlay({ progress, onCancel }: AuthOverlayProps) {
               }
               note={
                 stage.id === "library" && isRetrying
-                  ? `Still syncing — attempt ${progress.attempt} of ${progress.attemptCount}.`
+                  ? t("Still syncing — attempt {attempt} of {total}.", { attempt: progress.attempt, total: progress.attemptCount })
                   : null
               }
             />
@@ -157,7 +159,7 @@ export function AuthOverlay({ progress, onCancel }: AuthOverlayProps) {
             type="button"
             onClick={onCancel}
           >
-            Cancel
+            {t("Cancel")}
           </button>
         )}
       </div>
@@ -172,6 +174,7 @@ interface AuthStepProps {
 }
 
 function AuthStep({ stage, state, note }: AuthStepProps) {
+  const t = useT();
   const { Icon } = stage;
   /*
    * Read here as well as in the parent. `MotionConfig` at the app root suppresses transform and
@@ -211,7 +214,7 @@ function AuthStep({ stage, state, note }: AuthStepProps) {
             state === "pending" ? "text-muted-foreground/60" : "text-foreground",
           )}
         >
-          {stage.title}
+          {t(stage.title)}
         </span>
 
         {/*
@@ -227,7 +230,7 @@ function AuthStep({ stage, state, note }: AuthStepProps) {
               exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
               transition={{ duration: 0.18 }}
             >
-              {note ?? stage.description}
+              {note ?? t(stage.description)}
             </motion.span>
           )}
         </AnimatePresence>

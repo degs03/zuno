@@ -1,5 +1,7 @@
 // The equaliser as numbers: bands, limits, presets and the frequency response. Pure, so it can be checked.
 
+import { msg } from "../../i18n";
+
 /** ISO octave centres. Matches `BAND_HZ` in `equalizer.rs`. */
 export const EQUALIZER_BANDS_HZ = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000] as const;
 
@@ -14,6 +16,7 @@ export type EqualizerSettings = {
   bandsDb: number[];
 };
 
+/** Built-in names are English data (matched and stored as-is), marked with `msg` and translated where shown. */
 export type EqualizerPreset = { name: string; settings: EqualizerSettings };
 
 /** Clamped to the range and snapped to the step. Anything that is not a number is 0 dB. */
@@ -94,12 +97,12 @@ const preset = (name: string, bandsDb: number[]): EqualizerPreset => ({
 });
 
 export const EQUALIZER_PRESETS: readonly EqualizerPreset[] = [
-  preset("Flat", [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-  preset("Bass", [6, 5, 4, 2, 0, 0, 0, 0, 0, 0]),
-  preset("Warm", [2, 3, 3, 2, 1, 0, -1, -1, -2, -2]),
-  preset("Vocal", [-2, -2, -1, 1, 3, 4, 3, 1, 0, 0]),
-  preset("Treble", [0, 0, 0, 0, 0, 1, 2, 4, 5, 5]),
-  preset("Loudness", [5, 4, 2, 0, -1, -1, 0, 2, 4, 4]),
+  preset(msg("Flat"), [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+  preset(msg("Bass"), [6, 5, 4, 2, 0, 0, 0, 0, 0, 0]),
+  preset(msg("Warm"), [2, 3, 3, 2, 1, 0, -1, -1, -2, -2]),
+  preset(msg("Vocal"), [-2, -2, -1, 1, 3, 4, 3, 1, 0, 0]),
+  preset(msg("Treble"), [0, 0, 0, 0, 0, 1, 2, 4, 5, 5]),
+  preset(msg("Loudness"), [5, 4, 2, 0, -1, -1, 0, 2, 4, 4]),
 ];
 
 export const EQUALIZER_FLAT: EqualizerSettings = EQUALIZER_PRESETS[0].settings;

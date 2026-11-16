@@ -7,11 +7,33 @@ import { isAndroid } from "./platform";
 
 export type AndroidMediaEvent = {
   type: "media";
-  action: "play" | "pause" | "playPause" | "next" | "previous" | "seekTo";
+  action:
+    | "play"
+    | "pause"
+    | "playPause"
+    | "next"
+    | "previous"
+    | "seekTo"
+    // Widget and headset extras (PlaybackService / NowPlayingWidget).
+    | "like"
+    | "shuffle"
+    | "repeat"
+    | "openPlayer";
   positionSec?: number;
 };
 
-type AndroidEvent = AndroidMediaEvent;
+/**
+ * The audio output route changed (PlaybackService's AudioDeviceCallback), or is being reported
+ * once at startup. `kind` is "speaker", "wired", "bluetooth", "usb" or "other".
+ */
+export type AndroidDeviceEvent = {
+  type: "device";
+  name: string;
+  kind: string;
+  connected: boolean;
+};
+
+type AndroidEvent = AndroidMediaEvent | AndroidDeviceEvent;
 
 export function onAndroidEvent<T extends AndroidEvent["type"]>(
   type: T,

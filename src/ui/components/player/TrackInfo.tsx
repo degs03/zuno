@@ -10,11 +10,13 @@ import { TrackArtwork } from "../TrackArtwork";
 import { CoverButton } from "../CoverButton";
 import { ArtistLinks } from "../ArtistLinks";
 import { useTrackContextMenu } from "../TrackContextMenu";
+import { useT } from "../../../i18n";
 
 export function TrackInfo() {
   const state = usePlayerSelector((player) => ({ currentTrack: player.currentTrack }), shallowEqual);
   const libraryState = useLibraryState();
   const uiState = usePlayerUIState();
+  const t = useT();
   const { openTrackMenu, toggleTrackLike } = useTrackContextMenu();
   const currentTrack = state.currentTrack;
   const titleViewportRef = useRef<HTMLDivElement>(null);
@@ -106,19 +108,19 @@ export function TrackInfo() {
           disabled={isLikeStatusLoading || isLikePending}
           aria-label={
             isLikeStatusLoading || isLikePending
-              ? "Loading like status"
+              ? t("Loading like status")
               : isLiked
-                ? "Remove like"
+                ? t("Remove like")
                 : libraryState.status === "signed-out"
-                  ? "Sign in to like"
-                  : "Like song"
+                  ? t("Sign in to like")
+                  : t("Like song")
           }
           title={
             libraryState.status === "signed-out"
-              ? "Sign in to like"
+              ? t("Sign in to like")
               : isLiked
-                ? "Remove like"
-                : "Like song"
+                ? t("Remove like")
+                : t("Like song")
           }
         >
           {isLikeStatusLoading || isLikePending ? (

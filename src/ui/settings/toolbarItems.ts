@@ -4,6 +4,7 @@ import {
   readLocalBooleanSetting,
   writeLocalBooleanSetting,
 } from "../../internal/durableLocalSetting";
+import { msg } from "../../i18n";
 
 /**
  * Which optional buttons the title bar carries.
@@ -31,33 +32,33 @@ export const TOOLBAR_ITEMS: Array<{
 }> = [
   {
     id: "notifications",
-    label: "Notifications",
-    description: "New releases from artists you subscribe to, with an unread count.",
+    label: msg("Notifications"),
+    description: msg("New releases from artists you subscribe to, with an unread count."),
   },
   {
     id: "downloads",
-    label: "Downloads",
-    description: "Progress for songs being saved for offline, and what is stored.",
+    label: msg("Downloads"),
+    description: msg("Progress for songs being saved for offline, and what is stored."),
   },
   {
     id: "discord",
-    label: "Discord presence",
-    description: "Shortcut for sharing what you are playing. Hiding it leaves it as it is.",
+    label: msg("Discord presence"),
+    description: msg("Shortcut for sharing what you are playing. Hiding it leaves it as it is."),
   },
   {
     id: "lastfm",
-    label: "Last.fm scrobbling",
-    description: "Shortcut for scrobbling. Hiding it leaves it as it is.",
+    label: msg("Last.fm scrobbling"),
+    description: msg("Shortcut for scrobbling. Hiding it leaves it as it is."),
   },
   {
     id: "ytmusic",
-    label: "YouTube Music history",
-    description: "Shortcut for reporting plays to YouTube. Hiding it leaves it as it is.",
+    label: msg("YouTube Music history"),
+    description: msg("Shortcut for reporting plays to YouTube. Hiding it leaves it as it is."),
   },
   {
     id: "github",
     label: "GitHub",
-    description: "Opens the project's source in your browser.",
+    description: msg("Opens the project's source in your browser."),
   },
 ];
 

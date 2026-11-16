@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { logInternalDebug, logInternalError, logInternalInfo } from "../../internal/logging";
 import { toBase64 } from "../../internal/base64";
 import { decodeFrame } from "../../internal/ipcFrame";
+import { isOfflineModeOn } from "../../internal/connectivity";
 
 type ProxyHttpMeta = {
   status: number;
@@ -189,6 +190,8 @@ async function buildBodyBase64(input: RequestInfo | URL, init?: RequestInit): Pr
 }
 
 export async function tauriFetch(input: RequestInfo | URL, init?: TauriFetchInit): Promise<Response> {
+  // Offline mode: fail like a dropped connection, so every caller's offline path takes over.
+  if (isOfflineModeOn()) throw new TypeError("Offline mode is on");
   const startedAt = performance.now();
   let sourceHeaders: HeadersInit | undefined;
   

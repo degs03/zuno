@@ -1,4 +1,5 @@
 import type { DataSource, StreamData } from "../datasource/DataSource";
+import { isBitPerfect } from "../ui/settings/bitPerfect";
 import type { Lyrics, LyricsQuery, Track } from "../datasource/types";
 import { logInternalDebug, logInternalError, logInternalInfo, logInternalWarn } from "../internal/logging";
 import { isPrematureEnd } from "./prematureEnd";
@@ -15,6 +16,7 @@ import { hasPreloadDeck } from "./preloadDeck";
 import { getAudioEngineMode } from "../ui/settings/audioEngine";
 import { DiscordRpcService } from "./DiscordRPC";
 import { getInvokeErrorMessage } from "../internal/appSettings";
+import { t } from "../i18n";
 import {
   MAX_CROSSFADE_SEC,
   readPlaybackSettings,
@@ -65,6 +67,10 @@ export interface PlayerState {
   currentTrack: Track | null;
   history: Track[];
   error: string | null;
+  /** What kind of failure `error` is, so the UI can offer the right way out. */
+  errorKind?: "offline" | "playback";
+  /** The raw technical message behind `error`, for a "details" disclosure. */
+  errorDetail?: string;
   playbackOrderMode: PlaybackOrderMode;
   /** Independent of playbackOrderMode: shuffle and repeat compose freely. */
   shuffleEnabled: boolean;
@@ -100,6 +106,7 @@ export interface PlayerSession {
 type Listener = () => void;
 const DISCORD_ASSET_URL_LIMIT = 256;
 /** How long the sleep timer spends fading out before it pauses. */
+/** Default fade at the end of a sleep timer; the user can pick 10/30/60 s (sleepFade.ts). */
 const SLEEP_FADE_MS = 20_000;
 
 /** A session saved before shuffle split out stored it as the order mode. */
@@ -195,6 +202,9 @@ export class PlayerController {
   private sleepTimerId: number | null = null;
   /** Fade the last few seconds, so sleep does not end on an abrupt cut. */
   private sleepFadeId: number | null = null;
+  /** The volume before the timer's fade began, restored when it fires, is extended or cancelled. */
+  private sleepRestoreVolume: number | null = null;
+  private sleepFadeMs = SLEEP_FADE_MS;
   /** Coalesces a burst of skip forward/back clicks — see `NavigationCoalescer`. */
   private readonly navigationCoalescer = new NavigationCoalescer();
   private playbackOrderMode: PlaybackOrderMode = "in-order";
@@ -728,27 +738,32 @@ export class PlayerController {
    * restored afterwards so the next session does not start silent — the usual way a naive
    * sleep timer ruins the following morning.
    */
-  setSleepTimer(minutes: number | null): void {
+  setSleepTimer(minutes: number | null, fadeSec?: number): void {
+    // A running fade has lowered the volume; put it back before anything else.
+    if (this.sleepRestoreVolume !== null) this.audioEngine.setVolume(this.sleepRestoreVolume);
     this.clearSleepTimer();
     if (minutes === null || minutes <= 0) {
       this.emit();
       return;
     }
+    if (fadeSec !== undefined) this.sleepFadeMs = Math.max(0, fadeSec) * 1000;
+    const fadeMs = this.sleepFadeMs;
 
     const durationMs = minutes * 60_000;
     this.sleepTimerDeadline = Date.now() + durationMs;
     const restoreVolume = this.audioEngine.getVolume();
+    this.sleepRestoreVolume = restoreVolume;
 
-    if (durationMs > SLEEP_FADE_MS) {
+    if (fadeMs > 0 && durationMs > fadeMs) {
       this.sleepFadeId = globalThis.setTimeout(() => {
         const startedAt = Date.now();
         const step = () => {
-          const progress = Math.min(1, (Date.now() - startedAt) / SLEEP_FADE_MS);
+          const progress = Math.min(1, (Date.now() - startedAt) / fadeMs);
           this.audioEngine.setVolume(restoreVolume * (1 - progress));
           if (progress < 1) this.sleepFadeId = globalThis.setTimeout(step, 250);
         };
         step();
-      }, durationMs - SLEEP_FADE_MS) as unknown as number;
+      }, durationMs - fadeMs) as unknown as number;
     }
 
     this.sleepTimerId = globalThis.setTimeout(() => {
@@ -763,6 +778,17 @@ export class PlayerController {
     this.emit();
   }
 
+  /**
+   * Adds `minutes` to a running timer (the shake-to-extend gesture), undoing any fade already
+   * under way. No-op without a timer.
+   */
+  extendSleepTimer(minutes: number): void {
+    const remaining = this.getSleepTimerRemainingMs();
+    if (remaining === null) return;
+    this.setSleepTimer(remaining / 60_000 + minutes);
+    logInternalInfo("PlayerController.extendSleepTimer", { minutes });
+  }
+
   /** Remaining milliseconds, or null when no timer is running. */
   getSleepTimerRemainingMs(): number | null {
     if (this.sleepTimerDeadline === null) return null;
@@ -775,6 +801,7 @@ export class PlayerController {
     this.sleepTimerId = null;
     this.sleepFadeId = null;
     this.sleepTimerDeadline = null;
+    this.sleepRestoreVolume = null;
   }
 
   /** Queues a whole album or playlist behind whatever is already hand-picked. */
@@ -1264,7 +1291,7 @@ export class PlayerController {
     }
     // Fails fast rather than waiting out network timeouts; setError explains it's offline.
     if (!isOnline() && !isPlayableOffline(track)) {
-      throw new Error("Not available offline.");
+      throw new Error(t("Not available offline."));
     }
 
     try {
@@ -1277,7 +1304,8 @@ export class PlayerController {
       if (this.usesPreloadDeck(track) && this.audioEngine.hasPreloaded(track.id)) {
         const swapped = await this.audioEngine.transitionToPreloaded(
           track.id,
-          this.crossfadeSec * 1000,
+          // A crossfade ramps both tracks' samples; bit-perfect output only swaps (gapless).
+          isBitPerfect() ? 0 : this.crossfadeSec * 1000,
         );
         if (swapped) {
           this.loadedTrackId = track.id;
@@ -1459,9 +1487,9 @@ export class PlayerController {
       });
       const detail = getInvokeErrorMessage(error);
       if (track.source === "local" || this.audioEngine.usesNativeAudio()) {
-        throw new Error(`Unable to load audio data for playback. ${detail}`);
+        throw new Error(t("Unable to load audio data for playback. {detail}", { detail }));
       }
-      throw new Error(`Unable to load YouTube player for playback. ${detail}`);
+      throw new Error(t("Unable to load YouTube player for playback. {detail}", { detail }));
     }
   }
 
@@ -1751,11 +1779,13 @@ export class PlayerController {
 
     this.setState({
       status: "error",
+      errorKind: offlineMiss ? "offline" : "playback",
+      errorDetail: detail && detail !== "[object Object]" ? detail : undefined,
       error: offlineMiss
-        ? "You're offline. Only downloaded songs can play until you reconnect."
+        ? t("You're offline. Only downloaded songs can play until you reconnect.")
         : detail && detail !== "[object Object]"
-          ? `Playback failed. ${detail}`
-          : "Playback failed. Check internal logs for details.",
+          ? t("Playback failed. {detail}", { detail })
+          : t("Playback failed. Check internal logs for details."),
       // Preserve currentTrack to prevent reversion to hardcoded track
       currentTrack: this.state.currentTrack,
     });

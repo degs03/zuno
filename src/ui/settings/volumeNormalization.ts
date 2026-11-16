@@ -13,6 +13,8 @@ const CHANGE_EVENT = "volume-normalization-change";
 
 const readEnabled = () => readLocalBooleanSetting(STORAGE_KEY, false);
 
+export const isVolumeNormalizationEnabled = readEnabled;
+
 function subscribe(callback: () => void) {
   window.addEventListener(CHANGE_EVENT, callback);
   window.addEventListener("storage", callback);

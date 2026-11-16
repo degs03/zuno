@@ -17,6 +17,7 @@ import {
   useSeekPreview,
   type MiniSkinProps,
 } from "./shared";
+import { useT } from "../../../../i18n";
 
 const METER_COLUMNS = 14;
 const METER_ROWS = 5;
@@ -71,6 +72,7 @@ export function Y2kSkin({
   onRestore,
   onClose,
 }: MiniSkinProps) {
+  const t = useT();
   const seek = useSeekPreview(currentTime, onSeek);
   const shownTime = seek.preview ?? currentTime;
   const progress = clampProgress(shownTime, duration);
@@ -117,21 +119,21 @@ export function Y2kSkin({
         <div className="relative flex h-2.5 items-center justify-between text-[7.5px] font-bold tracking-[0.18em]">
           <span className={cn(isError && "text-(--skin-danger)")}>{state}</span>
           <span className="flex items-center gap-0.5">
-            <LcdButton label="Restore main window" onClick={onRestore}>
+            <LcdButton label={t("Restore main window")} onClick={onRestore}>
               <ArrowUpIcon size={9} aria-hidden="true" />
             </LcdButton>
-            <LcdButton label="Close mini player" onClick={onClose}>
+            <LcdButton label={t("Close mini player")} onClick={onClose}>
               <CloseIcon size={9} aria-hidden="true" />
             </LcdButton>
           </span>
         </div>
 
         <SkinTitle
-          text={title ?? "Nothing playing"}
+          text={title ?? t("Nothing playing")}
           className="relative h-4 text-[12px] font-bold leading-4 tracking-[-0.01em]"
         />
         <p className={cn("relative h-3 truncate text-[10px] leading-3", isError ? "font-semibold text-(--skin-danger)" : "opacity-75")}>
-          {isError ? "Couldn't play this song" : isLoading ? "Loading…" : artist ?? (hasTrack ? "" : "Insert a song")}
+          {isError ? t("Couldn't play this song") : isLoading ? t("Loading…") : artist ?? (hasTrack ? "" : t("Insert a song"))}
         </p>
 
         <div className="relative flex h-3.5 items-end justify-between">
@@ -156,8 +158,8 @@ export function Y2kSkin({
         </div>
 
         <SegmentSlider
-          label="Song position"
-          valueText={`${formatSkinTime(shownTime)} of ${formatSkinTime(duration)}`}
+          label={t("Song position")}
+          valueText={t("{time} of {duration}", { time: formatSkinTime(shownTime), duration: formatSkinTime(duration) })}
           value={shownTime}
           max={duration || 1}
           share={progress}
@@ -170,7 +172,7 @@ export function Y2kSkin({
           <span className="text-[7px] font-bold tracking-[0.14em]" aria-hidden="true">VOL</span>
           <div className="flex-1">
             <SegmentSlider
-              label="Volume"
+              label={t("Volume")}
               valueText={`${Math.round(volume * 100)}%`}
               value={volume}
               max={1}
@@ -193,18 +195,18 @@ export function Y2kSkin({
       </div>
 
       {/* ── Transport ───────────────────────────────────────────────── */}
-      <GelButton label="Previous" onClick={onPrevious} className="left-[194px] top-5">
+      <GelButton label={t("Previous")} onClick={onPrevious} className="left-[194px] top-5">
         <SkipPreviousIcon size={13} aria-hidden="true" />
       </GelButton>
-      <GelButton label="Next" onClick={onNext} className="left-[194px] top-[92px]">
+      <GelButton label={t("Next")} onClick={onNext} className="left-[194px] top-[92px]">
         <SkipNextIcon size={13} aria-hidden="true" />
       </GelButton>
 
       <button
         type="button"
         onClick={onTogglePlay}
-        aria-label={isLoading ? "Loading song" : isPlaying ? "Pause" : "Play"}
-        title={isLoading ? "Loading song" : isPlaying ? "Pause" : "Play"}
+        aria-label={isLoading ? t("Loading song") : isPlaying ? t("Pause") : t("Play")}
+        title={isLoading ? t("Loading song") : isPlaying ? t("Pause") : t("Play")}
         className={cn(
           "group/orb absolute left-[227px] top-[35px] grid size-[70px] place-items-center rounded-full p-1",
           "bg-[conic-gradient(from_200deg,var(--skin-chrome-lo),var(--skin-chrome-hi),var(--skin-chrome),var(--skin-chrome-lo),var(--skin-chrome-hi),var(--skin-chrome),var(--skin-chrome-lo))]",

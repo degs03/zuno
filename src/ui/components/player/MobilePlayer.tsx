@@ -21,6 +21,7 @@ import { PlaybackControls } from "./PlaybackControls";
 import { LyricsButton } from "./LyricsButton";
 import { DownloadButton } from "./DownloadButton";
 import { PlaybackOptions } from "./PlaybackOptions";
+import { useT } from "../../../i18n";
 
 /**
  * Phone player: a floating pill above the nav bar that opens into a full-screen Now Playing
@@ -52,6 +53,7 @@ function usePlayerBasics() {
 }
 
 export function MobilePlayerPill({ onExpand }: { onExpand: () => void }) {
+  const t = useT();
   const { currentTrack, status } = usePlayerBasics();
   const isPlaying = status === "playing";
   const isBusy = status === "loading";
@@ -75,7 +77,7 @@ export function MobilePlayerPill({ onExpand }: { onExpand: () => void }) {
         data-mobile-player
         role="button"
         tabIndex={0}
-        aria-label={`Now playing: ${currentTrack.title}. Open player`}
+        aria-label={t("Now playing: {title}. Open player", { title: currentTrack.title })}
         onClick={onExpand}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
@@ -99,7 +101,7 @@ export function MobilePlayerPill({ onExpand }: { onExpand: () => void }) {
         </span>
         <button
           type="button"
-          aria-label={isPlaying ? "Pause" : "Play"}
+          aria-label={isPlaying ? t("Pause") : t("Play")}
           onClick={(event) => {
             event.stopPropagation();
             void playerController.togglePlayPause();
@@ -116,7 +118,7 @@ export function MobilePlayerPill({ onExpand }: { onExpand: () => void }) {
         </button>
         <button
           type="button"
-          aria-label="Next"
+          aria-label={t("Next")}
           onClick={(event) => {
             event.stopPropagation();
             void playerController.skipToNext();
@@ -127,7 +129,11 @@ export function MobilePlayerPill({ onExpand }: { onExpand: () => void }) {
         </button>
         {/* Progress along the pill's bottom edge, in the accent. */}
         <span aria-hidden="true" className="pointer-events-none absolute inset-x-6 bottom-0 h-0.5 rounded-full bg-muted">
-          <span className="glow block h-full rounded-full bg-primary" style={{ width: `${progress * 100}%` }} />
+          {/* A transform, not a width: repainting a glowing bar twice a second showed up on phones. */}
+          <span
+            className="block h-full w-full origin-left rounded-full bg-primary transition-transform duration-500 ease-linear"
+            style={{ transform: `scaleX(${Math.max(0, Math.min(1, progress))})` }}
+          />
         </span>
       </div>
     </div>
@@ -145,6 +151,7 @@ export function NowPlayingSheet({
   onToggleLyrics: () => void;
   onToggleQueue: () => void;
 }) {
+  const t = useT();
   const { currentTrack } = usePlayerBasics();
   const libraryState = useLibraryState();
   const { toggleTrackLike } = useTrackContextMenu();
@@ -170,7 +177,7 @@ export function NowPlayingSheet({
           key="now-playing"
           role="dialog"
           aria-modal="true"
-          aria-label="Now playing"
+          aria-label={t("Now playing")}
           initial={{ y: "100%" }}
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
@@ -202,7 +209,7 @@ export function NowPlayingSheet({
           >
             <button
               type="button"
-              aria-label="Close player"
+              aria-label={t("Close player")}
               onClick={onClose}
               className="grid size-11 place-items-center rounded-full text-foreground active:bg-[var(--color-pressed)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -231,7 +238,7 @@ export function NowPlayingSheet({
               {canLike ? (
                 <button
                   type="button"
-                  aria-label={isLiked ? "Remove like" : "Like song"}
+                  aria-label={isLiked ? t("Remove like") : t("Like song")}
                   disabled={likePending}
                   onClick={() => void toggleTrackLike(currentTrack)}
                   className={cn(
@@ -260,7 +267,7 @@ export function NowPlayingSheet({
                 <PlaybackOptions />
                 <button
                   type="button"
-                  aria-label="Open queue"
+                  aria-label={t("Open queue")}
                   onClick={() => {
                     onClose();
                     onToggleQueue();

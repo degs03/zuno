@@ -15,7 +15,10 @@ import android.graphics.BitmapFactory
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.net.wifi.WifiManager
 import android.os.Build
+import android.os.PowerManager
+import android.view.KeyEvent
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -44,6 +47,11 @@ class PlaybackService : Service() {
     val status: String,
     val durationSec: Double,
     val positionSec: Double,
+    val liked: Boolean = false,
+    val shuffle: Boolean = false,
+    /** "off", "all" or "one". */
+    val repeat: String = "off",
+    val nextTitle: String? = null,
   )
 
   private lateinit var session: MediaSessionCompat
@@ -56,6 +64,13 @@ class PlaybackService : Service() {
   private var artwork: Bitmap? = null
   private val main = Handler(Looper.getMainLooper())
   private val io = Executors.newSingleThreadExecutor()
+  private var wakeLock: PowerManager.WakeLock? = null
+  private var wifiLock: WifiManager.WifiLock? = null
+
+  // One-button headset gestures: presses are counted until the window closes, then acted on.
+  private var presses = 0
+  private var longPressFired = false
+  private val pressWindow = Runnable { firePresses() }
 
   private val noisy = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -98,6 +113,13 @@ class PlaybackService : Service() {
         override fun onSkipToPrevious() = ZunoPlugin.dispatchAction("previous")
         override fun onSeekTo(pos: Long) =
           ZunoPlugin.dispatchAction("seekTo") { put("positionSec", pos / 1000.0) }
+
+        override fun onMediaButtonEvent(mediaButtonEvent: Intent): Boolean {
+          @Suppress("DEPRECATION") // The typed overload is API 33+; minSdk is 26.
+          val event = mediaButtonEvent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
+            ?: return super.onMediaButtonEvent(mediaButtonEvent)
+          return handleHeadsetKey(event) || super.onMediaButtonEvent(mediaButtonEvent)
+        }
       })
       setSessionActivity(openAppIntent())
       isActive = true
@@ -106,7 +128,12 @@ class PlaybackService : Service() {
   }
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    MediaButtonReceiver.handleIntent(session, intent)
+    if (intent?.action == ACTION_CUSTOM) {
+      // Widget extras (like, shuffle, repeat): the WebView owns that state, so just forward.
+      intent.getStringExtra(EXTRA_ACTION)?.let { ZunoPlugin.dispatchAction(it) }
+    } else {
+      MediaButtonReceiver.handleIntent(session, intent)
+    }
     if (state == null) {
       // Started by a stale media button (widget/headset) with nothing loaded: Android still
       // requires the foreground promise to be kept before we can go away.
@@ -131,6 +158,8 @@ class PlaybackService : Service() {
 
   override fun onDestroy() {
     instance = null
+    main.removeCallbacks(pressWindow)
+    releaseLocks()
     abandonFocus()
     if (noisyRegistered) unregisterReceiver(noisy)
     session.release()
@@ -167,6 +196,8 @@ class PlaybackService : Service() {
         .build()
     )
 
+    if (s.status == "playing") acquireLocks() else if (s.status == "paused") releaseLocks()
+
     if (playing) {
       requestFocus()
       if (!noisyRegistered) {
@@ -185,7 +216,7 @@ class PlaybackService : Service() {
       this, NOTIFICATION_ID, buildNotification(s, playing),
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0,
     )
-    NowPlayingWidget.push(this, s.title, s.artist, playing, artwork)
+    NowPlayingWidget.push(this, s, playing, artwork)
     loadArtwork(s.artworkUrl)
   }
 
@@ -233,6 +264,88 @@ class PlaybackService : Service() {
     }
   }
 
+  /**
+   * HEADSETHOOK / PLAY_PAUSE from a one-button headset or earbud: 1 press toggles, 2 and 3 do
+   * what the user chose (default next / previous), holding does the long-press gesture.
+   * Dedicated NEXT/PREVIOUS keys fall through to the default handling.
+   */
+  private fun handleHeadsetKey(event: KeyEvent): Boolean {
+    if (event.keyCode != KeyEvent.KEYCODE_HEADSETHOOK && event.keyCode != KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
+      return false
+    }
+    when (event.action) {
+      KeyEvent.ACTION_DOWN -> {
+        if (event.repeatCount > 0 && !longPressFired && (event.isLongPress || event.repeatCount >= 2)) {
+          longPressFired = true
+          main.removeCallbacks(pressWindow)
+          presses = 0
+          perform(AudioRoutes.gesture(this, "long", "none"))
+        }
+      }
+      KeyEvent.ACTION_UP -> {
+        if (longPressFired) {
+          longPressFired = false
+          return true
+        }
+        presses += 1
+        main.removeCallbacks(pressWindow)
+        if (presses >= 3) firePresses() else main.postDelayed(pressWindow, PRESS_WINDOW_MS)
+      }
+    }
+    return true
+  }
+
+  private fun firePresses() {
+    val count = presses
+    presses = 0
+    when (count) {
+      0 -> Unit
+      1 -> perform("playPause")
+      2 -> perform(AudioRoutes.gesture(this, "double", "next"))
+      else -> perform(AudioRoutes.gesture(this, "triple", "previous"))
+    }
+  }
+
+  private fun perform(action: String) {
+    when (action) {
+      "none", "" -> Unit
+      "playPause" -> ZunoPlugin.dispatchAction(if (state?.status == "playing") "pause" else "play")
+      else -> ZunoPlugin.dispatchAction(action)
+    }
+  }
+
+  /**
+   * CPU and Wi-Fi stay awake while music plays with the screen off: the Rust engine decodes on
+   * its own thread and streams over the network, and Doze / Wi-Fi power save would otherwise
+   * starve both. Released on pause, so a paused phone sleeps normally.
+   */
+  private fun acquireLocks() {
+    if (wakeLock?.isHeld != true) {
+      val power = getSystemService(POWER_SERVICE) as PowerManager
+      wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "zuno:playback").apply {
+        setReferenceCounted(false)
+        acquire(WAKE_LOCK_TIMEOUT_MS)
+      }
+    } else {
+      // Renewed on every playing update so it never lapses mid-album, never outlives the app.
+      wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
+    }
+    if (wifiLock?.isHeld != true) {
+      val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+      @Suppress("DEPRECATION")
+      val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) WifiManager.WIFI_MODE_FULL_HIGH_PERF else WifiManager.WIFI_MODE_FULL
+      wifiLock = wifi.createWifiLock(mode, "zuno:stream").apply {
+        setReferenceCounted(false)
+        acquire()
+      }
+    }
+  }
+
+  private fun releaseLocks() {
+    wakeLock?.takeIf { it.isHeld }?.release()
+    wifiLock?.takeIf { it.isHeld }?.release()
+  }
+
   private fun requestFocus() {
     if (hasFocus) return
     val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
@@ -271,6 +384,11 @@ class PlaybackService : Service() {
   companion object {
     private const val CHANNEL_ID = "playback"
     private const val NOTIFICATION_ID = 1
+    private const val PRESS_WINDOW_MS = 450L
+    /** Safety net: a wake lock is renewed while playing and can never be held for longer. */
+    private const val WAKE_LOCK_TIMEOUT_MS = 30 * 60 * 1000L
+    const val ACTION_CUSTOM = "com.zuno.desktop.CUSTOM_ACTION"
+    const val EXTRA_ACTION = "action"
 
     @Volatile
     private var state: State? = null
@@ -279,6 +397,12 @@ class PlaybackService : Service() {
     private var instance: PlaybackService? = null
 
     fun isRunning(): Boolean = instance != null
+
+    fun isPaused(): Boolean = state?.status == "paused"
+
+    fun isPlaying(): Boolean = state?.status == "playing" || state?.status == "loading"
+
+    fun current(): State? = state
 
     /** Called for every state change from the frontend's media-session hook. */
     fun update(context: Context, next: State) {

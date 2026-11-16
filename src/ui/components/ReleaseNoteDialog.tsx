@@ -4,9 +4,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { cn } from "@/lib/utils";
 import { GitHubIcon, ListIcon } from "@/ui/icons";
-import { parseReleaseNote, RELEASE_NOTE_BODY } from "../../internal/releaseNote";
+import { parseReleaseNote, releaseNoteBody } from "../../internal/releaseNote";
+import { getLocale } from "../../i18n";
 import { ExternalLinkButton } from "./ExternalLinkButton";
 import { GITHUB_NEW_ISSUE_URL, GITHUB_RELEASES_URL } from "../links";
+import { useT } from "../../i18n";
 
 interface ReleaseNoteDialogProps {
   /** The version being announced, or null when there is nothing to announce. */
@@ -22,6 +24,7 @@ interface ReleaseNoteDialogProps {
  * scrolling and would clip anything rendered inside it.
  */
 export function ReleaseNoteDialog({ version, onDismiss }: ReleaseNoteDialogProps) {
+  const t = useT();
   const dismissRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -64,7 +67,7 @@ export function ReleaseNoteDialog({ version, onDismiss }: ReleaseNoteDialogProps
             transition={{ type: "spring", stiffness: 420, damping: 32, mass: 0.7 }}
           >
             <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-primary">
-              Updated
+              {t("Updated")}
             </span>
             <h2 id="release-note-title" className="mt-1 text-xl font-bold tracking-tight">
               Zuno {version}
@@ -75,7 +78,7 @@ export function ReleaseNoteDialog({ version, onDismiss }: ReleaseNoteDialogProps
                 subreddit is linked where it is mentioned rather than as a button, so the
                 sentence reads as a sentence. */}
             <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-              {parseReleaseNote(RELEASE_NOTE_BODY).map((segment, index) =>
+              {parseReleaseNote(releaseNoteBody(getLocale())).map((segment, index) =>
                 segment.kind === "text" ? (
                   segment.value
                 ) : segment.kind === "strong" ? (
@@ -101,12 +104,12 @@ export function ReleaseNoteDialog({ version, onDismiss }: ReleaseNoteDialogProps
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <ExternalLinkButton
                 icon={<ListIcon size={15} aria-hidden="true" />}
-                label="Release notes"
+                label={t("Release notes")}
                 url={GITHUB_RELEASES_URL}
               />
               <ExternalLinkButton
                 icon={<GitHubIcon size={15} aria-hidden="true" />}
-                label="Report an issue"
+                label={t("Report an issue")}
                 url={GITHUB_NEW_ISSUE_URL}
               />
 
@@ -120,7 +123,7 @@ export function ReleaseNoteDialog({ version, onDismiss }: ReleaseNoteDialogProps
                 )}
                 onClick={onDismiss}
               >
-                Got it
+                {t("Got it")}
               </button>
             </div>
           </motion.div>

@@ -124,6 +124,14 @@ export { ClockCircleIcon as ClockIcon } from "@solar-icons/react/linear/clock-ci
 export { SpeedometerMaxIcon as SpeedIcon } from "@solar-icons/react/linear/speedometer-max";
 export { Tuning2Icon as EqualizerIcon } from "@solar-icons/react/linear/tuning-2";
 export { DisketteIcon as SaveIcon } from "@solar-icons/react/linear/diskette";
+export { ImportIcon } from "@solar-icons/react/linear/import";
+export { WheelIcon as CarIcon } from "@solar-icons/react/linear/wheel";
+export { ExportIcon } from "@solar-icons/react/linear/export";
+export { HeadphonesRoundIcon as HeadphonesIcon } from "@solar-icons/react/linear/headphones-round";
+export { CloudCrossIcon as OfflineIcon } from "@solar-icons/react/linear/cloud-cross";
+export { Chart2Icon as StatsIcon } from "@solar-icons/react/linear/chart-2";
+export { ArchiveDownIcon as BackupIcon } from "@solar-icons/react/linear/archive-down";
+export { TuningSquareIcon as SoundProfileIcon } from "@solar-icons/react/linear/tuning-square";
 export { CupHotIcon as CoffeeIcon } from "@solar-icons/react/linear/cup-hot";
 export { MagicWandIcon as DiceIcon } from "@solar-icons/react/linear/magic-wand";
 export { MagicWandIcon as DiceActiveIcon } from "@solar-icons/react/bold/magic-wand";

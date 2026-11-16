@@ -77,6 +77,49 @@ impl EqualizerValues {
     }
 }
 
+/**
+ * Tone and stereo controls that sit beside the ten bands: a bass and a treble shelf, left/right
+ * balance and stereo width. Neutral is exactly transparent and skipped like a flat EQ.
+ */
+#[derive(Clone, Copy, PartialEq)]
+pub(crate) struct EffectsValues {
+    /// Low shelf at `BASS_SHELF_HZ`, 0..+12 dB (a cut is what the bands are for).
+    pub(crate) bass_db: f32,
+    /// High shelf at `TREBLE_SHELF_HZ`, -12..+12 dB.
+    pub(crate) treble_db: f32,
+    /// -1 is left only, +1 right only. The louder side never gets louder than unity.
+    pub(crate) balance: f32,
+    /// Side-channel scale: 0 mono, 1 untouched, 2 twice as wide.
+    pub(crate) width: f32,
+}
+
+impl EffectsValues {
+    pub(crate) const NEUTRAL: Self = Self { bass_db: 0.0, treble_db: 0.0, balance: 0.0, width: 1.0 };
+
+    pub(crate) fn clamped(self) -> Self {
+        let finite = |value: f32, fallback: f32| if value.is_finite() { value } else { fallback };
+        Self {
+            bass_db: finite(self.bass_db, 0.0).clamp(0.0, MAX_GAIN_DB),
+            treble_db: finite(self.treble_db, 0.0).clamp(-MAX_GAIN_DB, MAX_GAIN_DB),
+            balance: finite(self.balance, 0.0).clamp(-1.0, 1.0),
+            width: finite(self.width, 1.0).clamp(0.0, 2.0),
+        }
+    }
+
+    fn has_shelves(&self) -> bool {
+        self.bass_db != 0.0 || self.treble_db != 0.0
+    }
+
+    fn has_stereo(&self) -> bool {
+        self.balance != 0.0 || self.width != 1.0
+    }
+}
+
+const BASS_SHELF_HZ: f32 = 90.0;
+const TREBLE_SHELF_HZ: f32 = 8_000.0;
+/// Butterworth-ish shelf slope: no bump at the corner, so "+6 bass" is just more bass.
+const SHELF_Q: f32 = std::f32::consts::FRAC_1_SQRT_2;
+
 struct EqualizerState {
     /**
      * Bumped on every change.
@@ -87,15 +130,48 @@ struct EqualizerState {
      */
     generation: AtomicU64,
     values: Mutex<EqualizerValues>,
+    effects: Mutex<EffectsValues>,
 }
 
 static EQUALIZER: EqualizerState = EqualizerState {
     generation: AtomicU64::new(0),
     values: Mutex::new(EqualizerValues::FLAT),
+    effects: Mutex::new(EffectsValues::NEUTRAL),
 };
+
+pub(crate) fn set_effects(effects: EffectsValues) {
+    if let Ok(mut guard) = EQUALIZER.effects.lock() {
+        *guard = effects.clamped();
+    }
+    EQUALIZER.generation.fetch_add(1, Ordering::Release);
+}
+
+pub(crate) fn effects() -> EffectsValues {
+    EQUALIZER
+        .effects
+        .lock()
+        .map(|guard| *guard)
+        .unwrap_or(EffectsValues::NEUTRAL)
+}
 
 /// Whether each track's loudness gain applies (#181). Toggling it retunes live sources too.
 static NORMALIZE: AtomicBool = AtomicBool::new(false);
+
+/**
+ * Bit-perfect (DAC) mode: every sample leaves this stage exactly as it was decoded — no preamp,
+ * bands, shelves, stereo, loudness gain. The engine also pins volume and speed to unity and
+ * opens the device at the track's own sample rate (audio.rs), so nothing in the app alters it.
+ */
+static BIT_PERFECT: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn set_bit_perfect(enabled: bool) {
+    BIT_PERFECT.store(enabled, Ordering::Release);
+    EQUALIZER.generation.fetch_add(1, Ordering::Release);
+}
+
+pub(crate) fn bit_perfect() -> bool {
+    BIT_PERFECT.load(Ordering::Acquire)
+}
 
 pub(crate) fn set_normalize(enabled: bool) {
     NORMALIZE.store(enabled, Ordering::Release);
@@ -202,6 +278,38 @@ impl Biquad {
         }
     }
 
+    /// RBJ cookbook shelf. `low` picks the low shelf, otherwise the high one.
+    fn shelf(low: bool, frequency: f32, sample_rate: f32, gain_db: f32) -> Self {
+        if gain_db == 0.0 || frequency >= sample_rate / 2.0 {
+            return Self::PASSTHROUGH;
+        }
+        let a = 10f32.powf(gain_db / 40.0);
+        let omega = std::f32::consts::TAU * frequency / sample_rate;
+        let (sin, cos) = omega.sin_cos();
+        let alpha = sin / (2.0 * SHELF_Q);
+        let root = 2.0 * a.sqrt() * alpha;
+        let (b0, b1, b2, a0, a1, a2) = if low {
+            (
+                a * ((a + 1.0) - (a - 1.0) * cos + root),
+                2.0 * a * ((a - 1.0) - (a + 1.0) * cos),
+                a * ((a + 1.0) - (a - 1.0) * cos - root),
+                (a + 1.0) + (a - 1.0) * cos + root,
+                -2.0 * ((a - 1.0) + (a + 1.0) * cos),
+                (a + 1.0) + (a - 1.0) * cos - root,
+            )
+        } else {
+            (
+                a * ((a + 1.0) + (a - 1.0) * cos + root),
+                -2.0 * a * ((a - 1.0) + (a + 1.0) * cos),
+                a * ((a + 1.0) + (a - 1.0) * cos - root),
+                (a + 1.0) - (a - 1.0) * cos + root,
+                2.0 * ((a - 1.0) - (a + 1.0) * cos),
+                (a + 1.0) - (a - 1.0) * cos - root,
+            )
+        };
+        Self { b0: b0 / a0, b1: b1 / a0, b2: b2 / a0, a1: a1 / a0, a2: a2 / a0, ..Self::PASSTHROUGH }
+    }
+
     #[inline]
     fn process(&mut self, input: f32) -> f32 {
         let output = self.b0 * input + self.b1 * self.x1 + self.b2 * self.x2
@@ -254,6 +362,17 @@ pub(crate) struct EqualizedSource<S> {
     active_len: usize,
     /// Samples until the settings generation is checked again.
     recheck_in: u32,
+    /// Bass and treble shelves, per channel like the bands.
+    shelves: Vec<[Biquad; 2]>,
+    shelves_active: bool,
+    /// Balance/width need a whole stereo frame, so left is processed with right in hand and
+    /// right is handed out on the following call.
+    stereo_active: bool,
+    balance_gains: (f32, f32),
+    width: f32,
+    pending_right: Option<f32>,
+    /// "Made for you" measurement of the decoded signal (analysis.rs); idle unless asked for.
+    analyzer: crate::analysis::Analyzer,
 }
 
 /// How often a playing source looks for new EQ settings: ~3 ms at 48 kHz stereo, far below
@@ -278,6 +397,13 @@ impl<S: Source> EqualizedSource<S> {
             active: [0; BAND_COUNT],
             active_len: 0,
             recheck_in: 0,
+            shelves: vec![[Biquad::PASSTHROUGH; 2]; channels.max(1)],
+            shelves_active: false,
+            stereo_active: false,
+            balance_gains: (1.0, 1.0),
+            width: 1.0,
+            pending_right: None,
+            analyzer: crate::analysis::Analyzer::new(sample_rate),
         };
         source.reload();
         source
@@ -285,9 +411,18 @@ impl<S: Source> EqualizedSource<S> {
 
     fn reload(&mut self) {
         self.generation = EQUALIZER.generation.load(Ordering::Acquire);
+        if bit_perfect() {
+            // Unity and untouched: the fast path in `next` returns each sample as decoded.
+            self.gain = 1.0;
+            self.bypass = true;
+            self.shelves_active = false;
+            self.stereo_active = false;
+            return;
+        }
         let values = values();
         let normalize = if NORMALIZE.load(Ordering::Acquire) { self.loudness_gain } else { 1.0 };
         self.gain = 10f32.powf(values.preamp_db / 20.0) * normalize;
+        self.reload_effects();
         let was_bypassed = self.bypass;
         self.bypass = values.is_flat();
         if self.bypass {
@@ -321,15 +456,60 @@ impl<S: Source> EqualizedSource<S> {
             }
         }
     }
-}
 
-impl<S: Source> Iterator for EqualizedSource<S> {
-    type Item = f32;
+    fn reload_effects(&mut self) {
+        let effects = effects();
+        let pitch = f32::from_bits(PITCH_RATIO.load(Ordering::Acquire));
+        let was_active = self.shelves_active;
+        self.shelves_active = effects.has_shelves();
+        let bass = Biquad::shelf(true, BASS_SHELF_HZ / pitch, self.sample_rate, effects.bass_db);
+        let treble = Biquad::shelf(false, TREBLE_SHELF_HZ / pitch, self.sample_rate, effects.treble_db);
+        for channel in &mut self.shelves {
+            channel[0].retune(bass);
+            channel[1].retune(treble);
+            if self.shelves_active && !was_active {
+                channel[0].clear_history();
+                channel[1].clear_history();
+            }
+        }
+        // Stereo controls only mean something on a two-channel stream.
+        self.stereo_active = self.filters.len() == 2 && effects.has_stereo();
+        let balance = effects.balance;
+        self.balance_gains = (
+            if balance > 0.0 { 1.0 - balance } else { 1.0 },
+            if balance < 0.0 { 1.0 + balance } else { 1.0 },
+        );
+        self.width = effects.width;
+    }
+
+    /// Gain, bands and shelves for one sample of one channel.
+    #[inline]
+    fn filter(&mut self, channel: usize, sample: f32) -> f32 {
+        let mut output = sample * self.gain;
+        if !self.bypass {
+            let filters = &mut self.filters[channel];
+            for &band in &self.active[..self.active_len] {
+                output = filters[band].process(output);
+            }
+        }
+        if self.shelves_active {
+            let shelves = &mut self.shelves[channel];
+            let bassed = shelves[0].process(output);
+            output = shelves[1].process(bassed);
+        }
+        output
+    }
+
+    /// Mid/side width, then balance.
+    #[inline]
+    fn stereo(&self, left: f32, right: f32) -> (f32, f32) {
+        let mid = (left + right) * 0.5;
+        let side = (left - right) * 0.5 * self.width;
+        ((mid + side) * self.balance_gains.0, (mid - side) * self.balance_gains.1)
+    }
 
     #[inline]
-    fn next(&mut self) -> Option<f32> {
-        let sample = self.inner.next()?;
-
+    fn tick(&mut self) {
         if self.recheck_in == 0 {
             self.recheck_in = RECHECK_EVERY;
             if self.generation != EQUALIZER.generation.load(Ordering::Acquire) {
@@ -337,19 +517,44 @@ impl<S: Source> Iterator for EqualizedSource<S> {
             }
         }
         self.recheck_in -= 1;
+    }
+}
+
+impl<S: Source> Iterator for EqualizedSource<S> {
+    type Item = f32;
+
+    #[inline]
+    fn next(&mut self) -> Option<f32> {
+        if let Some(right) = self.pending_right.take() {
+            return Some(right);
+        }
+        let sample = self.inner.next()?;
+        self.tick();
         // Counted while bypassed too, or turning the EQ on mid-track filters left as right.
         let channel = self.channel_index;
         self.channel_index = (self.channel_index + 1) % self.filters.len();
-        if self.bypass {
+        // Measured before any processing, so the user's own EQ never colours it.
+        if channel == 0 && crate::analysis::active() {
+            self.analyzer.feed(sample);
+        }
+        if self.bypass && !self.shelves_active && !self.stereo_active {
             return Some(sample * self.gain);
         }
 
-        let mut output = sample * self.gain;
-        let filters = &mut self.filters[channel];
-        for &band in &self.active[..self.active_len] {
-            output = filters[band].process(output);
+        let output = self.filter(channel, sample);
+        if !(self.stereo_active && channel == 0) {
+            return Some(output);
         }
-        Some(output)
+        // Left in hand: pull its right partner so the frame can be widened and balanced.
+        let Some(right) = self.inner.next() else {
+            return Some(output);
+        };
+        self.tick();
+        self.channel_index = (self.channel_index + 1) % self.filters.len();
+        let right = self.filter(1, right);
+        let (left, right) = self.stereo(output, right);
+        self.pending_right = Some(right);
+        Some(left)
     }
 
     #[inline]
@@ -387,12 +592,15 @@ impl<S: Source> Source for EqualizedSource<S> {
          */
         for channel in &mut self.filters {
             for filter in channel.iter_mut() {
-                filter.x1 = 0.0;
-                filter.x2 = 0.0;
-                filter.y1 = 0.0;
-                filter.y2 = 0.0;
+                filter.clear_history();
             }
         }
+        for channel in &mut self.shelves {
+            for filter in channel.iter_mut() {
+                filter.clear_history();
+            }
+        }
+        self.pending_right = None;
         self.channel_index = 0;
         Ok(())
     }
@@ -401,8 +609,32 @@ impl<S: Source> Source for EqualizedSource<S> {
 #[cfg(test)]
 mod tests {
     use super::{
-        flush_denormal, loudness_gain, Biquad, EqualizerValues, BAND_COUNT, BAND_HZ, MAX_GAIN_DB,
+        flush_denormal, loudness_gain, Biquad, EffectsValues, EqualizerValues, BAND_COUNT, BAND_HZ,
+        MAX_GAIN_DB,
     };
+
+    #[test]
+    fn shelves_lift_their_own_end_of_the_spectrum() {
+        let rate = 48_000.0;
+        let bass = Biquad::shelf(true, 90.0, rate, 12.0);
+        assert!(response_at(bass, 40.0, rate) > 3.0, "bass shelf lifts 40 Hz");
+        assert!(response_at(bass, 4_000.0, rate) < 1.1, "bass shelf leaves 4 kHz alone");
+        let treble = Biquad::shelf(false, 8_000.0, rate, 12.0);
+        assert!(response_at(treble, 16_000.0, rate) > 3.0, "treble shelf lifts 16 kHz");
+        assert!(response_at(treble, 200.0, rate) < 1.1, "treble shelf leaves 200 Hz alone");
+        assert_eq!(Biquad::shelf(true, 90.0, rate, 0.0).b0, 1.0, "0 dB shelf is a passthrough");
+    }
+
+    #[test]
+    fn effects_clamp_and_neutral_is_neutral() {
+        let neutral = EffectsValues::NEUTRAL;
+        assert!(!neutral.has_shelves() && !neutral.has_stereo());
+        let wild = EffectsValues { bass_db: -5.0, treble_db: 40.0, balance: 3.0, width: f32::NAN }.clamped();
+        assert_eq!(wild.bass_db, 0.0);
+        assert_eq!(wild.treble_db, MAX_GAIN_DB);
+        assert_eq!(wild.balance, 1.0);
+        assert_eq!(wild.width, 1.0);
+    }
 
     /// A value below the floor lands on exact zero; an audible one passes through untouched,
     /// regardless of sign.

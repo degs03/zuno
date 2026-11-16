@@ -14,12 +14,13 @@ import type {
 import type { LibraryController } from "../../player/LibraryController";
 import type { PlayerControllerActions } from "../../player/playerStore";
 import { logInternalError } from "../../internal/logging";
-import { removeAllDownloads, useOfflineState } from "../../player/offlineStore";
+import { removeAllDownloads, useOfflineState, unpinCollection, usePinnedCollections } from "../../player/offlineStore";
 import { BrowseShelves } from "../components/BrowseShelves";
 import { TrackRow } from "../components/TrackRow";
 import { useTrackContextMenu } from "../components/TrackContextMenu";
 import { useNowPlaying } from "../hooks/useNowPlaying";
 import { loadFailedMessage } from "../../internal/connectivity";
+import { msg, t, tn, useT } from "../../i18n";
 
 /**
  * "downloads" is not a YouTube feed — it reads from the offline store on this machine. It
@@ -29,17 +30,17 @@ import { loadFailedMessage } from "../../internal/connectivity";
 export type BrowseTab = BrowseSurface | "downloads";
 
 const SURFACES: Array<{ value: BrowseTab; label: string }> = [
-  { value: "explore", label: "Explore" },
-  { value: "charts", label: "Charts" },
-  { value: "moods", label: "Moods & genres" },
-  { value: "podcasts", label: "Podcasts" },
-  { value: "downloads", label: "Downloads" },
+  { value: "explore", label: msg("Explore") },
+  { value: "charts", label: msg("Charts") },
+  { value: "moods", label: msg("Moods & genres") },
+  { value: "podcasts", label: msg("Podcasts") },
+  { value: "downloads", label: msg("Downloads") },
 ];
 
 function formatSize(bytes: number): string {
-  if (bytes < 1024 ** 2) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+  if (bytes < 1024 ** 2) return t("{size} KB", { size: Math.max(1, Math.round(bytes / 1024)) });
+  if (bytes < 1024 ** 3) return t("{size} MB", { size: (bytes / 1024 ** 2).toFixed(1) });
+  return t("{size} GB", { size: (bytes / 1024 ** 3).toFixed(2) });
 }
 
 /**
@@ -66,6 +67,7 @@ export function BrowsePage({
   onOpenArtist: (artist: Artist) => void;
   onOpenPlaylist: (playlist: Playlist) => void;
 }) {
+  const t = useT();
   const [surface, setSurface] = useState<BrowseTab>(initialTab);
   /*
    * Chips drill into further feeds. Kept as a stack inside this page rather than as new tabs:
@@ -117,13 +119,13 @@ export function BrowsePage({
       })
       .catch((cause: unknown) => {
         logInternalError("BrowsePage.load failed", cause, { surface });
-        if (!cancelled) setError(loadFailedMessage("Could not load this feed."));
+        if (!cancelled) setError(loadFailedMessage(t("Could not load this feed.")));
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isDownloads, libraryController, surface, target]);
+  }, [isDownloads, libraryController, surface, t, target]);
 
   const playShelfTrack = (shelfTracks: Track[], track: Track) => {
     void playerController.playTrackById(track.id, shelfTracks);
@@ -137,17 +139,17 @@ export function BrowsePage({
             <button
               type="button"
               onClick={() => setDrillDown((stack) => stack.slice(0, -1))}
-              aria-label="Back"
+              aria-label={t("Back")}
               className="grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <ArrowLeftIcon size={18} aria-hidden="true" />
             </button>
           )}
           <h1 className="text-3xl font-bold tracking-[-0.02em] text-foreground">
-            {drillDown[drillDown.length - 1]?.title ?? (isDownloads ? "Downloads" : "Browse")}
+            {drillDown[drillDown.length - 1]?.title ?? (isDownloads ? t("Downloads") : t("Browse"))}
           </h1>
         </div>
-        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Browse feed" data-scroll-row>
+        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label={t("Browse feed")} data-scroll-row>
           {SURFACES.map((item) => (
             <button
               key={item.value}
@@ -166,7 +168,7 @@ export function BrowsePage({
                   : "bg-card text-muted-foreground hover:text-foreground",
               )}
             >
-              {item.label}
+              {t(item.label)}
             </button>
           ))}
         </div>
@@ -178,23 +180,23 @@ export function BrowsePage({
             <span className="grid size-12 place-items-center rounded-full bg-card text-muted-foreground">
               <DownloadIcon size={24} aria-hidden="true" />
             </span>
-            <p className="text-sm font-medium text-foreground">Nothing downloaded yet</p>
+            <p className="text-sm font-medium text-foreground">{t("Nothing downloaded yet")}</p>
             <p className="max-w-sm text-sm text-muted-foreground">
-              Use the download button on any song to keep it on this machine. Downloaded songs
-              play without a connection.
+              {t("Use the download button on any song to keep it on this machine. Downloaded songs play without a connection.")}
             </p>
           </div>
         ) : (
           <section className="flex flex-col gap-3">
+            <KeptOfflineList />
             <div className="flex items-end justify-between gap-4">
               <p className="text-sm text-muted-foreground">
-                {downloads.length} {downloads.length === 1 ? "song" : "songs"} ·{" "}
+                {tn("{n} song", "{n} songs", downloads.length)} ·{" "}
                 {formatSize(offline.usedBytes)}
-                {inFlight.length > 0 ? ` · ${inFlight.length} in progress` : ""}
+                {inFlight.length > 0 ? ` · ${t("{count} in progress", { count: inFlight.length })}` : ""}
                 {offline.downloadingId
                   ? offline.progress !== null
-                    ? ` · downloading ${offline.progress}%`
-                    : " · downloading"
+                    ? ` · ${t("downloading {percent}%", { percent: offline.progress })}`
+                    : ` · ${t("downloading")}`
                   : ""}
 
               </p>
@@ -217,7 +219,7 @@ export function BrowsePage({
                     : "bg-card text-muted-foreground hover:text-foreground",
                 )}
               >
-                {confirmRemoveAll ? "Click again to remove all" : "Remove all"}
+                {confirmRemoveAll ? t("Click again to remove all") : t("Remove all")}
               </button>
             </div>
 
@@ -243,8 +245,8 @@ export function BrowsePage({
                           {isActive
                             ? offline.progress !== null
                               ? `${offline.progress}%`
-                              : "Downloading"
-                            : "Queued"}
+                              : t("Downloading")
+                            : t("Queued")}
                         </span>
                       }
                     />
@@ -285,11 +287,11 @@ export function BrowsePage({
       ) : page === null ? (
         <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
           <SpinnerSteps size={18} color="currentColor" />
-          Loading {SURFACES.find((item) => item.value === surface)?.label}...
+          {t("Loading {feed}...", { feed: t(SURFACES.find((item) => item.value === surface)?.label ?? "") })}
         </div>
       ) : page.shelves.length === 0 ? (
         <p className="px-2 py-10 text-center text-sm text-muted-foreground">
-          YouTube Music returned nothing for this feed.
+          {t("YouTube Music returned nothing for this feed.")}
         </p>
       ) : (
         <BrowseShelves
@@ -307,6 +309,35 @@ export function BrowsePage({
             ])}
         />
       )}
+    </div>
+  );
+}
+
+/** Playlists and albums kept offline, with a way to stop following each. */
+function KeptOfflineList() {
+  const t = useT();
+  const pins = Object.values(usePinnedCollections());
+  if (pins.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-2 rounded-xl bg-card/60 p-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t("Kept offline")}</p>
+      <ul className="flex flex-col gap-1">
+        {pins.map((pin) => (
+          <li key={pin.id} className="flex items-center justify-between gap-3">
+            <span className="min-w-0 truncate text-sm text-foreground">
+              {pin.title}
+              <span className="text-muted-foreground"> · {pin.kind === "album" ? t("album") : t("playlist")} · {tn("{n} song", "{n} songs", pin.trackIds.length)}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => unpinCollection(pin.id)}
+              className="shrink-0 rounded-full px-3 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {t("Stop keeping")}
+            </button>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

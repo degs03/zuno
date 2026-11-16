@@ -5,6 +5,7 @@ import { Loader } from "@/components/motion/loader";
 import { CloseIcon } from "@/ui/icons";
 import type { UpdateInfo, UpdateInstallProgress } from "../../internal/updateChecker";
 import { installUpdate, snoozeUpdate } from "../../internal/updateChecker";
+import { useT } from "../../i18n";
 
 const AUTO_DISMISS_MS = 60_000;
 
@@ -19,10 +20,11 @@ interface UpdateToastProps {
 }
 
 export function UpdateToast({ update, onDismiss }: UpdateToastProps) {
+  const t = useT();
   const [installing, setInstalling] = useState(false);
   const [progress, setProgress] = useState<UpdateInstallProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const releaseLabel = update.canInstall ? "GitHub" : "Download";
+  const releaseLabel = update.canInstall ? "GitHub" : t("Download");
 
   useEffect(() => {
     if (installing) return;
@@ -44,8 +46,14 @@ export function UpdateToast({ update, onDismiss }: UpdateToastProps) {
     setError(null);
     try {
       await installUpdate(update, setProgress);
-    } catch {
-      setError("Installation failed. You can still open the release on GitHub.");
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "";
+      // Actionable messages (Android install permission, damaged download) are shown as they are.
+      setError(
+        /^(Allow Zuno|the downloaded update)/i.test(message)
+          ? message
+          : t("Installation failed. You can still open the release on GitHub."),
+      );
       setInstalling(false);
     }
   };
@@ -62,14 +70,14 @@ export function UpdateToast({ update, onDismiss }: UpdateToastProps) {
     >
       <div className="flex min-w-0 flex-col gap-0.5">
         <strong className="text-sm font-medium text-foreground">
-          Version {update.version} is available
+          {t("Version {version} is available", { version: update.version })}
         </strong>
         {installing && (
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Loader variant="spinner" size={12} />
             {progress?.percent !== undefined
-              ? `Downloading ${progress.percent}%`
-              : "Preparing update..."}
+              ? t("Downloading {percent}%", { percent: progress.percent })
+              : t("Preparing update...")}
           </span>
         )}
         {error && <span className="text-sm text-destructive">{error}</span>}
@@ -83,7 +91,7 @@ export function UpdateToast({ update, onDismiss }: UpdateToastProps) {
             disabled={installing}
             onClick={() => void install()}
           >
-            {installing ? "Installing..." : "Install"}
+            {installing ? t("Installing...") : t("Install")}
           </button>
         )}
         <a
@@ -91,7 +99,7 @@ export function UpdateToast({ update, onDismiss }: UpdateToastProps) {
           href={update.releaseUrl}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label={`Open version ${update.version} release on GitHub`}
+          aria-label={t("Open version {version} release on GitHub", { version: update.version })}
           onClick={(e) => {
             e.preventDefault();
             void openUrl(update.releaseUrl);
@@ -104,8 +112,8 @@ export function UpdateToast({ update, onDismiss }: UpdateToastProps) {
           type="button"
           disabled={installing}
           onClick={dismiss}
-          aria-label="Close update notification"
-          title="Close"
+          aria-label={t("Close update notification")}
+          title={t("Close")}
         >
           <CloseIcon size={16} />
         </button>

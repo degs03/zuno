@@ -9,6 +9,17 @@ import { useOfflineArtworkUrl } from "./offlineStore";
 import { onPosition } from "./rustAudio";
 import { isAndroid, isLinux, isMacOS, isWindows } from "../ui/platform";
 import { onAndroidEvent } from "../ui/android";
+import { getArtworkUrlCandidates } from "../datasource/youtube/artwork";
+import { syncAndroidBitPerfect } from "../ui/settings/bitPerfect";
+import {
+  libraryController,
+  useLibrarySelector,
+  usePlayerSelector,
+  usePlayerSessionSelector,
+} from "./playerStore";
+
+/** Fired on `window` when Android asks for the full player (the widget's cover). */
+export const OPEN_PLAYER_EVENT = "zuno-open-player";
 
 type NativeMediaAction =
   | "play"
@@ -105,6 +116,17 @@ export function useMediaSession(
   );
   // A downloaded song's saved cover, so the OS media controls keep their artwork offline.
   const offlineArtworkUrl = useOfflineArtworkUrl(state.currentTrack?.artworkUrl);
+  // Widget extras (Android only reads them): like, shuffle, repeat and what plays next.
+  const currentId = state.currentTrack?.id;
+  const liked = useLibrarySelector((library) =>
+    Boolean(currentId && library.library?.likedSongs.some((track) => track.id === currentId)));
+  const shuffle = usePlayerSelector((player) => player.shuffleEnabled);
+  const orderMode = usePlayerSelector((player) => player.playbackOrderMode);
+  const nextTitle = usePlayerSessionSelector((session) => {
+    const next = session?.queue[session.queueIndex + 1];
+    return next ? `${next.title}${next.artist ? ` · ${next.artist}` : ""}` : null;
+  });
+  const repeat = orderMode === "repeat-one" ? "one" : orderMode === "repeat-all" ? "all" : "off";
   const sendNativeMediaUpdate = useCallback((context: string, forceMetadata = false) => {
     if (!nativeMediaCommand) return;
 
@@ -114,22 +136,32 @@ export function useMediaSession(
       update: {
         title: track?.title ?? null,
         artist: track?.artist ?? null,
-        artworkUrl: offlineArtworkUrl ?? track?.artworkUrl ?? null,
+        // A list row's cover is often 60-120 px; the lock screen and widget want a real one.
+        artworkUrl: offlineArtworkUrl
+          ?? (track?.artworkUrl ? getArtworkUrlCandidates(track.artworkUrl, 544)[0] ?? track.artworkUrl : null),
         status: state.status,
         durationSec: duration || null,
         positionSec: getClampedPosition(duration, controller.getCurrentTime()),
         forceMetadata,
+        ...(usesNativeAndroidMediaSession ? { liked, shuffle, repeat, nextTitle } : {}),
       },
     }).catch((error) => {
       logInternalWarn(`useMediaSession native ${context} update failed`, {
         error: String(error),
       });
     });
-  }, [controller, nativeMediaCommand, offlineArtworkUrl, state.currentTrack, state.status]);
+  }, [controller, nativeMediaCommand, offlineArtworkUrl, state.currentTrack, state.status, liked, shuffle, repeat, nextTitle]);
+
+  // Bit-perfect USB DAC: keep Android's direct path at the new track's sample rate.
+  useEffect(() => {
+    if (!usesNativeAndroidMediaSession || state.status !== "playing") return;
+    const timer = window.setTimeout(() => void syncAndroidBitPerfect(), 800);
+    return () => window.clearTimeout(timer);
+  }, [state.currentTrack?.id, state.status]);
 
   useEffect(() => {
     if (!usesNativeAndroidMediaSession) return;
-    return onAndroidEvent("media", (event) => {
+    const stop = onAndroidEvent("media", (event) => {
       if (event.action === "seekTo" && typeof event.positionSec === "number") {
         void controller.seekTo(event.positionSec);
       }
@@ -138,7 +170,21 @@ export function useMediaSession(
       if (event.action === "playPause") void controller.togglePlayPause();
       if (event.action === "next") void controller.skipToNext();
       if (event.action === "previous") void controller.skipToPrevious();
+      if (event.action === "shuffle") controller.toggleShuffle();
+      if (event.action === "repeat") controller.cyclePlaybackOrderMode();
+      if (event.action === "openPlayer") window.dispatchEvent(new Event(OPEN_PLAYER_EVENT));
+      if (event.action === "like") {
+        const track = controller.getPlayerSession()?.currentTrack;
+        if (track) {
+          void libraryController
+            .setTrackLiked(track, !libraryController.isTrackLiked(track.id))
+            .catch((error: unknown) => logInternalWarn("Android like failed", { error: String(error) }));
+        }
+      }
     });
+    // Listeners are up: Kotlin flushes anything queued while the page was loading.
+    void invoke("android_frontend_ready").catch(() => {});
+    return stop;
   }, [controller]);
 
   useEffect(() => {

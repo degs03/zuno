@@ -13,6 +13,22 @@ val tauriProperties = Properties().apply {
     }
 }
 
+/*
+ * Release signing from `gen/android/keystore.properties` (gitignored), so every OTA update is
+ * signed with the same key as the installed app — Android refuses an update signed otherwise.
+ *   storeFile=C:/Users/you/Documents/ZUNO/zuno-android.jks
+ *   storePassword=...
+ *   keyAlias=...
+ *   keyPassword=...
+ * Without the file, release APKs build unsigned as before.
+ */
+val keystoreProperties = Properties().apply {
+    val propFile = rootProject.file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+
 android {
     compileSdk = 36
     namespace = "com.zuno.desktop"
@@ -23,6 +39,16 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    signingConfigs {
+        if (keystoreProperties.getProperty("storeFile") != null) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -37,6 +63,7 @@ android {
             }
         }
         getByName("release") {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             // Drops resources nothing references once code shrinking has run.
             isShrinkResources = true

@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { GoogleIcon } from "@/ui/icons";
 import { SpinnerSteps } from "@/components/motion/loader";
+import { useT } from "../../i18n";
 
 interface GoogleSignInButtonProps {
   onClick: () => void;
@@ -43,6 +44,7 @@ export function GoogleSignInButton({
   size = "md",
   className,
 }: GoogleSignInButtonProps) {
+  const t = useT();
   const glyphSize = size === "sm" ? 15 : 17;
 
   return (
@@ -51,8 +53,8 @@ export function GoogleSignInButton({
       onClick={onClick}
       disabled={disabled || isBusy}
       aria-busy={isBusy}
-      aria-label="Sign in with Google"
-      title="Sign in with Google"
+      aria-label={t("Sign in with Google")}
+      title={t("Sign in with Google")}
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-full font-medium",
         "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -72,7 +74,7 @@ export function GoogleSignInButton({
       )}
     >
       {isBusy ? <SpinnerSteps size={glyphSize} /> : <GoogleIcon size={glyphSize} />}
-      {!iconOnly && (isBusy ? "Connecting…" : "Sign in with Google")}
+      {!iconOnly && (isBusy ? t("Connecting…") : t("Sign in with Google"))}
     </button>
   );
 }

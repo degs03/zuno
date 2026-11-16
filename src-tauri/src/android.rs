@@ -231,6 +231,86 @@ pub struct MediaSessionUpdate {
     #[serde(default, skip_serializing)]
     #[allow(dead_code)]
     force_metadata: Option<bool>,
+    /// Widget extras: like state, shuffle, repeat ("off" | "all" | "one"), next track title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    liked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shuffle: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repeat: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    next_title: Option<String>,
+}
+
+#[derive(Serialize)]
+struct InstallArgs {
+    path: String,
+}
+
+/// Hands a downloaded, checksum-verified APK to the system installer (see ota.rs).
+/// Fails with "permission" when the user still has to allow installs from Zuno.
+#[tauri::command]
+pub async fn android_install_apk(app: tauri::AppHandle, path: String) -> Result<(), CommandError> {
+    call::<serde_json::Value, _>(&app, "installApk", InstallArgs { path }).await.map(|_| ())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BitPerfectArgs {
+    enabled: bool,
+    sample_rate: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BitPerfectStatus {
+    status: String,
+}
+
+/// Bit-perfect USB DAC routing at `sample_rate` (Android 14+); see AudioRoutes.applyBitPerfect.
+#[tauri::command]
+pub async fn android_set_bit_perfect(
+    app: tauri::AppHandle,
+    enabled: bool,
+    sample_rate: u32,
+) -> Result<BitPerfectStatus, CommandError> {
+    call(&app, "setBitPerfect", BitPerfectArgs { enabled, sample_rate }).await
+}
+
+#[derive(Serialize)]
+struct KeepScreenOnArgs {
+    on: bool,
+}
+
+/// Keeps the display on (car mode, karaoke).
+#[tauri::command]
+pub async fn android_keep_screen_on(app: tauri::AppHandle, on: bool) -> Result<(), CommandError> {
+    call::<serde_json::Value, _>(&app, "setKeepScreenOn", KeepScreenOnArgs { on }).await.map(|_| ())
+}
+
+/// The page has its `zuno-android` listeners up: flush queued events, start the route watch.
+#[tauri::command]
+pub async fn android_frontend_ready(app: tauri::AppHandle) -> Result<(), CommandError> {
+    call::<serde_json::Value, _>(&app, "frontendReady", ()).await.map(|_| ())
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeadsetPrefs {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    double: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    triple: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    long: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resume_on_connect: Option<bool>,
+}
+
+/// One-button headset gestures and resume-on-connect, kept natively so they work with the
+/// screen off and the page asleep.
+#[tauri::command]
+pub async fn android_set_headset_prefs(app: tauri::AppHandle, prefs: HeadsetPrefs) -> Result<(), CommandError> {
+    call::<serde_json::Value, _>(&app, "setHeadsetPrefs", prefs).await.map(|_| ())
 }
 
 #[tauri::command]
