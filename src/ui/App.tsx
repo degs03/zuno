@@ -2150,7 +2150,7 @@ useEffect(() => {
       white border rather than an edge.
     */}
     <div
-      className={`relative flex h-screen flex-col overflow-hidden rounded-[var(--window-radius)] ${
+      className={`relative flex h-screen flex-col overflow-hidden bg-background rounded-[var(--window-radius)] ${
         isMobile
           ? "pt-[env(safe-area-inset-top)]"
           : nativeWindowControls || !windowOutline
@@ -2391,7 +2391,8 @@ useEffect(() => {
           </ErrorBoundary>
         </div>
       </div>
-      {isMobile && !playerUIState.isLyricsFullscreen && (
+      {/* The Zuno island: phones and desktop share it (desktop keeps the title-bar tabs too). */}
+      {!playerUIState.isLyricsFullscreen && (
         <MobileNavBar active={mobileNavActive} onNavigate={handleMobileNavigate} />
       )}
       {isMobile && (

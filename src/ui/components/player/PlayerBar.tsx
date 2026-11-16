@@ -204,7 +204,7 @@ export function PlayerBar({ onToggleLyrics, onToggleQueue, isQueueOpen, onConnec
         <MobilePlayerPill onExpand={() => onExpandPlayer?.()} />
       ) : (
       <div
-        className="group/playerbar flex shrink-0 flex-col gap-1 bg-background px-4 pb-3 pt-2"
+        className="group/playerbar mx-3 mt-1 flex shrink-0 flex-col gap-1 rounded-[1.75rem] bg-card px-5 pb-3 pt-2 shadow-[0_10px_30px_-14px_rgb(0_0_0/0.55)] ring-1 ring-inset ring-foreground/[0.07]"
       >
         {/* Expanded: the seek bar spans the full bar above everything. */}
         {!compactPlayerBar && <SeekBar />}

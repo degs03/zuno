@@ -4,6 +4,7 @@ import { CompassIcon, HomeIcon, LibraryIcon, SearchIcon, SettingsIcon } from "@/
 import { msg, useT } from "../../i18n";
 import { useOfflineState } from "../../player/offlineStore";
 import { useReduceMotion } from "../settings/renderEffects";
+import { isMobile } from "../platform";
 
 export type MobileNavTarget = "home" | "search" | "browse" | "library" | "settings";
 
@@ -69,12 +70,19 @@ export function MobileNavBar({
   return (
     <div
       ref={rootRef}
-      className="relative z-[75] flex shrink-0 justify-center px-3 pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-1.5"
+      className={cn(
+        "relative z-[75] flex shrink-0 justify-center px-3",
+        // Desktop: the same island, a little smaller, under the floating player.
+        isMobile ? "pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-1.5" : "pb-3 pt-1",
+      )}
     >
       <nav
         data-mobile-nav
         aria-label={t("Main")}
-        className="flex h-[3.75rem] w-full max-w-md items-stretch gap-1 rounded-[2rem] bg-card p-1.5 shadow-[0_10px_30px_-12px_rgb(0_0_0/0.6)] ring-1 ring-inset ring-foreground/[0.07]"
+        className={cn(
+          "flex w-full items-stretch gap-1 rounded-[2rem] bg-card p-1.5 shadow-[0_10px_30px_-12px_rgb(0_0_0/0.6)] ring-1 ring-inset ring-foreground/[0.07]",
+          isMobile ? "h-[3.75rem] max-w-md" : "h-12 max-w-sm",
+        )}
       >
         {ITEMS.map(({ target, label, Icon }) => {
           const isActive = active === target;
@@ -93,11 +101,11 @@ export function MobileNavBar({
                 !reduce && "transition-[flex-grow,background-color,color] duration-200 ease-out active:scale-95",
                 isActive
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground active:bg-[var(--color-pressed)]",
+                  : "text-muted-foreground hover:text-foreground active:bg-[var(--color-pressed)]",
               )}
             >
               <span className="relative grid shrink-0 place-items-center">
-                <Icon size={22} strokeWidth={isActive ? 2.1 : 1.6} />
+                <Icon size={isMobile ? 22 : 19} strokeWidth={isActive ? 2.1 : 1.6} />
                 {badge > 0 && (
                   <span
                     aria-label={t("{n} downloading", { n: badge })}

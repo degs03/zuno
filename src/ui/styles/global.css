@@ -481,7 +481,8 @@ html[data-platform-mobile] [data-scroll-row] > * {
  * sit above. Desktop has the player bar only; mobile adds the nav bar.
  */
 :root {
-  --bottom-chrome: 7rem;
+  /* The floating player plus the Zuno island under it. */
+  --bottom-chrome: 10.5rem;
 }
 html[data-platform-mobile] {
   /* The player pill (~4rem) plus the floating nav buttons (~4.25rem) and the gesture area. */
