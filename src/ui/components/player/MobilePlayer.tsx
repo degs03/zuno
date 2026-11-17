@@ -219,9 +219,10 @@ export function NowPlayingSheet({
             <span className="size-11" aria-hidden="true" />
           </div>
 
-          <div className="relative flex min-h-0 flex-1 flex-col justify-center gap-6 px-6 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]">
+          {/* Bottom padding clears the floating navbar, which stays on top of this sheet. */}
+          <div className="relative flex min-h-0 flex-1 flex-col justify-center gap-6 px-6 pb-[calc(var(--mobile-nav-height,env(safe-area-inset-bottom))+1.75rem)]">
             <TrackArtwork
-              className="mx-auto aspect-square w-full max-w-[min(22rem,62vh)] rounded-card shadow-pop"
+              className="mx-auto aspect-square w-full max-w-[min(22rem,54vh)] rounded-card shadow-pop"
               artworkUrl={currentTrack.artworkUrl}
               size={352}
               iconSize={72}
