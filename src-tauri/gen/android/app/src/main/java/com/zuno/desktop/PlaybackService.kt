@@ -129,7 +129,7 @@ class PlaybackService : Service() {
           @Suppress("DEPRECATION") // The typed overload is API 33+; minSdk is 26.
           val event = mediaButtonEvent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
             ?: return super.onMediaButtonEvent(mediaButtonEvent)
-          return handleHeadsetKey(event) || super.onMediaButtonEvent(mediaButtonEvent)
+          return handleHeadsetKey(event) || handleEarbudSkip(event) || super.onMediaButtonEvent(mediaButtonEvent)
         }
       })
       setSessionActivity(openAppIntent())
@@ -172,6 +172,7 @@ class PlaybackService : Service() {
     instance = null
     main.removeCallbacks(pressWindow)
     main.removeCallbacks(releaseLocksLater)
+    main.removeCallbacks(confirmPlay)
     releaseLocks()
     actionWakeLock?.takeIf { it.isHeld }?.release()
     abandonFocus()
@@ -256,12 +257,12 @@ class PlaybackService : Service() {
       .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
       .setOnlyAlertOnce(true)
       .setOngoing(playing)
-      .addAction(action(android.R.drawable.ic_media_previous, "Previous", PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS))
+      .addAction(NotificationCompat.Action(android.R.drawable.ic_media_previous, "Previous", skipIntent(this, "previous")))
       .addAction(
         if (playing) action(android.R.drawable.ic_media_pause, "Pause", PlaybackStateCompat.ACTION_PAUSE)
         else action(android.R.drawable.ic_media_play, "Play", PlaybackStateCompat.ACTION_PLAY)
       )
-      .addAction(action(android.R.drawable.ic_media_next, "Next", PlaybackStateCompat.ACTION_SKIP_TO_NEXT))
+      .addAction(NotificationCompat.Action(android.R.drawable.ic_media_next, "Next", skipIntent(this, "next")))
       .setStyle(MediaStyle().setMediaSession(session.sessionToken).setShowActionsInCompactView(0, 1, 2))
       .build()
   }
@@ -316,6 +317,22 @@ class PlaybackService : Service() {
     return true
   }
 
+  /**
+   * Bluetooth earbuds count their own taps and send NEXT for a double tap and PREVIOUS for a
+   * triple, so those keys are where the user's double/triple gestures apply. The notification,
+   * widget and lock screen skip through other paths and are unaffected; with the default
+   * gestures (next / previous) this behaves exactly as before.
+   */
+  private fun handleEarbudSkip(event: KeyEvent): Boolean {
+    val gesture = when (event.keyCode) {
+      KeyEvent.KEYCODE_MEDIA_NEXT -> AudioRoutes.gesture(this, "double", "next")
+      KeyEvent.KEYCODE_MEDIA_PREVIOUS -> AudioRoutes.gesture(this, "triple", "previous")
+      else -> return false
+    }
+    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) perform(gesture)
+    return true
+  }
+
   private fun firePresses() {
     val count = presses
     presses = 0
@@ -339,7 +356,20 @@ class PlaybackService : Service() {
   private fun userAction(action: String) {
     holdActionWakeLock()
     if (action == "pause") pausedByFocusLoss = false
+    main.removeCallbacks(confirmPlay)
     ZunoPlugin.dispatchAction(action)
+    if (action == "play") main.postDelayed(confirmPlay, PLAY_CONFIRM_MS)
+  }
+
+  /**
+   * A resume pressed with the screen off that the page never acted on (its WebView paused or
+   * the renderer deprioritised): wake the WebView and send it once more.
+   */
+  private val confirmPlay = Runnable {
+    if (state?.status != "paused") return@Runnable
+    android.util.Log.w("Zuno", "play not confirmed; waking the WebView and retrying")
+    ZunoPlugin.instance?.webView()?.onResume()
+    ZunoPlugin.dispatchAction("play")
   }
 
   private var actionWakeLock: PowerManager.WakeLock? = null
@@ -439,6 +469,7 @@ class PlaybackService : Service() {
     private const val PRESS_WINDOW_MS = 450L
     private const val PAUSED_LOCK_GRACE_MS = 3 * 60 * 1000L
     private const val ACTION_WAKE_LOCK_MS = 20 * 1000L
+    private const val PLAY_CONFIRM_MS = 2500L
     /** Safety net: a wake lock is renewed while playing and can never be held for longer. */
     private const val WAKE_LOCK_TIMEOUT_MS = 30 * 60 * 1000L
     const val ACTION_CUSTOM = "com.zuno.desktop.CUSTOM_ACTION"
@@ -457,6 +488,13 @@ class PlaybackService : Service() {
     fun isPlaying(): Boolean = state?.status == "playing" || state?.status == "loading"
 
     fun current(): State? = state
+
+    /** Notification and widget skip buttons: a direct service command, never a media key. */
+    fun skipIntent(context: Context, action: String): PendingIntent = PendingIntent.getForegroundService(
+      context, ("skip:" + action).hashCode(),
+      Intent(context, PlaybackService::class.java).setAction(ACTION_CUSTOM).putExtra(EXTRA_ACTION, action),
+      PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+    )
 
     /** Called for every state change from the frontend's media-session hook. */
     fun update(context: Context, incoming: State) {

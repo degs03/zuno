@@ -293,15 +293,11 @@ class NowPlayingWidget : AppWidgetProvider() {
             if (snap?.playing == true) PlaybackStateCompat.ACTION_PAUSE else PlaybackStateCompat.ACTION_PLAY,
           ),
         )
-        views.setOnClickPendingIntent(
-          R.id.widget_next,
-          MediaButtonReceiver.buildMediaButtonPendingIntent(context, PlaybackStateCompat.ACTION_SKIP_TO_NEXT),
-        )
+        // Skips go straight to the service, not through media keys: MEDIA_NEXT/PREVIOUS keys are
+        // the Bluetooth earbuds' double/triple tap, which the user can remap to other gestures.
+        views.setOnClickPendingIntent(R.id.widget_next, PlaybackService.skipIntent(context, "next"))
         if (!small) {
-          views.setOnClickPendingIntent(
-            R.id.widget_prev,
-            MediaButtonReceiver.buildMediaButtonPendingIntent(context, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS),
-          )
+          views.setOnClickPendingIntent(R.id.widget_prev, PlaybackService.skipIntent(context, "previous"))
           views.setOnClickPendingIntent(R.id.widget_like, custom(context, "like"))
         }
         if (large) {

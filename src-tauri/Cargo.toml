@@ -1,6 +1,6 @@
 [package]
 name = "zuno"
-version = "1.8.2"
+version = "1.8.3"
 description = "Zuno - a desktop music client"
 authors = ["you"]
 edition = "2021"

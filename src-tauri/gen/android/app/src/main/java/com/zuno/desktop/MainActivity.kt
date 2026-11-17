@@ -66,7 +66,8 @@ class MainActivity : TauriActivity() {
    */
   override fun onPause() {
     super.onPause()
-    if (PlaybackService.isPlaying()) ZunoPlugin.instance?.webView()?.onResume()
+    // Paused too: a headset press to resume with the screen off is handled in this page.
+    if (PlaybackService.isRunning()) ZunoPlugin.instance?.webView()?.onResume()
   }
 
   companion object {

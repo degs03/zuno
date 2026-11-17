@@ -853,9 +853,9 @@ function HeadsetSettingsCard() {
       />
       <div className="flex flex-col">
         <p className="text-sm text-muted-foreground">{t("One press always plays or pauses.")}</p>
-        {gestureRow("double", t("Double press"), t("Press the button twice quickly."))}
-        {gestureRow("triple", t("Triple press"), t("Press it three times."))}
-        {gestureRow("long", t("Press and hold"), t("Hold the button for a second."))}
+        {gestureRow("double", t("Double press"), t("Press the button or tap the earbud twice quickly."))}
+        {gestureRow("triple", t("Triple press"), t("Three times, on the button or the earbud."))}
+        {gestureRow("long", t("Press and hold"), t("Hold the button for a second. Wired only: Bluetooth earbuds keep this for their own functions."))}
         {device && device.kind !== "speaker" ? (
           <SettingRow
             title={t("{device} is my car", { device: device.name })}
