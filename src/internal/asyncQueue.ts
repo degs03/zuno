@@ -25,8 +25,13 @@ export function createSerialQueue(): <T>(fn: () => Promise<T>) => Promise<T> {
  * Built for the stream resolver: preloading the *next* track is queued as background, so a
  * track the user just tapped never waits behind it. Work already running is never interrupted —
  * only the order of what is still waiting changes. Within one priority, order is FIFO.
+ *
+ * With `timeoutMs`, a job that has not settled by then is rejected and its slot released, so one
+ * hung call (BotGuard never answering in a throttled WebView) cannot freeze everything behind it.
  */
-export function createPriorityQueue(): <T>(fn: () => Promise<T>, background?: boolean) => Promise<T> {
+export function createPriorityQueue(
+  timeoutMs?: number,
+): <T>(fn: () => Promise<T>, background?: boolean) => Promise<T> {
   type Job = { run: () => Promise<void>; background: boolean };
   const pending: Job[] = [];
   let running = false;
@@ -46,7 +51,20 @@ export function createPriorityQueue(): <T>(fn: () => Promise<T>, background?: bo
     return new Promise<T>((resolve, reject) => {
       const job: Job = {
         background,
-        run: () => fn().then(resolve, reject),
+        run: () => {
+          const work = fn().then(resolve, reject);
+          if (!timeoutMs) return work;
+          return new Promise<void>((done) => {
+            const timer = setTimeout(() => {
+              reject(new Error(`Timed out after ${timeoutMs} ms.`));
+              done();
+            }, timeoutMs);
+            void work.finally(() => {
+              clearTimeout(timer);
+              done();
+            });
+          });
+        },
       };
       if (background) {
         pending.push(job);

@@ -11,6 +11,7 @@ import { recordPlay } from "./playHistory";
 import { computeQueueWindow } from "./queueWindow";
 import { getOfflineTrack, isPlayableOffline, isTrackDownloaded } from "./offlineStore";
 import { isOnline } from "../internal/connectivity";
+import { isAndroid } from "../ui/platform";
 import { findPlayableIndex } from "./playableIndex";
 import { hasPreloadDeck } from "./preloadDeck";
 import { getAudioEngineMode } from "../ui/settings/audioEngine";
@@ -43,6 +44,15 @@ const TRANSITION_TICK_MS = 250;
  * not preload a string of tracks nobody reaches.
  */
 const PRELOAD_LEAD_SEC = 20;
+/** With the screen off the WebView is throttled, so the next track gets far more headroom. */
+const HIDDEN_PRELOAD_LEAD_SEC = 60;
+/** Failed tracks skipped in a row before playback gives up and shows the error. */
+const MAX_FAILURE_SKIPS = 3;
+
+/** Android with the screen off or the app in the background: no UI, throttled timers. */
+function isHiddenAndroid(): boolean {
+  return isAndroid && typeof document !== "undefined" && document.visibilityState === "hidden";
+}
 
 /**
  * How often a play in progress is reported to the provider's history.
@@ -186,6 +196,10 @@ export class PlayerController {
   private prematureEndTrackId: string | null = null;
   /** The track whose Rust stream ended early even after a fresh URL; it plays on the IFrame deck. */
   private streamDiedTrackId: string | null = null;
+  /** Set by automatic advances (track end, next button) for the playTrackById call they make. */
+  private nextPlayIsAutomatic = false;
+  /** Tracks skipped in a row because they failed to load; reset by any track that plays. */
+  private failureSkips = 0;
   private pendingSeekTime: number | null = null;
   private radioQueueRequestId = 0;
   /*
@@ -391,6 +405,9 @@ export class PlayerController {
     shufflePlaylist = false,
   ): Promise<boolean> {
     const requestedAt = performance.now();
+    // With the screen off nobody can read an error, so any failed play advances instead.
+    const automatic = this.nextPlayIsAutomatic || isHiddenAndroid();
+    this.nextPlayIsAutomatic = false;
     // Close out whatever was playing first: this is the funnel every track change goes
     // through, so it catches a natural end and a skip with the same one call.
     this.finishPlayReport();
@@ -522,6 +539,7 @@ export class PlayerController {
       }
       if (requestId !== this.playTrackRequestId) return false;
 
+      this.failureSkips = 0;
       this.setState({ status: "playing", error: null });
       logInternalInfo("PlayerController.playTrackById success", {
         trackId: track.id,
@@ -530,9 +548,37 @@ export class PlayerController {
       return true;
     } catch (error) {
       if (requestId !== this.playTrackRequestId) return false;
+      if (automatic && await this.skipAfterFailure(error, videoId)) return false;
       this.setError(error);
       return false;
     }
+  }
+
+  private playAutomatically(videoId: string): Promise<boolean> {
+    this.nextPlayIsAutomatic = true;
+    return this.playTrackById(videoId);
+  }
+
+  /**
+   * A track that could not load during an automatic advance is skipped rather than ending
+   * playback: with the screen off the listener cannot see the error, and the queue going
+   * silent is worse than one missing song. Bounded, so a dead connection still stops.
+   */
+  private async skipAfterFailure(error: unknown, failedId: string): Promise<boolean> {
+    if (!isOnline() || this.failureSkips >= MAX_FAILURE_SKIPS) return false;
+    if (this.playbackOrderMode === "repeat-one") return false;
+    const next = this.nextPlayableTrack();
+    if (!next || next.id === failedId) return false;
+    this.failureSkips += 1;
+    logInternalWarn("PlayerController skipping a track that failed to load", {
+      failedId,
+      nextId: next.id,
+      attempt: this.failureSkips,
+      error: getInvokeErrorMessage(error),
+    });
+    this.refillAutomaticQueue();
+    await this.playAutomatically(next.id);
+    return true;
   }
 
   async play(): Promise<void> {
@@ -590,6 +636,9 @@ export class PlayerController {
       currentTrackId: this.state.currentTrack?.id ?? null,
     });
     try {
+      // A pause while loading (a call, a headset press) must win: without this the load
+      // finished and started playing anyway.
+      this.cancelLoadingPlayback();
       this.audioEngine.pause();
       this.setState({ status: "paused", error: null });
       logInternalInfo("PlayerController.pause success");
@@ -886,7 +935,7 @@ export class PlayerController {
       const queueEndTrack = await this.loadQueueEndRecommendations(this.state.currentTrack);
       if (queueEndTrack) {
         if (shouldResume) {
-          await this.playTrackById(queueEndTrack.id);
+          await this.playAutomatically(queueEndTrack.id);
         } else {
           await this.loadTrack(queueEndTrack);
         }
@@ -901,7 +950,7 @@ export class PlayerController {
       const radioTrack = await this.loadRadioQueue(this.state.currentTrack);
       if (radioTrack) {
         if (shouldResume) {
-          await this.playTrackById(radioTrack.id);
+          await this.playAutomatically(radioTrack.id);
         } else {
           await this.loadTrack(radioTrack);
         }
@@ -915,7 +964,7 @@ export class PlayerController {
     if (!nextTrack || nextTrack.id === this.state.currentTrack?.id) return;
     this.refillAutomaticQueue();
     if (shouldResume) {
-      await this.playTrackById(nextTrack.id);
+      await this.playAutomatically(nextTrack.id);
     } else {
       await this.loadTrack(nextTrack);
     }
@@ -977,7 +1026,9 @@ export class PlayerController {
        */
       const canUseIframe = this.audioEngine.usesRustAudio()
         && !isTrackDownloaded(track.id)
-        && this.streamDiedTrackId !== track.id;
+        && this.streamDiedTrackId !== track.id
+        // The IFrame is a <video> in the WebView, which stays silent with the screen off.
+        && !isHiddenAndroid();
       logInternalWarn(`PlayerController.prematureEnd retry failed, ${canUseIframe ? "using the YouTube player" : "advancing"}`, {
         trackId: track.id,
         positionSec: Math.round(position),
@@ -1033,7 +1084,7 @@ export class PlayerController {
       if (await this.recoverFromPrematureEnd()) return;
 
       if (this.playbackOrderMode === "repeat-one" && this.state.currentTrack) {
-        await this.playTrackById(this.state.currentTrack.id);
+        await this.playAutomatically(this.state.currentTrack.id);
         return;
       }
 
@@ -1053,7 +1104,7 @@ export class PlayerController {
 
       if (nextTrack && nextTrack.id !== this.state.currentTrack?.id) {
         this.refillAutomaticQueue();
-        await this.playTrackById(nextTrack.id);
+        await this.playAutomatically(nextTrack.id);
         return;
       }
 
@@ -1087,7 +1138,7 @@ export class PlayerController {
             trackCount: this.queue.all.length,
             reshuffled: this.shuffleEnabled && this.isPlaylistMode,
           });
-          await this.playTrackById(firstTrack.id);
+          await this.playAutomatically(firstTrack.id);
           return;
         }
       }
@@ -1096,7 +1147,7 @@ export class PlayerController {
       if (seed) {
         const queueEndTrack = await this.loadQueueEndRecommendations(seed);
         if (queueEndTrack) {
-          await this.playTrackById(queueEndTrack.id);
+          await this.playAutomatically(queueEndTrack.id);
           return;
         }
       }
@@ -1113,7 +1164,7 @@ export class PlayerController {
       }
 
       this.queue.set(recommendations, 0);
-      await this.playTrackById(recommendations[0].id);
+      await this.playAutomatically(recommendations[0].id);
     } catch (error) {
       this.setError(error);
     } finally {
@@ -1441,7 +1492,27 @@ export class PlayerController {
           );
         }
       } catch (error) {
-        if (canFallBackToIframe) {
+        if (canFallBackToIframe && isHiddenAndroid()) {
+          /*
+           * The IFrame deck cannot play while the WebView is hidden: it reported "playing" and
+           * stayed silent. One freshly resolved stream instead, then fail so the queue moves on.
+           */
+          if (this.streamDiedTrackId === track.id) throw error;
+          logInternalWarn("PlayerController.ensureTrackLoaded re-resolving in background", {
+            trackId: track.id,
+            error: getInvokeErrorMessage(error),
+          });
+          const fresh = await this.dataSource.getStreamData?.(track);
+          if (!fresh) throw error;
+          await this.audioEngine.loadTrack(
+            track.id,
+            fresh.bytes,
+            fresh.mimeType,
+            fresh.sourceUrl,
+            fresh.rustSource,
+            track.durationSec,
+          );
+        } else if (canFallBackToIframe) {
           logInternalWarn("PlayerController.ensureTrackLoaded falling back to the YouTube player", {
             trackId: track.id,
             error: getInvokeErrorMessage(error),
@@ -1720,7 +1791,7 @@ export class PlayerController {
     this.queueGapless(next, remaining);
     if (!next || !this.usesPreloadDeck(next)) return;
 
-    if (remaining <= PRELOAD_LEAD_SEC) this.audioEngine.preloadNext(next.id);
+    if (remaining <= (isHiddenAndroid() ? HIDDEN_PRELOAD_LEAD_SEC : PRELOAD_LEAD_SEC)) this.audioEngine.preloadNext(next.id);
 
     if (this.crossfadeSec <= 0 || remaining > this.crossfadeSec) return;
     if (!this.audioEngine.hasPreloaded(next.id)) return;

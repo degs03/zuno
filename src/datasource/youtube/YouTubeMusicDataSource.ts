@@ -300,6 +300,11 @@ type LibraryResponses = {
 };
 
 const LIKED_SONGS_PLAYLIST_ID = "LM";
+/**
+ * Longest one download-client resolve may hold the queue. Normal ones take 1–3 s; past this it
+ * is hung (usually on BotGuard in a throttled background WebView) and the next track goes ahead.
+ */
+const DOWNLOAD_RESOLVE_TIMEOUT_MS = 45_000;
 /** Everything a browse shelf can meaningfully hold. */
 /** Must match YOUTUBE_LOGIN_WINDOW in src-tauri/src/lib.rs; cancelling closes this window. */
 const YOUTUBE_LOGIN_WINDOW_LABEL = "youtube-music-login";
@@ -424,7 +429,8 @@ export class YouTubeMusicDataSource extends DataSource {
   private webClientPromise: Promise<Innertube> | null = null;
   private downloadClientPromise: Promise<Innertube> | null = null;
   /** See `withDownloadLock`. */
-  private readonly downloadQueue = createPriorityQueue();
+  // Bounded: a resolve stuck on BotGuard while the screen is off must not hold every later track.
+  private readonly downloadQueue = createPriorityQueue(DOWNLOAD_RESOLVE_TIMEOUT_MS);
   /*
    * An accessor rather than a field, so the ~30 readers of `this.musicCookie` observe the
    * rotations the proxy folds in instead of the value captured at sign-in. Both sides of the

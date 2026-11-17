@@ -30,7 +30,26 @@ const FALLBACK_TTL_SECONDS = 12 * 60 * 60;
 /** Re-attest this long before expiry so a token never dies mid-download. */
 const REFRESH_MARGIN_MS = 5 * 60 * 1000;
 
+/**
+ * Upper bound on one whole attestation. BotGuard's own callback can simply never fire, and a
+ * cached promise that never settles froze every later stream resolve behind it.
+ */
+const ATTEST_TIMEOUT_MS = 20_000;
+
+/** Before the app is hidden, a minter closer than this to expiry is replaced while still visible. */
+const BACKGROUND_MIN_REMAINING_MS = 2 * 60 * 60 * 1000;
+
 type CachedMinter = { minter: WebPoMinter; expiresAt: number };
+
+function attestWithTimeout(): Promise<CachedMinter> {
+  return new Promise<CachedMinter>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("BotGuard attestation timed out.")), ATTEST_TIMEOUT_MS);
+    attest().then(
+      (entry) => { clearTimeout(timer); resolve(entry); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
+}
 
 let cached: Promise<CachedMinter> | null = null;
 
@@ -116,12 +135,45 @@ async function attest(): Promise<CachedMinter> {
 
 function getMinter(): Promise<CachedMinter> {
   if (!cached) {
-    cached = attest().catch((error) => {
-      cached = null; // A failed attestation must not be cached, or the app never recovers.
+    const pending: Promise<CachedMinter> = attestWithTimeout().catch((error) => {
+      // A failed attestation must not be cached, or the app never recovers.
+      if (cached === pending) cached = null;
       throw error;
     });
+    cached = pending;
   }
   return cached;
+}
+
+let refreshing = false;
+
+/**
+ * Makes sure the minter will outlive a stretch in the background.
+ *
+ * BotGuard runs on WebView timers, which Android throttles hard once the screen is off, so an
+ * attestation that falls due then can stall long enough for tracks to load without a token
+ * (cut after ~1 MiB). Called as the app is hidden, while it can still run at full speed. The
+ * old minter keeps serving until the new one is ready.
+ */
+export function refreshPoTokenForBackground(): void {
+  const current = cached;
+  if (!current) return; // Nothing played yet: nothing to keep fresh.
+  void current
+    .then(async (entry) => {
+      if (refreshing || entry.expiresAt - Date.now() >= BACKGROUND_MIN_REMAINING_MS) return;
+      refreshing = true;
+      try {
+        const fresh = await attestWithTimeout();
+        if (cached === current) cached = Promise.resolve(fresh);
+      } finally {
+        refreshing = false;
+      }
+    })
+    .catch((error) => {
+      logInternalWarn("poToken.background refresh failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
 }
 
 /**
@@ -164,4 +216,10 @@ export async function mintPoToken(contentBinding: string): Promise<string | unde
     });
     return undefined;
   }
+}
+
+if (typeof document !== "undefined" && /Android/i.test(navigator.userAgent)) {
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") refreshPoTokenForBackground();
+  });
 }

@@ -96,6 +96,15 @@ async function main() {
     await failing.catch(() => {});
     equal(await run(async () => "ok"), "ok", "a rejection does not wedge the priority queue");
   }
+
+  {
+    const run = createPriorityQueue(20);
+    const hung = run(() => new Promise<string>(() => {}));
+    let timedOut = false;
+    await hung.catch(() => { timedOut = true; });
+    check(timedOut, "a hung job is rejected after the timeout");
+    equal(await run(async () => "next"), "next", "a hung job does not wedge the jobs behind it");
+  }
 }
 
 await main();

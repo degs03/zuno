@@ -72,20 +72,26 @@ class PlaybackService : Service() {
   private var longPressFired = false
   private val pressWindow = Runnable { firePresses() }
 
+  /** Released this long after a pause, so a resume with the screen off is instant and online. */
+  private val releaseLocksLater = Runnable { releaseLocks() }
+
   private val noisy = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-      if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) ZunoPlugin.dispatchAction("pause")
+      if (intent.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) userAction("pause")
     }
   }
 
   private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+    holdActionWakeLock()
     when (change) {
       AudioManager.AUDIOFOCUS_LOSS -> {
         hasFocus = false
+        pausedByFocusLoss = false
         ZunoPlugin.dispatchAction("pause")
       }
       AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-        if (state?.status == "playing") {
+        // "loading" too: a call that lands while the next track loads must still resume after.
+        if (isPlaying()) {
           pausedByFocusLoss = true
           ZunoPlugin.dispatchAction("pause")
         }
@@ -106,15 +112,20 @@ class PlaybackService : Service() {
     createChannel()
     session = MediaSessionCompat(this, "Zuno").apply {
       setCallback(object : MediaSessionCompat.Callback() {
-        override fun onPlay() = ZunoPlugin.dispatchAction("play")
-        override fun onPause() = ZunoPlugin.dispatchAction("pause")
-        override fun onStop() = ZunoPlugin.dispatchAction("pause")
-        override fun onSkipToNext() = ZunoPlugin.dispatchAction("next")
-        override fun onSkipToPrevious() = ZunoPlugin.dispatchAction("previous")
-        override fun onSeekTo(pos: Long) =
+        override fun onPlay() = userAction("play")
+        override fun onPause() = userAction("pause")
+        override fun onStop() = userAction("pause")
+        override fun onSkipToNext() = userAction("next")
+        override fun onSkipToPrevious() = userAction("previous")
+        override fun onSeekTo(pos: Long) {
+          holdActionWakeLock()
           ZunoPlugin.dispatchAction("seekTo") { put("positionSec", pos / 1000.0) }
+        }
 
         override fun onMediaButtonEvent(mediaButtonEvent: Intent): Boolean {
+          // Android's media-key wakelock ends when this returns; ours covers the press window,
+          // the hop into the WebView and the Rust resume or track load that follows.
+          holdActionWakeLock()
           @Suppress("DEPRECATION") // The typed overload is API 33+; minSdk is 26.
           val event = mediaButtonEvent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
             ?: return super.onMediaButtonEvent(mediaButtonEvent)
@@ -130,6 +141,7 @@ class PlaybackService : Service() {
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     if (intent?.action == ACTION_CUSTOM) {
       // Widget extras (like, shuffle, repeat): the WebView owns that state, so just forward.
+      holdActionWakeLock()
       intent.getStringExtra(EXTRA_ACTION)?.let { ZunoPlugin.dispatchAction(it) }
     } else {
       MediaButtonReceiver.handleIntent(session, intent)
@@ -159,7 +171,9 @@ class PlaybackService : Service() {
   override fun onDestroy() {
     instance = null
     main.removeCallbacks(pressWindow)
+    main.removeCallbacks(releaseLocksLater)
     releaseLocks()
+    actionWakeLock?.takeIf { it.isHeld }?.release()
     abandonFocus()
     if (noisyRegistered) unregisterReceiver(noisy)
     session.release()
@@ -196,7 +210,14 @@ class PlaybackService : Service() {
         .build()
     )
 
-    if (s.status == "playing") acquireLocks() else if (s.status == "paused") releaseLocks()
+    if (s.status == "playing") {
+      main.removeCallbacks(releaseLocksLater)
+      acquireLocks()
+    } else if (s.status == "paused") {
+      // Not at once: a press to resume a minute later must find the CPU and Wi-Fi awake.
+      main.removeCallbacks(releaseLocksLater)
+      main.postDelayed(releaseLocksLater, PAUSED_LOCK_GRACE_MS)
+    }
 
     if (playing) {
       requestFocus()
@@ -309,9 +330,27 @@ class PlaybackService : Service() {
   private fun perform(action: String) {
     when (action) {
       "none", "" -> Unit
-      "playPause" -> ZunoPlugin.dispatchAction(if (state?.status == "playing") "pause" else "play")
-      else -> ZunoPlugin.dispatchAction(action)
+      "playPause" -> userAction(if (isPlaying()) "pause" else "play")
+      else -> userAction(action)
     }
+  }
+
+  /** A control the user pressed. A manual pause cancels a pending resume after a call. */
+  private fun userAction(action: String) {
+    holdActionWakeLock()
+    if (action == "pause") pausedByFocusLoss = false
+    ZunoPlugin.dispatchAction(action)
+  }
+
+  private var actionWakeLock: PowerManager.WakeLock? = null
+
+  /** Short CPU hold so a press handled with the screen off and nothing playing is not frozen. */
+  private fun holdActionWakeLock() {
+    val lock = actionWakeLock ?: (getSystemService(POWER_SERVICE) as PowerManager)
+      .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "zuno:action")
+      .apply { setReferenceCounted(false) }
+      .also { actionWakeLock = it }
+    lock.acquire(ACTION_WAKE_LOCK_MS)
   }
 
   /**
@@ -356,9 +395,22 @@ class PlaybackService : Service() {
           .build()
       )
       .setOnAudioFocusChangeListener(focusListener, main)
+      .setAcceptsDelayedFocusGain(true)
       .build()
+    focusRequest?.let { audio.abandonAudioFocusRequest(it) }
     focusRequest = request
-    hasFocus = audio.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    when (audio.requestAudioFocus(request)) {
+      AudioManager.AUDIOFOCUS_REQUEST_GRANTED -> hasFocus = true
+      // Granted later through AUDIOFOCUS_GAIN (a call is ringing): resume then.
+      AudioManager.AUDIOFOCUS_REQUEST_DELAYED -> {
+        hasFocus = true // Pending; must not re-request on every render.
+        if (state?.status == "playing") {
+          pausedByFocusLoss = true
+          ZunoPlugin.dispatchAction("pause")
+        }
+      }
+      else -> hasFocus = false // Retried on the next render.
+    }
   }
 
   private fun abandonFocus() {
@@ -385,6 +437,8 @@ class PlaybackService : Service() {
     private const val CHANNEL_ID = "playback"
     private const val NOTIFICATION_ID = 1
     private const val PRESS_WINDOW_MS = 450L
+    private const val PAUSED_LOCK_GRACE_MS = 3 * 60 * 1000L
+    private const val ACTION_WAKE_LOCK_MS = 20 * 1000L
     /** Safety net: a wake lock is renewed while playing and can never be held for longer. */
     private const val WAKE_LOCK_TIMEOUT_MS = 30 * 60 * 1000L
     const val ACTION_CUSTOM = "com.zuno.desktop.CUSTOM_ACTION"
@@ -405,7 +459,10 @@ class PlaybackService : Service() {
     fun current(): State? = state
 
     /** Called for every state change from the frontend's media-session hook. */
-    fun update(context: Context, next: State) {
+    fun update(context: Context, incoming: State) {
+      // A failed track keeps the session as a paused one: tearing it down took the
+      // notification and every headset button with it, so nothing could ever retry.
+      val next = if (incoming.status == "error") incoming.copy(status = "paused") else incoming
       val active = next.status == "playing" || next.status == "paused" || next.status == "loading"
       Handler(Looper.getMainLooper()).post {
         if (!active || next.title.isEmpty()) {
@@ -419,7 +476,12 @@ class PlaybackService : Service() {
           running.render()
         } else if (next.status == "playing") {
           // Only a user-started play may start the service; it is then foreground until stop.
-          ContextCompat.startForegroundService(context, Intent(context, PlaybackService::class.java))
+          try {
+            ContextCompat.startForegroundService(context, Intent(context, PlaybackService::class.java))
+          } catch (error: IllegalStateException) {
+            // Android 12+ refuses a foreground start from the background; never crash for it.
+            android.util.Log.w("Zuno", "PlaybackService start refused", error)
+          }
         }
       }
     }
